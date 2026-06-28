@@ -3,9 +3,9 @@ import './App.css';
 
 function App() {
   return (
-    <div className="App">  
+    <div className="App"> 
        <h1>
-        Muka kang burattt
+        This is the main Header ulol
        </h1>
     </div>
   );
