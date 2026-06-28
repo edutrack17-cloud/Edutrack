@@ -5,7 +5,7 @@ function App() {
   return (
     <div className="App">  
        <h1>
-        Main Heading tite
+        This is the main Header
        </h1>
     </div>
   );
