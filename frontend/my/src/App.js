@@ -7,6 +7,9 @@ function App() {
        <h1>
         This is the main Header ulol
        </h1>
+       <h2>
+        This is the sub header kupal
+       </h2>
     </div>
   );
 }
