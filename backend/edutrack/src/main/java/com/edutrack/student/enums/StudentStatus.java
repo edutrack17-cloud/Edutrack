@@ -1,4 +1,4 @@
-package com.edutrack.student;
+package com.edutrack.student.enums;
 
 public enum StudentStatus {
     enrolled,

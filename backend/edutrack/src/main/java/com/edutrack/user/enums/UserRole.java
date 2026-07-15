@@ -1,4 +1,4 @@
-package com.edutrack.user;
+package com.edutrack.user.enums;
 
 public enum UserRole {
     admin,

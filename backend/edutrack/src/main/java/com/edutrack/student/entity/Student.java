@@ -1,6 +1,7 @@
-package com.edutrack.student;
+package com.edutrack.student.entity;
 
-import com.edutrack.section.Section;
+import com.edutrack.section.entity.Section;
+import com.edutrack.student.enums.StudentStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

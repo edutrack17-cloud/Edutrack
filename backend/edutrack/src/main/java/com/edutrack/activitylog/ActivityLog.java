@@ -1,6 +1,6 @@
-package com.edutrack.activitylogs;
+package com.edutrack.activitylog;
 
-import com.edutrack.user.User;
+import com.edutrack.user.entity.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

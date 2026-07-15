@@ -1,7 +1,9 @@
-package com.edutrack.section;
+package com.edutrack.section.entity;
 
-import com.edutrack.student.Student;
-import com.edutrack.user.User;
+import com.edutrack.section.enums.GradeLevel;
+import com.edutrack.section.enums.SectionStatus;
+import com.edutrack.student.entity.Student;
+import com.edutrack.user.entity.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -15,15 +17,13 @@ public class Section {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int sectionId;
 
-    @NotBlank
-    @Size(max = 100)
     @Column(nullable = false, length = 100)
     private String sectionName;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private int gradeLevel;
+    private GradeLevel gradeLevel;
 
-    @NotBlank
     @Enumerated(EnumType.STRING)
     private SectionStatus sectionStatus = SectionStatus.active;
 
@@ -50,11 +50,11 @@ public class Section {
         this.sectionName = sectionName;
     }
 
-    public int getGradeLevel() {
+    public GradeLevel getGradeLevel() {
         return gradeLevel;
     }
 
-    public void setGradeLevel(int gradeLevel) {
+    public void setGradeLevel(GradeLevel gradeLevel) {
         this.gradeLevel = gradeLevel;
     }
 

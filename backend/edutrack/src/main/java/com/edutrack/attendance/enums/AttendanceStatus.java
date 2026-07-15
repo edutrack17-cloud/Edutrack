@@ -1,4 +1,4 @@
-package com.edutrack.attendance;
+package com.edutrack.attendance.enums;
 
 public enum AttendanceStatus {
     present,

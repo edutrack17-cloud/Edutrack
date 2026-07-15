@@ -1,4 +1,4 @@
-package com.edutrack.section;
+package com.edutrack.section.enums;
 
 public enum SectionStatus {
     active,

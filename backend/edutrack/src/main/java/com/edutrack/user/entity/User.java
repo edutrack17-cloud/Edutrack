@@ -1,7 +1,9 @@
-package com.edutrack.user;
+package com.edutrack.user.entity;
 
-import com.edutrack.activitylogs.ActivityLog;
-import com.edutrack.section.Section;
+import com.edutrack.activitylog.ActivityLog;
+import com.edutrack.section.entity.Section;
+import com.edutrack.user.enums.AccountStatus;
+import com.edutrack.user.enums.UserRole;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -15,35 +17,24 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long userId;
 
-    @NotBlank
-    @Size(max = 100)
     @Column(nullable = false, name = "username", length = 100)
     private String username;
 
-    @NotBlank
-    @Size(max = 255)
     @Column(nullable = false, name = "password")
     private String password;
 
-    @NotBlank
-    @Size(max = 100)
     @Column(nullable = false, name = "first_name", length = 100)
     private String firstName;
 
-    @Size(max = 100)
     @Column(name = "middle_name", length = 100)
     private String middleName;
 
-    @NotBlank
-    @Size(max = 100)
     @Column(nullable = false, name = "last_name", length = 100)
     private String lastName;
 
-    @NotBlank
     @Enumerated(EnumType.STRING)
     private UserRole userRole = UserRole.teacher;
 
-    @NotBlank
     @Enumerated(EnumType.STRING)
     private AccountStatus accountStatus = AccountStatus.active;
 
@@ -53,6 +44,7 @@ public class User {
     @OneToMany(mappedBy = "user")
     private List<Section> sections;
 
+    public User(){}
 
     public long getUserId() {
         return userId;

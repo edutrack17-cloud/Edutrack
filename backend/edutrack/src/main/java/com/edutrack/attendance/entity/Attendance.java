@@ -1,9 +1,8 @@
-package com.edutrack.attendance;
+package com.edutrack.attendance.entity;
 
-import com.edutrack.student.Student;
+import com.edutrack.attendance.enums.AttendanceStatus;
+import com.edutrack.student.entity.Student;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
 
