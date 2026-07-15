@@ -6,6 +6,9 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.time.LocalDate;
+import java.util.Date;
+
 @Entity
 @Table(name = "students")
 public class Student {
@@ -13,35 +16,34 @@ public class Student {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long studentId;
 
-    @NotBlank
-    @Size(max = 12)
     @Column(nullable = false, length = 12)
     private String lrn;
 
-    @NotBlank
-    @Size(max = 100)
     @Column(nullable = false, length = 100)
     private String firstName;
 
-    @Size(max = 100)
     @Column(length = 100)
     private String middleName;
 
-    @NotBlank
-    @Size(max = 100)
     @Column(nullable = false, length = 100)
     private String lastName;
+
+    @Column(nullable = false)
+    private LocalDate birthDate;
+
+    @Column(nullable = false, length = 100)
+    private String guardian;
+
+    @Column(nullable = false, length = 11)
+    private String guardianPhoneNumber;
 
     @ManyToOne
     @JoinColumn(name = "sectionId", nullable = false)
     private Section section;
 
-    @NotBlank
-    @Size(max = 255)
     @Column(nullable = false, length = 255)
     private String rfid;
 
-    @NotBlank
     @Enumerated(EnumType.STRING)
     private StudentStatus studentStatus = StudentStatus.enrolled;
 
@@ -107,5 +109,29 @@ public class Student {
 
     public void setStudentId(long studentId) {
         this.studentId = studentId;
+    }
+
+    public LocalDate getBirthDate() {
+        return birthDate;
+    }
+
+    public void setBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
+    }
+
+    public String getGuardian() {
+        return guardian;
+    }
+
+    public void setGuardian(String guardian) {
+        this.guardian = guardian;
+    }
+
+    public String getGuardianPhoneNumber() {
+        return guardianPhoneNumber;
+    }
+
+    public void setGuardianPhoneNumber(String guardianPhoneNumber) {
+        this.guardianPhoneNumber = guardianPhoneNumber;
     }
 }
