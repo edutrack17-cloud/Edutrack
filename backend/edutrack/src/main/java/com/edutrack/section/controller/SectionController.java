@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/sections")
+@RequestMapping("/api/section")
 public class SectionController {
     private final SectionService sectionService;
 

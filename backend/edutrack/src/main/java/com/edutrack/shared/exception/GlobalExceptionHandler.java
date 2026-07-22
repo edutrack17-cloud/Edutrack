@@ -13,10 +13,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -74,6 +77,29 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(response);
+    }
+
+    // TYPE MISMATCH EXCEPTION
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatchException(HttpServletRequest request){
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(buildErrorResponse(
+                   HttpStatus.BAD_REQUEST,
+                   "Request parameters has invalid values",
+                   request
+                ));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpServletRequest request){
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(buildErrorResponse(
+                        HttpStatus.BAD_REQUEST,
+                        "Request body contains invalid data",
+                        request
+                ));
     }
 
     // GENERIC EXCEPTION
