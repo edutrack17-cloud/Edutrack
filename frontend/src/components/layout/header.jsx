@@ -1,0 +1,1 @@
+// common folder for  application layout like header,footer,sidebar
