@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
@@ -40,7 +41,7 @@ public class SectionServiceTest {
     @InjectMocks
     private SectionService sectionService;
 
-    //HAPPY CASE (SECTION)
+    //HAPPY CASE (CREATE)
     @Test
     void sectionCreated(){
         //ARRANGE
@@ -69,7 +70,7 @@ public class SectionServiceTest {
         assertEquals("Apple", createdSection.sectionName());
     }
 
-    //EDGE CASE (SECTION)
+    //EDGE CASE (CREATE)
     @Test
     void disabledUserAccount(){
         //ARRANGE
@@ -87,7 +88,7 @@ public class SectionServiceTest {
 
     }
 
-    //EDGE CASE
+    //EDGE CASE (CREATE)
     @Test
     void sectionAlreadyExists(){
         //ARRANGE
@@ -102,7 +103,7 @@ public class SectionServiceTest {
         verify(sectionRepository, never()).save(any());
     }
 
-    //EDGE CASE (SECTION)
+    //EDGE CASE (CREATE)
     @Test
     void userNotFound(){
         //ARRANGE
@@ -112,6 +113,25 @@ public class SectionServiceTest {
         //ACT + ASSERT
         assertThrows(UserNotFoundException.class, () -> sectionService.createSection(sectionRequest));
         verify(sectionRepository, never()).save(any());
+    }
+
+    //HAPPY CASE (ARCHIVE)
+    @Test
+    void sectionArchived(){
+        //ARRANGE
+        SectionResponse fakeResponse = new SectionResponse(1, "Apple", GradeLevel.Grade_6, SectionStatus.active, "Teach");
+        Section fakeSection = new Section();
+        fakeSection.setSectionId(1);
+        fakeSection.setSectionStatus(SectionStatus.active);
+        when(sectionRepository.findById(fakeSection.getSectionId())).thenReturn(Optional.of(fakeSection));
+        when(sectionMapper.toResponseDTO(fakeSection)).thenReturn(fakeResponse);
+
+        //ACT
+        SectionResponse archivedSection = sectionService.archiveSection(fakeSection.getSectionId());
+
+        //ASSERT
+        verify(sectionMapper).toResponseDTO(fakeSection);
+        assertThat(fakeSection.getSectionStatus().equals(SectionStatus.archived));
     }
 
 }
