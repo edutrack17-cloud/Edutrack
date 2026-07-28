@@ -11,12 +11,12 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring", imports = NameUtil.class)
 public interface SectionMapper {
 
-    @Mapping(target = "adviser", expression = "java(NameUtil.buildFullName(section.getUser().getFirstName(), section.getUser().getMiddleName(), section.getUser().getLastName()))")
-    SectionResponse toResponseDTO(Section section);
-
-    @Mapping(target = "sectionId", ignore = true)
-    @Mapping(target = "sectionStatus", ignore = true)
-    @Mapping(target = "user", ignore = true)
-    Section toEntity(CreateSectionRequest clientRequest);
+//    @Mapping(target = "adviser", expression = "java(NameUtil.buildFullName(section.getUser().getFirstName(), section.getUser().getMiddleName(), section.getUser().getLastName()))")
+//    SectionResponse toResponseDTO(Section section);
+//
+//    @Mapping(target = "sectionId", ignore = true)
+//    @Mapping(target = "sectionStatus", ignore = true)
+//    @Mapping(target = "user", ignore = true)
+//    Section toEntity(CreateSectionRequest clientRequest);
 
 }

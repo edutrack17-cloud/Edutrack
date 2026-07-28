@@ -8,6 +8,9 @@ public record CreateSectionRequest(
    @NotBlank(message = "Section name is required")
    String sectionName,
 
+   @NotNull(message = "School year is required")
+   Long schoolYear,
+
    @NotNull(message = "Grade level is required")
    GradeLevel gradeLevel,
 

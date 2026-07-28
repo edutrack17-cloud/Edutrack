@@ -7,6 +7,8 @@ public record UpdateSectionRequest(
    @Size(max = 100)
    String sectionName,
 
+   Long schoolYear,
+
    GradeLevel gradeLevel,
 
    Long userId

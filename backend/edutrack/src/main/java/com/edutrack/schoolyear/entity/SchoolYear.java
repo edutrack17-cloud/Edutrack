@@ -28,7 +28,7 @@ public class SchoolYear {
     private SchoolYearStatus schoolYearStatus;
 
     @Column(nullable = false)
-    private LocalDate createdAt;
+    private LocalDate createdAt = LocalDate.now();
 
     private LocalDate updatedAt;
 

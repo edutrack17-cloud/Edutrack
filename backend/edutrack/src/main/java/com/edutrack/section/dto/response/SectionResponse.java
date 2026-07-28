@@ -6,6 +6,7 @@ import com.edutrack.section.enums.SectionStatus;
 public record SectionResponse(
    int sectionId,
    String sectionName,
+   String schoolYear,
    GradeLevel gradeLevel,
    SectionStatus sectionStatus,
    String adviser
