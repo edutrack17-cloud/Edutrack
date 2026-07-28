@@ -1,4 +1,4 @@
-package com.edutrack.activitylog;
+package com.edutrack.activitylog.entity;
 
 import com.edutrack.user.entity.User;
 import jakarta.persistence.*;

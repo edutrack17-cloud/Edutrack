@@ -32,12 +32,6 @@ public class StudentController {
        return ResponseEntity.status(HttpStatus.CREATED).body(savedStudent);
     }
 
-    //BULK CREATE
-    @PostMapping("bulkCreate")
-    public ResponseEntity<List<StudentResponse>> createBulkStudents(@RequestBody List<@Valid CreateStudentRequest> studentRequests){
-        List<StudentResponse> bulkStudents = studentService.bulkCreateStudents(studentRequests);
-        return ResponseEntity.status(HttpStatus.CREATED).body(bulkStudents);
-    }
 
     //READ
     @GetMapping

@@ -1,12 +1,10 @@
 package com.edutrack.user.entity;
 
-import com.edutrack.activitylog.ActivityLog;
+import com.edutrack.activitylog.entity.ActivityLog;
 import com.edutrack.section.entity.Section;
 import com.edutrack.user.enums.AccountStatus;
 import com.edutrack.user.enums.UserRole;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 import java.util.List;
 

@@ -1,13 +1,12 @@
 package com.edutrack.student.entity;
 
-import com.edutrack.section.entity.Section;
+import com.edutrack.student.enums.AdmissionType;
 import com.edutrack.student.enums.StudentStatus;
+import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
-import java.util.Date;
+import java.util.List;
 
 @Entity
 @Table(name = "students")
@@ -37,15 +36,17 @@ public class Student {
     @Column(nullable = false, length = 11)
     private String guardianPhoneNumber;
 
-    @ManyToOne
-    @JoinColumn(name = "sectionId", nullable = false)
-    private Section section;
-
     @Column(nullable = false, length = 255)
     private String rfid;
 
     @Enumerated(EnumType.STRING)
     private StudentStatus studentStatus = StudentStatus.enrolled;
+
+    @Enumerated(EnumType.STRING)
+    private AdmissionType admissionType;
+
+    @OneToMany(mappedBy = "student")
+    private List<StudentSectionAssignment> studentSectionAssignments;
 
     public StudentStatus getStudentStatus() {
         return studentStatus;
@@ -61,14 +62,6 @@ public class Student {
 
     public void setRfid(String rfid) {
         this.rfid = rfid;
-    }
-
-    public Section getSection() {
-        return section;
-    }
-
-    public void setSection(Section section) {
-        this.section = section;
     }
 
     public String getLastName() {
@@ -133,5 +126,21 @@ public class Student {
 
     public void setGuardianPhoneNumber(String guardianPhoneNumber) {
         this.guardianPhoneNumber = guardianPhoneNumber;
+    }
+
+    public AdmissionType getAdmissionType() {
+        return admissionType;
+    }
+
+    public void setAdmissionType(AdmissionType admissionType) {
+        this.admissionType = admissionType;
+    }
+
+    public List<StudentSectionAssignment> getStudentSectionAssignments() {
+        return studentSectionAssignments;
+    }
+
+    public void setStudentSectionAssignments(List<StudentSectionAssignment> studentSectionAssignments) {
+        this.studentSectionAssignments = studentSectionAssignments;
     }
 }

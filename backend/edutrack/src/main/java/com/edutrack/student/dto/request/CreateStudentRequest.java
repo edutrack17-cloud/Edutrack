@@ -32,9 +32,6 @@ public record CreateStudentRequest(
         @Size(max = 11)
         String guardianPhoneNumber,
 
-        @NotNull
-        Integer sectionId,
-
         @NotBlank
         @Size(max = 255)
         String rfid

@@ -8,7 +8,6 @@ public record UpdateStudentRequest(
    String lastName,
    String lrn,
    String rfid,
-   Integer sectionId,
    String guardian,
    String guardianPhoneNumber,
    LocalDate birthDate

@@ -11,7 +11,6 @@ public record StudentResponse(
         LocalDate birthDate,
         String guardian,
         String guardianPhoneNumber,
-        String sectionName,
         String rfid,
         StudentStatus studentStatus
 ) {

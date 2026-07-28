@@ -48,7 +48,6 @@ public class StudentService {
     //CREATE
     @Transactional
     public StudentResponse createStudent(CreateStudentRequest studentRequest){
-        Section selectedSection = sectionRepository.findById(studentRequest.sectionId()).orElseThrow(() -> new SectionNotFound(studentRequest.sectionId()));
 
         if (studentRepository.existsByLrn(studentRequest.lrn())){
             throw new StudentAlreadyExists(studentRequest.lrn());
@@ -60,30 +59,10 @@ public class StudentService {
 
 
         Student requestToEntity = studentMapper.toEntity(studentRequest);
-        requestToEntity.setSection(selectedSection);
         Student savedStudent = studentRepository.save(requestToEntity);
         return studentMapper.toStudentResponseDTO(savedStudent);
     }
 
-    //BULK CREATE
-    @Transactional
-    public List<StudentResponse> bulkCreateStudents(List<CreateStudentRequest> studentRequests){
-        Map<Integer, Section> sectionMap = sectionRepository.findAll().stream()
-                .collect(Collectors.toMap(Section::getSectionId, section -> section));
-
-        List<Student> studentEntities = studentRequests.stream()
-                .map(requestStudents -> {
-                    Student requestToEntity = studentMapper.toEntity(requestStudents);
-                    requestToEntity.setSection( Optional.ofNullable(sectionMap.get(requestStudents.sectionId()))
-                            .orElseThrow(() -> new SectionNotFound(requestStudents.sectionId())));
-                    return requestToEntity;
-                })
-                .toList();
-
-        List<Student> savedStudents = studentRepository.saveAll(studentEntities);
-        return savedStudents.stream().map(studentMapper::toStudentResponseDTO).toList();
-
-    }
 
     //READ
     public Page<StudentResponse> getStudents(GradeLevel gradeLevel, String sectionName, StudentStatus studentStatus, Pageable pageable){
@@ -156,13 +135,6 @@ public class StudentService {
         !updateStudentRequest.guardianPhoneNumber().isBlank() &&
         !studentToUpdate.getGuardianPhoneNumber().equalsIgnoreCase(updateStudentRequest.guardianPhoneNumber())){
             studentToUpdate.setGuardianPhoneNumber(updateStudentRequest.guardianPhoneNumber());
-            fieldChanged = true;
-        }
-
-        if (updateStudentRequest.sectionId() != null &&
-        studentToUpdate.getSection().getSectionId() != updateStudentRequest.sectionId()){
-            Section newSelectedSection = sectionRepository.findById(updateStudentRequest.sectionId()).orElseThrow(() -> new SectionNotFound(updateStudentRequest.sectionId()));
-            studentToUpdate.setSection(newSelectedSection);
             fieldChanged = true;
         }
 

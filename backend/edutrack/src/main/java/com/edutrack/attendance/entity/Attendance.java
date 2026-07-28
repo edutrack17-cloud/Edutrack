@@ -2,6 +2,7 @@ package com.edutrack.attendance.entity;
 
 import com.edutrack.attendance.enums.AttendanceStatus;
 import com.edutrack.student.entity.Student;
+import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -14,11 +15,15 @@ public class Attendance {
     private long attendanceId;
 
     @ManyToOne
+    @JoinColumn(name = "assignment_id")
+    private StudentSectionAssignment studentSectionAssignment;
+
+    @ManyToOne
     @JoinColumn(name = "studentId", nullable = false)
     private Student student;
 
     @Column(nullable = false)
-    private LocalDateTime datetimeIn;
+    private LocalDateTime datetimeIn = LocalDateTime.now();
 
     private LocalDateTime datetimeOut;
 

@@ -1,5 +1,6 @@
 package com.edutrack.section.entity;
 
+import com.edutrack.schoolyear.entity.SchoolYear;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.student.entity.Student;
@@ -17,6 +18,10 @@ public class Section {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int sectionId;
 
+    @ManyToOne
+    @JoinColumn(name = "school_year_id", nullable = false)
+    private SchoolYear schoolYear;
+
     @Column(nullable = false, length = 100)
     private String sectionName;
 
@@ -28,11 +33,8 @@ public class Section {
     private SectionStatus sectionStatus = SectionStatus.active;
 
     @ManyToOne
-    @JoinColumn(name = "userId", nullable = false)
+    @JoinColumn(name = "adviser_id", nullable = false)
     private User user;
-
-    @OneToMany(mappedBy = "section")
-    private List<Student> students;
 
     public int getSectionId() {
         return sectionId;
@@ -40,6 +42,14 @@ public class Section {
 
     public void setSectionId(int sectionId) {
         this.sectionId = sectionId;
+    }
+
+    public SchoolYear getSchoolYear() {
+        return schoolYear;
+    }
+
+    public void setSchoolYear(SchoolYear schoolYear) {
+        this.schoolYear = schoolYear;
     }
 
     public String getSectionName() {
@@ -74,11 +84,4 @@ public class Section {
         this.user = user;
     }
 
-    public List<Student> getStudents() {
-        return students;
-    }
-
-    public void setStudents(List<Student> students) {
-        this.students = students;
-    }
 }
