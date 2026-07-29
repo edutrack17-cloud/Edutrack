@@ -1,5 +1,6 @@
 package com.edutrack.section.repository;
 
+import com.edutrack.schoolyear.entity.SchoolYear;
 import com.edutrack.section.entity.Section;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,4 +11,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SectionRepository extends JpaRepository<Section, Integer>, JpaSpecificationExecutor<Section> {
     boolean existsBySectionNameIgnoreCase(String sectionName);
+
+    boolean existsBySectionNameAndSchoolYear(String sectionName, SchoolYear schoolYear);
 }

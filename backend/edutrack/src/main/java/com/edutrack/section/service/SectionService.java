@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional(readOnly = true)
 public class SectionService {
     private final SectionRepository sectionRepository;
     private final UserRepository userRepository;
@@ -42,35 +43,13 @@ public class SectionService {
         this.schoolYearRepository = schoolYearRepository;
     }
 
-//    //CREATE
-//    @Transactional
-//    public SectionResponse createSection(CreateSectionRequest sectionRequest){
-//        User adviser = userRepository.findById(sectionRequest.userId())
-//                .orElseThrow(() -> new UserNotFoundException(sectionRequest.userId()));
-//        SchoolYear schoolYearToSet = schoolYearRepository.findById(sectionRequest.schoolYear()).orElseThrow(SchoolYearNotFound::new);
-//
-//        if (sectionRepository.existsBySectionNameIgnoreCase(sectionRequest.sectionName())){
-//            throw new SectionAlreadyExists(sectionRequest.sectionName());
-//        }
-//
-//        if (adviser.getAccountStatus().equals(AccountStatus.disabled)){
-//            throw new AccountDisabled();
-//        }
-//
-//        Section sectionToBeSaved = sectionMapper.toEntity(sectionRequest);
-//        sectionToBeSaved.setSchoolYear(schoolYearToSet);
-//        sectionToBeSaved.setUser(adviser);
-//
-//        Section savedSection = sectionRepository.save(sectionToBeSaved);
-//
-//        return sectionMapper.toResponseDTO(savedSection);
-//    }
-//
-//    //READ
-//    @Transactional(readOnly = true)
-//    public Page<SectionResponse> getSections(String fullName, Pageable pageable){
-//        Specification<Section> filters = Specification
-//                .where(SectionSpecification.hasName(fullName));
-//        return sectionRepository.findAll(filters, pageable).map(sectionMapper::toResponseDTO);
-//    }
+    //CREATE
+    @Transactional
+    public SectionResponse createSection(CreateSectionRequest sectionRequest){
+        User adviserToBeAssign = userRepository.findById(sectionRequest.userId()).orElseThrow(() -> new UserNotFoundException(sectionRequest.userId()));
+        SchoolYear schoolYearToBeAssign = schoolYearRepository.findById(sectionRequest.schoolYear()).orElseThrow(SchoolYearNotFound::new);
+
+
+
+    }
 }
