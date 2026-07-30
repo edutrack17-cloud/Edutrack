@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-EdutrackApplication<edutrack>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.edutrack.EdutrackApplication",
+            "projectName": "edutrack",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}

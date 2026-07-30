@@ -12,5 +12,8 @@ import org.springframework.stereotype.Repository;
 public interface SectionRepository extends JpaRepository<Section, Integer>, JpaSpecificationExecutor<Section> {
     boolean existsBySectionNameIgnoreCase(String sectionName);
 
-    boolean existsBySectionNameAndSchoolYear(String sectionName, SchoolYear schoolYear);
+    boolean existsBySectionNameAndSchoolYear_SchoolYearId(String sectionName, Long schoolYearId);
+
+    boolean existsBySectionNameAndSchoolYear_SchoolYearIdAndSectionIdNot(
+        String sectionName, Long schoolYearId, Integer sectionId);
 }

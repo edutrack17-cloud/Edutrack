@@ -7,6 +7,7 @@ import com.edutrack.section.dto.request.CreateSectionRequest;
 import com.edutrack.section.dto.request.UpdateSectionRequest;
 import com.edutrack.section.dto.response.SectionResponse;
 import com.edutrack.section.entity.Section;
+import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.section.exception.AlreadyActive;
 import com.edutrack.section.exception.AlreadyArchived;
@@ -36,6 +37,19 @@ public class SectionService {
     private final SectionMapper sectionMapper;
     private final SchoolYearRepository schoolYearRepository;
 
+    private Section getById(Integer sectionId){
+        return sectionRepository.findById(sectionId).orElseThrow(() -> new SectionNotFound(sectionId));
+    }
+
+    private SchoolYear getBySchoolYearId(Long schoolYearId){
+        return schoolYearRepository.findById(schoolYearId).orElseThrow(SchoolYearNotFound::new);
+    }
+
+    private User getByUserId(Long userId) {
+    return userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException(userId));
+    }
+
     public SectionService(SectionRepository sectionRepository, UserRepository userRepository, SectionMapper sectionMapper, SchoolYearRepository schoolYearRepository) {
         this.sectionRepository = sectionRepository;
         this.userRepository = userRepository;
@@ -47,9 +61,106 @@ public class SectionService {
     @Transactional
     public SectionResponse createSection(CreateSectionRequest sectionRequest){
         User adviserToBeAssign = userRepository.findById(sectionRequest.userId()).orElseThrow(() -> new UserNotFoundException(sectionRequest.userId()));
-        SchoolYear schoolYearToBeAssign = schoolYearRepository.findById(sectionRequest.schoolYear()).orElseThrow(SchoolYearNotFound::new);
+        SchoolYear schoolYearToBeAssign = getBySchoolYearId(sectionRequest.schoolYear());
 
+        if (sectionRepository.existsBySectionNameAndSchoolYear_SchoolYearId(sectionRequest.sectionName(), sectionRequest.schoolYear())){
+            throw new SectionAlreadyExists(sectionRequest.sectionName());
+        }
 
+        Section sectionEntity = sectionMapper.toEntity(sectionRequest);
+        sectionEntity.setUser(adviserToBeAssign);
+        sectionEntity.setSchoolYear(schoolYearToBeAssign);
 
+        Section savedSection = sectionRepository.save(sectionEntity);
+        return sectionMapper.toResponseDTO(savedSection);
+    }
+
+    //READ
+    public Page<SectionResponse> getSection(String fullName, GradeLevel gradeLevel, SectionStatus sectionStatus, Pageable pageable){
+        Specification<Section> filters = Specification
+                .where(SectionSpecification.hasName(fullName)
+                .and(SectionSpecification.hasGradeLevel(gradeLevel)
+                .and(SectionSpecification.hasStatus(sectionStatus))));
+        return sectionRepository.findAll(filters ,pageable).map(sectionMapper::toResponseDTO);
+    }
+
+    //UPDATE
+    @Transactional
+    public SectionResponse updateSection(Integer sectionId, UpdateSectionRequest updateSectionRequest) {
+        Section sectionToUpdate = getById(sectionId);
+        boolean fieldsChanged = false;
+        boolean nameOrYearChanged = false;
+
+        String finalSectionName = sectionToUpdate.getSectionName();
+        SchoolYear finalSchoolYear = sectionToUpdate.getSchoolYear();
+
+        if (updateSectionRequest.sectionName() != null &&
+                !updateSectionRequest.sectionName().isBlank() &&
+                !sectionToUpdate.getSectionName().equalsIgnoreCase(updateSectionRequest.sectionName())) {
+            finalSectionName = updateSectionRequest.sectionName();
+            nameOrYearChanged = true;
+        }
+
+        if (updateSectionRequest.schoolYear() != null &&
+                !sectionToUpdate.getSchoolYear().getSchoolYearId().equals(updateSectionRequest.schoolYear())) {
+            finalSchoolYear = getBySchoolYearId(updateSectionRequest.schoolYear());
+            nameOrYearChanged = true;
+        }
+
+        if (nameOrYearChanged) {
+            if (sectionRepository.existsBySectionNameAndSchoolYear_SchoolYearIdAndSectionIdNot(
+                    finalSectionName, finalSchoolYear.getSchoolYearId(), sectionId)) {
+                throw new SectionAlreadyExists(finalSectionName);
+            }
+            sectionToUpdate.setSectionName(finalSectionName);
+            sectionToUpdate.setSchoolYear(finalSchoolYear);
+            fieldsChanged = true;
+        }
+
+        if (updateSectionRequest.gradeLevel() != null &&
+                !sectionToUpdate.getGradeLevel().equals(updateSectionRequest.gradeLevel())) {
+            sectionToUpdate.setGradeLevel(updateSectionRequest.gradeLevel());
+            fieldsChanged = true;
+        }
+
+        if (updateSectionRequest.userId() != null &&
+                (sectionToUpdate.getUser() == null ||
+                 !sectionToUpdate.getUser().getUserId().equals(updateSectionRequest.userId()))) {
+            User newAdviser = getByUserId(updateSectionRequest.userId());
+            sectionToUpdate.setUser(newAdviser);
+            fieldsChanged = true;
+        }
+
+        if (!fieldsChanged) {
+            throw new NoChangesDetected();
+        }
+
+        return sectionMapper.toResponseDTO(sectionToUpdate);
+    }
+
+    //ARCHIVE
+    @Transactional
+    public SectionResponse archiveSection(Integer sectionId) {
+        Section sectionToArchive = getById(sectionId);
+
+        if (sectionToArchive.getSectionStatus().equals(SectionStatus.archived)) {
+            throw new AlreadyArchived(sectionToArchive.getSectionName(), sectionId);
+        }
+
+        sectionToArchive.setSectionStatus(SectionStatus.archived);
+        return sectionMapper.toResponseDTO(sectionToArchive);
+    }
+
+    //RESTORE
+    @Transactional
+    public SectionResponse restoreSection(Integer sectionId) {
+        Section sectionToRestore = getById(sectionId);
+
+        if (sectionToRestore.getSectionStatus().equals(SectionStatus.active)) {
+            throw new AlreadyActive(sectionToRestore.getSectionName(), sectionId);
+        }
+
+        sectionToRestore.setSectionStatus(SectionStatus.active);
+        return sectionMapper.toResponseDTO(sectionToRestore);
     }
 }

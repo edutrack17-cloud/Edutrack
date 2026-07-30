@@ -13,7 +13,7 @@ import java.util.List;
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long userId;
+    private Long userId;
 
     @Column(nullable = false, name = "username", length = 100)
     private String username;
@@ -43,14 +43,6 @@ public class User {
     private List<Section> sections;
 
     public User(){}
-
-    public long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(long userId) {
-        this.userId = userId;
-    }
 
     public String getUsername() {
         return username;
@@ -122,5 +114,15 @@ public class User {
 
     public void setSections(List<Section> sections) {
         this.sections = sections;
+    }
+
+
+    public Long getUserId() {
+        return userId;
+    }
+
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 }
