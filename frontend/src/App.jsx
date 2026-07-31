@@ -1,8 +1,6 @@
+import LoginPage from "./features/auth/LoginPage";
+import MainLayout from "./components/layout/MainLayout";
+
 export default function App() {
-  return (
-    <div>
-      <p className=" text-red-600 "> change file structure</p>
-      <p className=" text-red-600 "> change file structure</p>
-    </div>
-  )
+  return <MainLayout/>;
 }
