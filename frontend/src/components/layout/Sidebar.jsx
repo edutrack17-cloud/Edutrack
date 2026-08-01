@@ -70,6 +70,8 @@ function Sidebar({
     ? "translate-x-0"
     : "-translate-x-full";
 
+  const settingsMarginClass = isCollapsed ? "mt-12" : "mt-4";
+
   const sidebarClasses = `
     sidebar-nav-scroll
     fixed top-0 left-0 z-30
@@ -139,7 +141,7 @@ function Sidebar({
         )}
 
 
-        <nav className="mt-6 flex flex-1 flex-col gap-1.5 px-4">
+        <nav className="mt-6 flex flex-col gap-1.5 px-4">
           {navigationItems.map((item) => {
             const Icon = item.icon;
 
@@ -155,7 +157,8 @@ function Sidebar({
           })}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-2 border-t border-white/20 px-4 py-3">
+      
+        <div className={`${settingsMarginClass} flex flex-col gap-2 border-t border-white/20 px-4 py-3`}>
           {!isCollapsed && (
             <h1 className="text-center font-bold">SETTINGS</h1>
           )}
