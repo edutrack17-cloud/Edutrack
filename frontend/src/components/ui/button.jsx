@@ -1,12 +1,11 @@
 import React from "react";
 
-function Button({ children, type, onClick }) {
+function Button({ children, type, onClick, className = "" }) {
   return (
     <button
       type={type}
       onClick={onClick}
-      className="w-full py-3 rounded-md font-bold text-white bg-primary hover:bg-sky-700 "
-    >
+      className={`rounded-md px-4 py-2.5 font-semibold transition-colors ${className}`}>
       {children}
     </button>
   );

@@ -69,7 +69,9 @@ function LoginForm() {
 
       {formik.status && <p className="text-danger text-sm mb-4">{formik.status}</p>}
 
-      <Button type="submit">Login</Button>
+     <Button type="submit" className="w-full bg-primary text-white hover:bg-sky-700">
+      Login
+     </Button>
     </form>
   );
 }

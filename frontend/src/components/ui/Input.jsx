@@ -1,7 +1,21 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+
 // use props and destructure it para makuha yung data sa parent nya kung saan man sya gagamitin na form
-function Input({ label, icon, id, name, type, value, onChange, onBlur, placeholder, error, touched }) {
+function Input({
+  label,
+  icon,
+  id,
+  name,
+  type,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  error,
+  touched,
+  className = "",
+}) {
   const [showPassword, setShowPassword] = useState(false);
 
   // this function kung showpassword value nya is false magiging true
@@ -12,17 +26,16 @@ function Input({ label, icon, id, name, type, value, onChange, onBlur, placehold
   // type nya is password and showpassword is true
   const isPasswordVisible = type === "password" && showPassword;
 
-   // if password is true show text like "password123" kapag no type nya which is input type = password
+  // if password is true show text like "password123" kapag no type nya which is input type = password
   const inputType = isPasswordVisible ? "text" : type;
 
   // check if na touch na or may error
   const showError = Boolean(touched && error);
 
-  // ginamit yung showError na variable if ture na touch or may error true
+  // ginamit yung showError na variable if true na touch or may error true
   const boxClass = showError
-    ? "flex items-center gap-2 rounded-md border px-3 py-2 bg-white border-danger"
-    : "flex items-center gap-2 rounded-md border px-3 py-2 bg-white border-gray-300 focus-within:border-primary";
-
+    ? `flex items-center gap-2 rounded-md border px-3 py-2 bg-white border-danger ${className}`
+    : `flex items-center gap-2 rounded-md border px-3 py-2 bg-white border-gray-300 focus-within:border-primary ${className}`;
 
   const toggleIcon = showPassword ? <EyeOff size={18} /> : <Eye size={18} />;
 
@@ -49,13 +62,21 @@ function Input({ label, icon, id, name, type, value, onChange, onBlur, placehold
         />
 
         {type === "password" && (
-          <button type="button" onClick={togglePasswordVisibility} className="text-gray">
+          <button
+            type="button"
+            onClick={togglePasswordVisibility}
+            className="text-gray"
+          >
             {toggleIcon}
           </button>
         )}
       </div>
 
-      {showError && <p className="text-danger text-sm mt-1">{error}</p>}
+      {showError && (
+        <p className="text-danger text-sm mt-1">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
