@@ -38,7 +38,7 @@ function LoginForm() {
   });
 
   return (
-    <form onSubmit={formik.handleSubmit}>
+    <form onSubmit={formik.handleSubmit} className="flex flex-col gap-4">
       <Input
         label="Username"
         icon={<User size={18} />}
@@ -67,11 +67,11 @@ function LoginForm() {
         touched={formik.touched.password}
       />
 
-      {formik.status && <p className="text-danger text-sm mb-4">{formik.status}</p>}
+      {formik.status && <p className="text-sm text-danger">{formik.status}</p>}
 
-     <Button type="submit" className="w-full bg-primary text-white hover:bg-sky-700">
-      Login
-     </Button>
+      <Button type="submit" className="w-full bg-primary text-white hover:bg-sky-700">
+        Login
+      </Button>
     </form>
   );
 }

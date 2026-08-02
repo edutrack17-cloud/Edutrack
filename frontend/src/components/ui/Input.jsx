@@ -15,6 +15,7 @@ function Input({
   error,
   touched,
   className = "",
+  labelClassName = "text-primary",
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -32,17 +33,20 @@ function Input({
   // check if na touch na or may error
   const showError = Boolean(touched && error);
 
-  // ginamit yung showError na variable if true na touch or may error true
+ 
   const boxClass = showError
-    ? `flex items-center gap-2 rounded-md border px-3 py-2 bg-white border-danger ${className}`
-    : `flex items-center gap-2 rounded-md border px-3 py-2 bg-white border-gray-300 focus-within:border-primary ${className}`;
+    ? `flex items-center gap-2 rounded-lg border px-3 py-2.5 bg-white border-danger ${className}`
+    : `flex items-center gap-2 rounded-lg border px-3 py-2.5 bg-white border-gray-300 transition-colors focus-within:border-primary ${className}`;
 
   const toggleIcon = showPassword ? <EyeOff size={18} /> : <Eye size={18} />;
 
   return (
-    <div className="mb-4">
+    <div className="w-full">
       {label && (
-        <label htmlFor={id} className="block text-primary font-semibold mb-1">
+        <label
+          htmlFor={id}
+          className={`mb-1 block text-sm font-semibold ${labelClassName}`}
+        >
           {label}
         </label>
       )}
@@ -58,7 +62,7 @@ function Input({
           onChange={onChange}
           onBlur={onBlur}
           placeholder={placeholder}
-          className="w-full bg-transparent outline-none border-0 text-gray-700"
+          className="w-full bg-transparent outline-none border-0 text-sm text-gray-700 placeholder:text-gray-400"
         />
 
         {type === "password" && (
@@ -72,11 +76,7 @@ function Input({
         )}
       </div>
 
-      {showError && (
-        <p className="text-danger text-sm mt-1">
-          {error}
-        </p>
-      )}
+      {showError && <p className="mt-1 text-sm text-danger">{error}</p>}
     </div>
   );
 }
