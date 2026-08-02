@@ -1,5 +1,7 @@
 package com.edutrack.student.dto.request;
 
+import com.edutrack.student.enums.AdmissionType;
+
 import java.time.LocalDate;
 
 public record UpdateStudentRequest(
@@ -10,5 +12,6 @@ public record UpdateStudentRequest(
    String rfid,
    String guardian,
    String guardianPhoneNumber,
+   AdmissionType admissionType,
    LocalDate birthDate
 ) {}

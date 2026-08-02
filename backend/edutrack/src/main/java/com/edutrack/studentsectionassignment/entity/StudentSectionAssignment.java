@@ -21,7 +21,7 @@ public class StudentSectionAssignment {
     private Student student;
 
     @ManyToOne
-    @JoinColumn(name = "sectionId", nullable = false)
+    @JoinColumn(name = "sectionId")
     private Section section;
 
     @Column(nullable = false)
@@ -29,7 +29,6 @@ public class StudentSectionAssignment {
 
     private LocalDate leftAt;
 
-    @Column(nullable = false)
     private ExitType exitType;
 
     @Column(columnDefinition = "TEXT")

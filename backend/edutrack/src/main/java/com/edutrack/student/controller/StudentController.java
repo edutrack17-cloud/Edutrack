@@ -25,13 +25,13 @@ public class StudentController {
         this.studentService = studentService;
     }
 
-    //CREATE
+    //ENROLL STUDENT
     @PostMapping
-    public ResponseEntity<StudentResponse> createStudent(@Valid @RequestBody CreateStudentRequest studentRequest){
-       StudentResponse savedStudent = studentService.createStudent(studentRequest);
-       return ResponseEntity.status(HttpStatus.CREATED).body(savedStudent);
+    public ResponseEntity<StudentResponse> enrollStudent(@Valid @RequestBody CreateStudentRequest studentRequest){
+        StudentResponse enrolledStudent = studentService.enrollStudent(studentRequest);
+        return ResponseEntity
+                .ok(enrolledStudent);
     }
-
 
     //READ
     @GetMapping
@@ -39,13 +39,7 @@ public class StudentController {
                                                              @RequestParam(required = false) String sectionName,
                                                              @RequestParam(required = false) StudentStatus studentStatus,
                                                              Pageable pageable){
-        return ResponseEntity.ok(studentService.getStudents(gradeLevel, sectionName, studentStatus, pageable));
-    }
-
-    //UPDATE
-    @PatchMapping("{studentId}")
-    public ResponseEntity<StudentResponse> updateStudent(@PathVariable Long studentId, @RequestBody UpdateStudentRequest updateStudentRequest){
-        StudentResponse updatedStudent = studentService.updateStudent(studentId, updateStudentRequest);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(updatedStudent);
+        return ResponseEntity
+                .ok(studentService.getStudents(gradeLevel, sectionName, studentStatus, pageable));
     }
 }

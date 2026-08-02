@@ -19,6 +19,9 @@ import com.edutrack.student.exception.StudentNotFound;
 import com.edutrack.student.mapper.StudentMapper;
 import com.edutrack.student.repository.StudentRepository;
 import com.edutrack.student.specification.StudentSpecification;
+import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
+import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
+import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -36,18 +39,29 @@ public class StudentService {
     private final StudentRepository studentRepository;
     private final StudentMapper studentMapper;
     private final SectionRepository sectionRepository;
+    private final StudentSectionAssignmentRepository studentSectionAssignmentRepository;
     private final SectionService sectionService;
 
-    public StudentService(StudentRepository studentRepository, StudentMapper studentMapper, SectionRepository sectionRepository, SectionService sectionService) {
+    private Section getBySectionId(int sectionId){
+        return sectionRepository.findById(sectionId).orElseThrow(() -> new SectionNotFound(sectionId));
+    }
+
+    public StudentService(StudentRepository studentRepository,
+                          StudentMapper studentMapper,
+                          SectionRepository sectionRepository,
+                          SectionService sectionService,
+                          StudentSectionAssignmentRepository studentSectionAssignmentRepository) {
         this.studentRepository = studentRepository;
         this.studentMapper = studentMapper;
         this.sectionRepository = sectionRepository;
         this.sectionService = sectionService;
+        this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
     }
 
-    //CREATE
+    //ENROLL STUDENT
     @Transactional
-    public StudentResponse createStudent(CreateStudentRequest studentRequest){
+    public StudentResponse enrollStudent(CreateStudentRequest studentRequest){
+       Section sectionToBeAssigned = getBySectionId(studentRequest.sectionId());
 
         if (studentRepository.existsByLrn(studentRequest.lrn())){
             throw new StudentAlreadyExists(studentRequest.lrn());
@@ -57,98 +71,37 @@ public class StudentService {
             throw new RFIDAlreadyExists();
         }
 
+       //STUDENT CREATION
+       Student requestToEntity = studentMapper.toEntity(studentRequest);
+       Student savedStudent = studentRepository.save(requestToEntity);
 
-        Student requestToEntity = studentMapper.toEntity(studentRequest);
-        Student savedStudent = studentRepository.save(requestToEntity);
-        return studentMapper.toStudentResponseDTO(savedStudent);
+       //SECTION ASSIGNMENT
+       StudentSectionAssignment assignmentToCreate = new StudentSectionAssignment();
+       assignmentToCreate.setStudent(savedStudent);
+       assignmentToCreate.setSection(sectionToBeAssigned);
+       studentSectionAssignmentRepository.save(assignmentToCreate);
+
+       return studentMapper.toStudentResponseDTO(savedStudent, sectionToBeAssigned);
     }
-
 
     //READ
-    public Page<StudentResponse> getStudents(GradeLevel gradeLevel, String sectionName, StudentStatus studentStatus, Pageable pageable){
-        Specification<Student> filters = Specification
-                .where(StudentSpecification.hasGradeLevel(gradeLevel))
-                .and(StudentSpecification.hasSectionName(sectionName))
-                .and(StudentSpecification.hasStatus(studentStatus));
-        return studentRepository.findAll(filters, pageable).map(studentMapper::toStudentResponseDTO);
-    }
+    public Page<StudentResponse> getStudents(GradeLevel gradeLevel,
+                                             String sectionName,
+                                             StudentStatus studentStatus,
+                                             Pageable pageable){
 
-    //UPDATE
-    @Transactional
-    public StudentResponse updateStudent(Long studentId, UpdateStudentRequest updateStudentRequest){
-        Student studentToUpdate = studentRepository.findById(studentId).orElseThrow(() -> new StudentNotFound(studentId));
-        boolean fieldChanged = false;
+        Specification<StudentSectionAssignment> filters = Specification
+                .where(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
+                .and(StudentSectionAssignmentSpecification.hasSection(sectionName))
+                .and(StudentSectionAssignmentSpecification.hasStudentStatus(studentStatus));
 
-        if (updateStudentRequest.firstName() != null &&
-                !updateStudentRequest.firstName().isBlank() &&
-                !studentToUpdate.getFirstName().equalsIgnoreCase(updateStudentRequest.firstName())){
-            studentToUpdate.setFirstName(updateStudentRequest.firstName());
-            fieldChanged = true;
-        }
-
-
-        if (updateStudentRequest.middleName() != null &&
-                !studentToUpdate.getMiddleName().equalsIgnoreCase(updateStudentRequest.middleName())){
-            if (updateStudentRequest.middleName().isEmpty()){
-                studentToUpdate.setMiddleName(null);
-            }
-            studentToUpdate.setMiddleName(updateStudentRequest.middleName());
-            fieldChanged = true;
-        }
-
-
-        if (updateStudentRequest.lastName() != null &&
-        !updateStudentRequest.lastName().isBlank() &&
-        !studentToUpdate.getLastName().equalsIgnoreCase(updateStudentRequest.lastName())){
-            studentToUpdate.setLastName(updateStudentRequest.lastName());
-            fieldChanged = true;
-        }
-
-        if (updateStudentRequest.lrn() != null &&
-        !updateStudentRequest.lrn().isBlank() &&
-        !studentToUpdate.getLrn().equalsIgnoreCase(updateStudentRequest.lrn())){
-            if (studentRepository.existsByLrn(updateStudentRequest.lrn())){
-                throw new StudentAlreadyExists(updateStudentRequest.lrn());
-            }
-            studentToUpdate.setLrn(updateStudentRequest.lrn());
-            fieldChanged = true;
-        }
-
-        if (updateStudentRequest.rfid() != null &&
-        !updateStudentRequest.rfid().isBlank() &&
-        !studentToUpdate.getRfid().equalsIgnoreCase(updateStudentRequest.rfid())){
-            if (studentRepository.existsByRfid(updateStudentRequest.rfid())){
-                throw new RFIDAlreadyExists();
-            }
-            studentToUpdate.setRfid(updateStudentRequest.rfid());
-            fieldChanged = true;
-        }
-
-        if (updateStudentRequest.guardian() != null &&
-        !updateStudentRequest.guardian().isBlank() &&
-        !studentToUpdate.getGuardian().equalsIgnoreCase(updateStudentRequest.guardian())){
-            studentToUpdate.setGuardian(updateStudentRequest.guardian());
-            fieldChanged = true;
-        }
-
-        if (updateStudentRequest.guardianPhoneNumber() != null &&
-        !updateStudentRequest.guardianPhoneNumber().isBlank() &&
-        !studentToUpdate.getGuardianPhoneNumber().equalsIgnoreCase(updateStudentRequest.guardianPhoneNumber())){
-            studentToUpdate.setGuardianPhoneNumber(updateStudentRequest.guardianPhoneNumber());
-            fieldChanged = true;
-        }
-
-        if (updateStudentRequest.birthDate() != null &&
-            !studentToUpdate.getBirthDate().equals(updateStudentRequest.birthDate())){
-            studentToUpdate.setBirthDate(updateStudentRequest.birthDate());
-            fieldChanged = true;
-        }
-
-        if (!fieldChanged){
-            throw new NoChangesDetected();
-        }
-
-        return studentMapper.toStudentResponseDTO(studentToUpdate);
+        return studentSectionAssignmentRepository
+                .findAll(filters, pageable)
+                .map(assignment ->
+                        studentMapper.toStudentResponseDTO(
+                                assignment.getStudent(),
+                                assignment.getSection()
+                        ));
     }
 
 }

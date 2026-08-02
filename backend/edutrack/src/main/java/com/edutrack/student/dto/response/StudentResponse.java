@@ -1,5 +1,7 @@
 package com.edutrack.student.dto.response;
 
+import com.edutrack.section.dto.response.SectionResponse;
+import com.edutrack.student.enums.AdmissionType;
 import com.edutrack.student.enums.StudentStatus;
 
 import java.time.LocalDate;
@@ -12,6 +14,8 @@ public record StudentResponse(
         String guardian,
         String guardianPhoneNumber,
         String rfid,
-        StudentStatus studentStatus
+        StudentStatus studentStatus,
+        AdmissionType admissionType,
+        SectionResponse section
 ) {
 }

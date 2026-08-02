@@ -43,6 +43,7 @@ public class Student {
     private StudentStatus studentStatus = StudentStatus.enrolled;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private AdmissionType admissionType;
 
     @OneToMany(mappedBy = "student")

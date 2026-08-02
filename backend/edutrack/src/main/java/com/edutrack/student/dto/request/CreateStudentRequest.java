@@ -1,5 +1,6 @@
 package com.edutrack.student.dto.request;
 
+import com.edutrack.student.enums.AdmissionType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -34,5 +35,11 @@ public record CreateStudentRequest(
 
         @NotBlank
         @Size(max = 255)
-        String rfid
+        String rfid,
+
+        @NotNull
+        AdmissionType admissionType,
+
+        @NotNull
+        int sectionId
 ) {}
