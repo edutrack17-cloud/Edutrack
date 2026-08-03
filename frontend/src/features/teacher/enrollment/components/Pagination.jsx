@@ -2,37 +2,55 @@ import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 function Pagination({ currentPage, totalPages, onPageChange }) {
-  const isFirstPage = currentPage <= 1;
-  const isLastPage = currentPage >= totalPages;
+  const isFirstPage = currentPage === 1;
+  const isLastPage = currentPage === totalPages;
 
   function goToPrevious() {
-    if (!isFirstPage) onPageChange(currentPage - 1);
+    if (!isFirstPage) {
+      // TODO:
+      // EnrollmentPage should request the previous page.
+      //
+      // Example:
+      // GET /api/students?page=${currentPage - 1}
+
+      onPageChange(currentPage - 1);
+    }
   }
 
   function goToNext() {
-    if (!isLastPage) onPageChange(currentPage + 1);
+    if (!isLastPage) {
+      // TODO:
+      // EnrollmentPage should request the next page.
+      //
+      // Example:
+      // GET /api/students?page=${currentPage + 1}
+
+      onPageChange(currentPage + 1);
+    }
   }
 
   return (
-    <div className="font-primary flex items-center justify-center gap-6 rounded-lg bg-primary px-4 py-3 text-white">
+    <div className="flex items-center justify-center rounded-md bg-primary p-1 text-white">
       <button
+        type="button"
         onClick={goToPrevious}
         disabled={isFirstPage}
-        className="cursor-pointer rounded-md p-1 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="rounded p-1 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <ChevronLeft size={20} />
+        <ChevronLeft size={18} strokeWidth={2.5} />
       </button>
 
-      <span className="text-sm font-semibold">
+      <span className="mx-4 text-center text-xs font-semibold sm:mx-8 sm:text-sm">
         Page {currentPage} of {totalPages}
       </span>
 
       <button
+        type="button"
         onClick={goToNext}
         disabled={isLastPage}
-        className="cursor-pointer rounded-md p-1 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="rounded p-1 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <ChevronRight size={20} />
+        <ChevronRight size={18} strokeWidth={2.5} />
       </button>
     </div>
   );

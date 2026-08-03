@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-// use props and destructure it para makuha yung data sa parent nya kung saan man sya gagamitin na form
 function Input({
   label,
   icon,
@@ -15,33 +14,16 @@ function Input({
   error,
   touched,
   className = "",
+  inputClassName = "",
   labelClassName = "text-primary",
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
-  // this function kung showpassword value nya is false magiging true
-  function togglePasswordVisibility() {
-    setShowPassword(!showPassword);
-  }
-
-  // type nya is password and showpassword is true
-  const isPasswordVisible = type === "password" && showPassword;
-
-  // if password is true show text like "password123" kapag no type nya which is input type = password
-  const inputType = isPasswordVisible ? "text" : type;
-
-  // check if na touch na or may error
-  const showError = Boolean(touched && error);
-
- 
-  const boxClass = showError
-    ? `flex items-center gap-2 rounded-lg border px-3 py-2.5 bg-white border-danger ${className}`
-    : `flex items-center gap-2 rounded-lg border px-3 py-2.5 bg-white border-gray-300 transition-colors focus-within:border-primary ${className}`;
-
-  const toggleIcon = showPassword ? <EyeOff size={18} /> : <Eye size={18} />;
+  const inputType =
+    type === "password" && showPassword ? "text" : type;
 
   return (
-    <div className="w-full">
+    <div>
       {label && (
         <label
           htmlFor={id}
@@ -51,8 +33,10 @@ function Input({
         </label>
       )}
 
-      <div className={boxClass}>
-        {icon && <span className="text-gray">{icon}</span>}
+      <div
+        className={`flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 focus-within:border-primary ${className}`}
+      >
+        {icon && <span className="text-gray-400">{icon}</span>}
 
         <input
           id={id}
@@ -62,21 +46,23 @@ function Input({
           onChange={onChange}
           onBlur={onBlur}
           placeholder={placeholder}
-          className="w-full bg-transparent outline-none border-0 text-sm text-gray-700 placeholder:text-gray-400"
+          className={`flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400 ${inputClassName}`}
         />
 
         {type === "password" && (
           <button
             type="button"
-            onClick={togglePasswordVisibility}
-            className="text-gray"
+            onClick={() => setShowPassword(!showPassword)}
+            className=" text-gray-400 "
           >
-            {toggleIcon}
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         )}
       </div>
 
-      {showError && <p className="mt-1 text-sm text-danger">{error}</p>}
+      {touched && error && (
+        <p className="mt-1 text-sm text-danger">{error}</p>
+      )}
     </div>
   );
 }

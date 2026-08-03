@@ -1,42 +1,27 @@
-import React, { useState } from "react";
-import { Plus } from "lucide-react";
-import Button from "../../../../components/ui/Button";
-import SearchInput from "../components/SearchInput";
+import { useState } from "react";
 import StudentFilters from "../components/StudentFilters";
-import StudentTable from "../components/StudentTable";
+import SearchInput from "../components/SearchInput";
+import Button from "../../../../components/ui/Button";
 import Pagination from "../components/Pagination";
+import StudentTable from "../components/StudentTable";
 import EnrollStudentModal from "../components/EnrollStudentModal";
 
 function EnrollmentPage() {
-  // Search state - used by SearchInput, and later by StudentTable to
-  // filter which rows show up.
-  const [searchTerm, setSearchTerm] = useState("");
+  const [search, setSearch] = useState("");
 
-  // Filter state - one piece of state per dropdown. All three live here
-  // (not inside StudentFilters) because StudentTable needs to read them
-  // too, to decide which rows to display.
   const [level, setLevel] = useState("");
   const [section, setSection] = useState("");
   const [status, setStatus] = useState("");
 
-  // Which page of results we're currently looking at.
   const [currentPage, setCurrentPage] = useState(1);
+  // TODO: BACKEND CONNECTION — totalPages should come from the API
+  // response once GET /api/students is wired up (e.g. response.totalPages).
+  const totalPages = 1;
 
-  // Controls whether the "Enroll New Student" modal is open. This lives
-  // here (not inside the modal itself) because the button that opens it
-  // ("Add Student") is on THIS page, not inside the modal - so both
-  // need to share the same open/closed value.
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-
-  function handleSearchChange(event) {
-    setSearchTerm(event.target.value);
-  }
 
   function handleLevelChange(event) {
     setLevel(event.target.value);
-    // Reset the section whenever the level changes, since the
-    // previously selected section might not belong to the new level.
-    setSection("");
   }
 
   function handleSectionChange(event) {
@@ -51,7 +36,7 @@ function EnrollmentPage() {
     setCurrentPage(newPage);
   }
 
-  function openAddModal() {
+  function handleAddStudent() {
     setIsAddModalOpen(true);
   }
 
@@ -59,19 +44,22 @@ function EnrollmentPage() {
     setIsAddModalOpen(false);
   }
 
-  function handleAddStudent(newStudent) {
-    // TODO: POST /api/students once Spring Boot is wired up. For now
-    // this just logs so the flow can be tested end-to-end in the UI.
-    console.log("New student:", newStudent);
+  function handleSubmitNewStudent(values) {
+    // TODO: BACKEND CONNECTION
+    //   1. POST /api/students             (create the student row)
+    //   2. POST /api/student-section-assignments (assign to section)
+    console.log("New student:", values);
   }
 
   return (
-    <div className="font-primary flex flex-col gap-6 bg-white p-3 sm:p-6">
-      <p className="text-sm font-medium text-gray">
-        Manage Student Enrollment Records
-      </p>
+    <div className="rounded-lg bg-white p-4 sm:p-6">
+      <div className="border-b border-gray-200 pb-4">
+        <p className="text-base font-semibold text-primary sm:text-lg">
+          Manage Student Enrollment Records
+        </p>
+      </div>
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <StudentFilters
           level={level}
           section={section}
@@ -82,42 +70,42 @@ function EnrollmentPage() {
         />
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchInput value={searchTerm} onChange={handleSearchChange} />
+          <SearchInput
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
           <Button
             type="button"
-            onClick={openAddModal}
-            className="flex w-full items-center justify-center gap-2 bg-primary text-white hover:bg-sky-700 sm:w-auto sm:shrink-0"
+            onClick={handleAddStudent}
+            className="bg-primary px-5 py-2.5 text-white hover:bg-sky-700 w-full sm:w-auto"
           >
-            <Plus size={18} />
             Add Student
           </Button>
         </div>
       </div>
 
-      {/* Student table */}
-      <StudentTable
-        searchTerm={searchTerm}
-        level={level}
-        section={section}
-        status={status}
-      />
+      <div className="mt-6">
+        <StudentTable
+          searchTerm={search}
+          level={level}
+          section={section}
+          status={status}
+        />
+      </div>
 
-      {/* Pagination */}
-      {/* TODO: "totalPages" is hardcoded to 1 for now - once the real
-          student list comes from Spring Boot, this should come from the
-          API response instead (e.g. response.data.totalPages). */}
-      <Pagination
-        currentPage={currentPage}
-        totalPages={1}
-        onPageChange={handlePageChange}
-      />
+      <div className="mt-4">
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      </div>
 
-      {/* Add Student modal - only shows itself when isAddModalOpen is true */}
       <EnrollStudentModal
         isOpen={isAddModalOpen}
         onClose={closeAddModal}
-        onSubmit={handleAddStudent}
+        onSubmit={handleSubmitNewStudent}
       />
     </div>
   );

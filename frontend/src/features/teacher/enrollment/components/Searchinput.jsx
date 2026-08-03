@@ -1,18 +1,20 @@
-import React from "react";
-import { Search } from "lucide-react";
 import Input from "../../../../components/ui/Input";
+import { Search } from "lucide-react";
 
-function SearchInput({ value, onChange }) {
+function SearchInput({
+  value,
+  onChange,
+  placeholder = "Search Student ",
+  className = "",
+}) {
   return (
     <Input
-      id="enrollment-search"
-      name="search"
-      type="text"
       icon={<Search size={18} />}
-      placeholder="Search LRN or Name"
+      type="text"
       value={value}
       onChange={onChange}
-      className="w-full sm:w-72"
+      placeholder={placeholder}
+      className={`h-10 w-full sm:w-72 ${className}`}
     />
   );
 }
