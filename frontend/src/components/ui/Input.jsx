@@ -16,6 +16,7 @@ function Input({
   className = "",
   inputClassName = "",
   labelClassName = "text-primary",
+  ...rest
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -36,7 +37,7 @@ function Input({
       <div
         className={`flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 focus-within:border-primary ${className}`}
       >
-        {icon && <span className="text-gray-400">{icon}</span>}
+        {icon && <span className="text-gray-500">{icon}</span>}
 
         <input
           id={id}
@@ -46,14 +47,18 @@ function Input({
           onChange={onChange}
           onBlur={onBlur}
           placeholder={placeholder}
-          className={`flex-1 bg-transparent outline-none text-sm placeholder:text-gray-400 ${inputClassName}`}
+          className={`flex-1 bg-transparent outline-none text-sm text-gray-500 placeholder:text-gray-500 ${inputClassName}`}
+          // Forwards any other native <input> attribute the caller passes
+          // in - "max", "min", "maxLength", "autoComplete", etc. - without
+          // Input.jsx needing to know about each one by name in advance.
+          {...rest}
         />
 
         {type === "password" && (
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className=" text-gray-400 "
+            className=" text-gray-500 "
           >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>

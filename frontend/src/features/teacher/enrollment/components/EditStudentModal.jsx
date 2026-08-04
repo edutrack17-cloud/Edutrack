@@ -1,3 +1,10 @@
+// EditStudentModal.jsx  (NEW FILE)
+//
+// Reuses StudentForm.jsx (same fields as EnrollStudentModal) but with
+// three differences: pre-filled initial values from the selected
+// student, a different title/button text, and PUT instead of POST on
+// submit.
+
 import React, { useState } from "react";
 import { useFormik } from "formik";
 import { X } from "lucide-react";
@@ -5,53 +12,49 @@ import RfidFormModal from "./RfidFormModal";
 import StudentForm from "./StudentForm";
 import enrollSchema from "../enrollmentSchema";
 
-const EMPTY_FORM = {
-  level: "",
-  section: "",
-  lrn: "",
-  rfid: "",
-  firstName: "",
-  middleName: "",
-  lastName: "",
-  birthdate: "",
-  address: "",
-  guardianName: "",
-  guardianMobile: "",
-};
-
-function EnrollStudentModal({
-  isOpen,
-  onClose,
-  onSubmit,
-  sections = [], // TODO: pass in real data from GET /api/sections once Spring Boot is ready
-}) {
+function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] }) {
   const [isRfidModalOpen, setIsRfidModalOpen] = useState(false);
 
   const formik = useFormik({
-    initialValues: EMPTY_FORM,
+    // "enableReinitialize" makes formik pick up a NEW "student" prop
+    // each time this modal is opened for a different row. Without this,
+    // formik only reads initialValues once on first mount, so editing
+    // Student A and then Student B would keep showing Student A's data.
+    enableReinitialize: true,
+    initialValues: {
+      // NOTE: student.gradeLevel is a string like "Grade 7" from mock
+      // data, but this form's Level dropdown expects a raw number (see
+      // the GRADE_LEVELS comment in StudentForm.jsx) - this is the same
+      // pre-existing mismatch noted there, so this will show unselected
+      // for the current mock data. Not something introduced here.
+      level: student?.level ?? "",
+      section: student?.sectionId ?? "",
+      lrn: student?.lrn ?? "",
+      rfid: student?.rfid ?? "",
+      firstName: student?.firstName ?? "",
+      middleName: student?.middleName ?? "",
+      lastName: student?.lastName ?? "",
+      birthdate: student?.birthdate ?? "",
+      address: student?.address ?? "",
+      guardianName: student?.guardianName ?? "",
+      guardianMobile: student?.guardianMobile ?? "",
+    },
     validationSchema: enrollSchema,
     onSubmit: (values, helpers) => {
       // TODO: BACKEND CONNECTION
-      //   1. POST /api/students            (create the student row)
-      //      Body: values above (level, section, lrn, rfid, firstName,
-      //      middleName, lastName, birthdate, address, guardianName,
-      //      guardianMobile).
-      //   2. POST /api/student-section-assignments (assign to the section)
-      //   Expected response: the newly created student record (with its
-      //   generated id).
-      //   On success: StudentTable's local "students" state should have
-      //   the new student appended (currently just logged via onSubmit).
-      onSubmit?.(values);
-      helpers.resetForm();
+      // PUT /api/students/{student.id}
+      // Body: the full updated student object (values above).
+      // Expected response: the updated student record.
+      // On success: StudentTable should update this student's row in
+      // its local "students" state with the returned data (currently
+      // done immediately via onSubmit below, without waiting for a
+      // real server response).
+      onSubmit?.(student?.id, values);
       onClose();
     },
   });
 
-  if (!isOpen) return null;
-
-  function handleClear() {
-    formik.resetForm();
-  }
+  if (!isOpen || !student) return null;
 
   function handleRfidConfirm(uid) {
     formik.setFieldValue("rfid", uid);
@@ -65,7 +68,7 @@ function EnrollStudentModal({
         <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
           <div className="w-6" />
           <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
-            Enroll New Student
+            Edit Student
           </h2>
           <button onClick={onClose} className="text-gray-500 transition-colors hover:text-gray-700">
             <X size={22} />
@@ -86,14 +89,14 @@ function EnrollStudentModal({
             onClick={formik.handleSubmit}
             className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
           >
-            Add
+            Save Changes
           </button>
           <button
             type="button"
-            onClick={handleClear}
+            onClick={onClose}
             className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
           >
-            Clear
+            Cancel
           </button>
         </div>
       </div>
@@ -107,4 +110,4 @@ function EnrollStudentModal({
   );
 }
 
-export default EnrollStudentModal;
+export default EditStudentModal;

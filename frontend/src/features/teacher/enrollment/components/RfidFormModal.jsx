@@ -28,11 +28,11 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
   }
 
   return (
-    <div className="font-primary fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
+    <div className="font-primary fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
+      <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-lg bg-white shadow-xl">
+        <div className="flex items-center border-b border-gray-200 px-4 py-3 sm:px-6 sm:py-4">
           <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+          <h2 className="flex-1 text-center text-base font-bold text-primary sm:text-lg md:text-xl">
             RFID FORM
           </h2>
           <button
@@ -43,7 +43,7 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
           </button>
         </div>
 
-        <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
+        <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5">
           <h3 className="text-sm font-bold tracking-wide text-primary uppercase">
             RFID Information
           </h3>
@@ -51,10 +51,10 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
           <button
             type="button"
             onClick={simulateTap}
-            className={`flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border transition-colors ${
+            className={`flex h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border transition-colors sm:h-40 ${
               uid
                 ? "border-success text-success"
-                : "border-gray-300 text-gray-500  hover:border-gray hover:text-gray-700"
+                : "border-gray-300 text-gray-500  hover:border-gray"
             }`}
           >
             {uid ? <Check size={40} /> : <Rss size={40} />}
@@ -73,7 +73,7 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
               readOnly
               placeholder="Waiting for tap..."
               className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none ${
-                uid ? "border-success text-success font-semibold" : "border-gray-300 text-gray-700"
+                uid ? "border-success text-success font-semibold" : "border-gray-500 text-gray-700"
               }`}
             />
           </div>

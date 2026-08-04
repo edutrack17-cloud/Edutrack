@@ -53,13 +53,7 @@ function EnrollmentPage() {
 
   return (
     <div className="rounded-lg bg-white p-4 sm:p-6">
-      <div className="border-b border-gray-200 pb-4">
-        <p className="text-base font-semibold text-primary sm:text-lg">
-          Manage Student Enrollment Records
-        </p>
-      </div>
-
-      <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <StudentFilters
           level={level}
           section={section}

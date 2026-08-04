@@ -7,8 +7,6 @@ import {
   FileSpreadsheet,
   UserPlus,
   GraduationCap,
-  KeyRound,
-  LogOut,
   Menu,
   X,
 } from "lucide-react";
@@ -60,17 +58,11 @@ function Sidebar({
       : `${baseClasses} hover:bg-white/10`;
   }
 
-  function handleLogout() {
-    console.log("Logout");
-  }
-
   const widthClass = isCollapsed ? "w-20" : "w-72";
   const logoSizeClass = isCollapsed ? "h-10 w-10" : "h-16 w-16";
   const mobileTranslateClass = isMobileOpen
     ? "translate-x-0"
     : "-translate-x-full";
-
-  const settingsMarginClass = isCollapsed ? "mt-12" : "mt-4";
 
   const sidebarClasses = `
     sidebar-nav-scroll
@@ -133,7 +125,7 @@ function Sidebar({
 
         {!isCollapsed && (
           <div className="px-4 py-2">
-            <div className="rounded-xl bg-sky-700 p-2 text-center shadow-md">
+            <div className="rounded-xl bg-white/95 text-primary p-2 text-center shadow-md">
               <h2 className="text-xl font-bold">{time}</h2>
               <p className="mt-0.5 text-xs">{date}</p>
             </div>
@@ -156,25 +148,6 @@ function Sidebar({
             );
           })}
         </nav>
-
-      
-        <div className={`${settingsMarginClass} flex flex-col gap-2 border-t border-white/20 px-4 py-3`}>
-          {!isCollapsed && (
-            <h1 className="text-center font-bold">SETTINGS</h1>
-          )}
-
-          <NavLink to="/change-password" className={getLinkClasses}>
-            <KeyRound size={ICON_SIZE} />
-            {!isCollapsed && <span>Change Password</span>}
-          </NavLink>
-
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-2 transition-colors hover:bg-white/10">
-            <LogOut size={ICON_SIZE} />
-            {!isCollapsed && <span>Logout</span>}
-          </button>
-        </div>
       </aside>
     </>
   );

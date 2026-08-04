@@ -4,7 +4,7 @@ import { Search } from "lucide-react";
 function SearchInput({
   value,
   onChange,
-  placeholder = "Search Student ",
+  placeholder = "Search Student Full Name ",
   className = "",
 }) {
   return (
@@ -14,7 +14,7 @@ function SearchInput({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className={`h-10 w-full sm:w-72 ${className}`}
+      className={`h-10 w-full sm:w-64 md:w-72 ${className}`}
     />
   );
 }

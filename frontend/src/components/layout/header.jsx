@@ -1,10 +1,30 @@
-import React from "react";
-import { Menu } from "lucide-react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { Menu, ChevronDown, KeyRound, LogOut } from "lucide-react";
 
-function Header({ title, fullname, role, onMenuClick }) {
+function Header({ title, fullname, role, onMenuClick, onLogout }) {
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  function toggleProfileMenu() {
+    setIsProfileMenuOpen((prev) => !prev);
+  }
+
+  function closeProfileMenu() {
+    setIsProfileMenuOpen(false);
+  }
+
+  function handleLogout() {
+    closeProfileMenu();
+    if (onLogout) {
+      onLogout();
+    } else {
+      console.log("Logout");
+    }
+  }
+
   return (
     <header className="flex min-h-20 items-center justify-between gap-3 bg-white px-4 py-3 shadow-md sm:px-6">
-      
+
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <button
           onClick={onMenuClick}
@@ -18,13 +38,51 @@ function Header({ title, fullname, role, onMenuClick }) {
         </h1>
       </div>
 
-      <div className="shrink-0 text-right sm:text-center">
-        <p className="whitespace-nowrap text-sm font-semibold text-primary font-primary sm:text-base">
-          {fullname}
-        </p>
-        <p className="text-xs text-gray font-primary sm:text-sm">
-          {role}
-        </p>
+      <div className="relative flex  shrink-0 items-center gap-5">
+        <div className="text-right sm:text-center">
+          <p className="whitespace-nowrap text-sm font-semibold text-primary font-primary sm:text-base">
+            {fullname}
+          </p>
+          <p className="text-xs text-gray font-primary sm:text-sm">
+            {role}
+          </p>
+        </div>
+
+        <button
+          onClick={toggleProfileMenu}
+          className="flex shrink-0 items-center justify-center rounded-lg p-1.5 transition-colors hover:bg-primary/10"
+        >
+          <ChevronDown
+            size={26}
+            className={ `text-primary transition-transform duration-200 ${
+              isProfileMenuOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        {isProfileMenuOpen && (
+          <>
+            {/* backdrop to close the dropdown when clicking outside */}
+            <div onClick={closeProfileMenu} className="fixed inset-0 z-10" />
+
+            <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
+              <Link
+                to="/change-password"
+                onClick={closeProfileMenu}
+                className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary transition-colors hover:bg-primary/10">
+                <KeyRound size={18} />
+                <span>Change Password</span>
+              </Link>
+
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-600 transition-colors hover:bg-red-50">
+                <LogOut size={18} />
+                <span>Logout</span>
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </header>
   );

@@ -1,6 +1,3 @@
-// Validation rules for the "Enroll New Student" form.
-// Kept in its own file (same pattern as loginSchema.js) so the
-// component itself stays focused on markup/behavior.
 import * as Yup from "yup";
 
 // Letters (incl. ñ), spaces, hyphens, and apostrophes -> covers names
