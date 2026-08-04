@@ -3,7 +3,9 @@ package com.edutrack.student.controller;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.student.dto.request.CreateStudentRequest;
+import com.edutrack.student.dto.request.DropStudentRequest;
 import com.edutrack.student.dto.request.UpdateStudentRequest;
+import com.edutrack.student.dto.response.StudentEditResponse;
 import com.edutrack.student.dto.response.StudentResponse;
 import com.edutrack.student.enums.StudentStatus;
 import com.edutrack.student.service.StudentService;
@@ -41,5 +43,19 @@ public class StudentController {
                                                              Pageable pageable){
         return ResponseEntity
                 .ok(studentService.getStudents(gradeLevel, sectionName, studentStatus, pageable));
+    }
+
+    //UPDATE
+    @PatchMapping("{studentId}")
+    public ResponseEntity<StudentEditResponse> updateStudent(@PathVariable Long studentId, @RequestBody UpdateStudentRequest updateStudentRequest){
+        StudentEditResponse updatedStudent = studentService.updateStudent(studentId, updateStudentRequest);
+        return ResponseEntity.ok(updatedStudent);
+    }
+
+    //DROP STUDENT
+    @PatchMapping("{studentId}/student-status/drop")
+    public ResponseEntity<StudentEditResponse> dropStudent(@PathVariable Long studentId, @RequestBody DropStudentRequest dropStudentRequest){
+        StudentEditResponse droppedStudent = studentService.dropStudent(studentId, dropStudentRequest);
+        return ResponseEntity.ok(droppedStudent);
     }
 }
