@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
 import LoginPage from "../features/auth/LoginPage";
 import EnrollmentPage from "../features/teacher/enrollment/pages/EnrollmentPage" ;
+import AttendancePage from "../features/teacher/attendance/Attendancepage";
 
 function AppRoutes() {
   return (
@@ -12,7 +13,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<MainLayout />}>
         <Route path="/dashboard" element={<div>Dashboard page</div>} />
-        <Route path="/attendance" element={<div>Attendance page</div>} />
+        <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/sf2-attendance" element={<div>SF2 Attendance page</div>} />
         <Route path="/enrollment" element={<EnrollmentPage />} />
         <Route path="/promote-student" element={<div>Promote Student page</div>} />

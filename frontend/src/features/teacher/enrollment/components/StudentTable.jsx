@@ -1,16 +1,3 @@
-// StudentTable.jsx  (MODIFIED)
-//
-// Changes from before:
-//   1. Mock data expanded (middleName, birthdate, address, guardianName,
-//      guardianMobile added) - needed to feed the new View/Edit modals.
-//      "name" was split into firstName/middleName/lastName for the
-//      same reason.
-//   2. "students" is now useState (was a plain const) so Edit-save and
-//      status-change confirmations can actually update what's shown.
-//   3. Kebab menu buttons (View/Edit/Enrolled/Dropped/Transferred) now
-//      have real onClick handlers - previously none of them did anything.
-//   4. Renders ViewStudentModal, EditStudentModal, and ConfirmStatusModal.
-
 import React, { useEffect, useRef, useState } from "react";
 import {
   MoreHorizontal,
@@ -22,7 +9,7 @@ import {
 } from "lucide-react";
 import ViewStudentModal from "./ViewStudentModal";
 import EditStudentModal from "./EditStudentModal";
-import ConfirmStatusModal from "./ConfirmStatus";
+import ConfirmStatusModal from "./ConfirmStatusModal";
 
 const menuButtonClass =
   "flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition";
@@ -61,11 +48,6 @@ function ActionMenu({
       <button onClick={onEdit} className={`${menuButtonClass} ${actionColorClass.edit}`}>
         <Pencil size={16} />
         Edit
-      </button>
-
-      <button onClick={onMarkEnrolled} className={`${menuButtonClass} ${actionColorClass.enrolled}`}>
-        <User size={16} />
-        Enrolled
       </button>
 
       <button onClick={onMarkDropped} className={`${menuButtonClass} ${actionColorClass.dropped}`}>
@@ -112,7 +94,7 @@ function StudentTable({ searchTerm = "", level = "", section = "", status = "" }
       address: "Tejero, General Trias, Cavite",
       guardianName: "Marissa Dela Cruz",
       guardianMobile: "09171234567",
-      gradeLevel: "Grade 7",
+      gradeLevel: "Grade 4",
       section: "Rose",
       status: "Enrolled",
     },
@@ -127,7 +109,7 @@ function StudentTable({ searchTerm = "", level = "", section = "", status = "" }
       address: "Panungyanan, General Trias, Cavite",
       guardianName: "Jose Santos",
       guardianMobile: "09181234567",
-      gradeLevel: "Grade 7",
+      gradeLevel: "Grade 5",
       section: "Rose",
       status: "Dropped",
     },
@@ -142,7 +124,7 @@ function StudentTable({ searchTerm = "", level = "", section = "", status = "" }
       address: "Manggahan, General Trias, Cavite",
       guardianName: "Ana Reyes",
       guardianMobile: "09191234567",
-      gradeLevel: "Grade 7",
+      gradeLevel: "Grade 6",
       section: "Rose",
       status: "Transferred",
     },

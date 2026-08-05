@@ -31,6 +31,7 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
       section: student?.sectionId ?? "",
       lrn: student?.lrn ?? "",
       rfid: student?.rfid ?? "",
+      admissionType: student?.admissionType ?? "",
       firstName: student?.firstName ?? "",
       middleName: student?.middleName ?? "",
       lastName: student?.lastName ?? "",

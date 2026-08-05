@@ -35,6 +35,13 @@ const enrollSchema = Yup.object({
 
   rfid: Yup.string().required("Please tap or add a student RFID"),
 
+  // Matches students.admission_type ENUM(regular, transferred_in) from
+  // the ERD - .oneOf() as a safety net in case a stray value ever ends
+  // up in formik state some other way (e.g. bad initial data on Edit).
+  admissionType: Yup.string()
+    .required("Please select an admission type")
+    .oneOf(["regular", "transferred_in"], "Invalid admission type"),
+
   firstName: Yup.string()
     .required("First name is required")
     .matches(NAME_REGEX, "First name should only contain letters")
@@ -59,12 +66,11 @@ const enrollSchema = Yup.object({
     .required("Birthdate is required")
     .max(new Date(), "Birthdate cannot be in the future")
     .test(
-      "age-range",
-      "Student age must be between 8 and 15 years old",
+      "min-age",
+      "Student must be at least 8 years old",
       (value) => {
         if (!value) return false;
-        const age = calculateAge(value);
-        return age >= 8 && age <= 15;
+        return calculateAge(value) >= 8;
       }
     ),
 

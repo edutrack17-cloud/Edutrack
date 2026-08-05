@@ -1,13 +1,20 @@
 import React from "react";
 import { X } from "lucide-react";
 
+// Matches students.admission_type ENUM(regular, transferred_in) from
+// the ERD - turns the raw stored value into readable display text.
+const ADMISSION_TYPE_LABELS = {
+  regular: "Regular",
+  transferred_in: "Transferred In",
+};
+
 // Small local component - one label + one value, reused for every
 // field below instead of repeating the same two <p> tags each time.
 function InfoField({ label, value }) {
   return (
     <div>
       <p className="mb-1 text-sm font-semibold text-gray-700">{label}</p>
-      <p className="text-sm text-gray">{value || "—"}</p>
+      <p className="text-sm text-gray-500">{value || "—"}</p>
     </div>
   );
 }
@@ -22,6 +29,9 @@ function ViewStudentModal({ isOpen, onClose, student }) {
   // changed since the table was last loaded.
 
   if (!isOpen || !student) return null;
+
+  const admissionTypeLabel =
+    ADMISSION_TYPE_LABELS[student.admissionType] || student.admissionType;
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
@@ -46,6 +56,7 @@ function ViewStudentModal({ isOpen, onClose, student }) {
               <InfoField label="Section" value={student.section} />
               <InfoField label="LRN" value={student.lrn} />
               <InfoField label="RFID UID" value={student.rfid} />
+              <InfoField label="Admission Type" value={admissionTypeLabel} />
             </div>
           </div>
 

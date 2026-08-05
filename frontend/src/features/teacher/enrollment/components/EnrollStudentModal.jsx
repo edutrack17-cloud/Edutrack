@@ -10,6 +10,10 @@ const EMPTY_FORM = {
   section: "",
   lrn: "",
   rfid: "",
+  // Matches students.admission_type ENUM(regular, transferred_in) from
+  // the ERD. Added here to match EditStudentModal's initialValues,
+  // which already carries this field.
+  admissionType: "",
   firstName: "",
   middleName: "",
   lastName: "",
@@ -33,9 +37,9 @@ function EnrollStudentModal({
     onSubmit: (values, helpers) => {
       // TODO: BACKEND CONNECTION
       //   1. POST /api/students            (create the student row)
-      //      Body: values above (level, section, lrn, rfid, firstName,
-      //      middleName, lastName, birthdate, address, guardianName,
-      //      guardianMobile).
+      //      Body: values above (level, section, lrn, rfid, admissionType,
+      //      firstName, middleName, lastName, birthdate, address,
+      //      guardianName, guardianMobile).
       //   2. POST /api/student-section-assignments (assign to the section)
       //   Expected response: the newly created student record (with its
       //   generated id).

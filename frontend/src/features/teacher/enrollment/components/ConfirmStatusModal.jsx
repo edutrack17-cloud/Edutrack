@@ -1,5 +1,3 @@
-// ConfirmStatusModal.jsx  (NEW FILE)
-//
 // One small generic confirmation dialog, reused for all three status
 // changes (Enrolled / Dropped / Transferred) instead of building three
 // nearly-identical modals - the specific status text/color is passed

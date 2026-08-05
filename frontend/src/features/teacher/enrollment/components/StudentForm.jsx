@@ -1,12 +1,3 @@
-// StudentForm.jsx  (NEW FILE)
-//
-// The actual form fields - Enrollment Information, Student Information,
-// Parent/Guardian Information - shared by BOTH EnrollStudentModal (add)
-// and EditStudentModal (edit), so this markup only has to be written
-// and maintained in ONE place. Each parent modal builds its own
-// "formik" instance (different initialValues/onSubmit) and just hands
-// it to this component to render.
-
 import React from "react";
 import { ChevronDown, Rss } from "lucide-react";
 import Input from "../../../../components/ui/Input";
@@ -141,6 +132,37 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             </button>
             {formik.touched.rfid && formik.errors.rfid && (
               <p className={errorTextClass}>{formik.errors.rfid}</p>
+            )}
+          </div>
+
+          {/* Matches students.admission_type ENUM(regular, transferred_in)
+              from the ERD. Full-width (sm:col-span-2) since it's an odd
+              5th item in an otherwise 2-column grid, same treatment as
+              the Address field below. */}
+          <div className="sm:col-span-2">
+            <label className={fieldLabelClass}>Admission Type</label>
+            <div className="relative">
+              <select
+                name="admissionType"
+                value={formik.values.admissionType}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={selectClass(
+                  formik.touched.admissionType && formik.errors.admissionType,
+                  Boolean(formik.values.admissionType)
+                )}
+              >
+                <option value="" className="text-gray-700">Select Admission Type</option>
+                <option value="regular" className="text-gray-700">Regular</option>
+                <option value="transferred_in" className="text-gray-700">Transferred In</option>
+              </select>
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+              />
+            </div>
+            {formik.touched.admissionType && formik.errors.admissionType && (
+              <p className={errorTextClass}>{formik.errors.admissionType}</p>
             )}
           </div>
         </div>

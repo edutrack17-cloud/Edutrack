@@ -7,7 +7,6 @@ import { Check, ChevronDown } from "lucide-react";
 // no new theme colors introduced.
 const STATUS_OPTIONS = [
   { value: "", label: "Status", textClass: "text-gray-500", hoverClass: "hover:bg-gray-100", selectedBgClass: "bg-gray-100" },
-  { value: "Enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "hover:bg-success/10", selectedBgClass: "bg-success/10" },
   { value: "Dropped", label: "Dropped", textClass: "text-danger", hoverClass: "hover:bg-danger/10", selectedBgClass: "bg-danger/10" },
   { value: "Transferred", label: "Transferred", textClass: "text-warning", hoverClass: "hover:bg-warning/10", selectedBgClass: "bg-warning/10" },
 ];
@@ -80,7 +79,7 @@ function StudentFilters({
           onChange={onLevelChange}
           className={selectClassName}
         >
-          <option value="">Levels</option>
+          <option value="">Grade Level</option>
 
           {/* TODO: BACKEND CONNECTION
               GET /api/grade-levels
@@ -119,9 +118,6 @@ function StudentFilters({
 
       {/* Status — values here match StudentTable's mock student.status
           strings exactly ("Enrolled" / "Dropped" / "Transferred").
-          They previously said "Pending"/"Inactive", which don't exist
-          anywhere in the actual student data, so filtering by them
-          would have silently returned zero results.
 
           This is a custom dropdown instead of a native <select> because
           <option> elements can't reliably render custom text colors
