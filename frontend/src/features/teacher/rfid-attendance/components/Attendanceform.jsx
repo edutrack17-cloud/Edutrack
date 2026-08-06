@@ -2,7 +2,7 @@ import React from "react";
 import Input from "../../../../components/ui/Input";
 import { ChevronDown } from "lucide-react";
 
-function AttendanceForm({ formik }) {
+function AttendanceForm({ formik, date }) {
   const fieldLabelClass = "mb-1 block text-sm font-semibold text-gray-700";
   const inputLabelClass = "text-gray-700";
   const errorTextClass = "mt-1 text-xs text-danger";
@@ -19,6 +19,17 @@ function AttendanceForm({ formik }) {
       <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
         Attendance Information
       </h3>
+
+      {/* Read-only — this record belongs to the day the RFID tap
+          happened, so it's shown for context but can't be changed
+          here. Editing time in/out/status doesn't move the record to
+          a different day. */}
+      <div>
+        <label className={fieldLabelClass}>Date</label>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500">
+          {date || "—"}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6">
         <Input

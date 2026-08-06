@@ -22,19 +22,6 @@ function Sidebar({
 }) {
   const teacher = "IORI YAGAMI";
 
-  const now = new Date();
-
-  const date = now.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  const time = now.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
   const navigationItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "RFID Attendance", path: "/rfid-attendance", icon: IdCard },
@@ -121,17 +108,6 @@ function Sidebar({
             </div>
           )}
         </div>
-
-
-        {!isCollapsed && (
-          <div className="px-4 py-2">
-            <div className="rounded-xl bg-white/95 text-primary p-2 text-center shadow-md">
-              <h2 className="text-xl font-bold">{time}</h2>
-              <p className="mt-0.5 text-xs">{date}</p>
-            </div>
-          </div>
-        )}
-
 
         <nav className="mt-6 flex flex-col gap-1.5 px-4">
           {navigationItems.map((item) => {

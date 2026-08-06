@@ -1,0 +1,18 @@
+import React from "react";
+
+function StatCard({ icon: Icon, count, label, colorClass = "text-primary" }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className={`flex items-center gap-2 ${colorClass}`}>
+        <Icon size={22} />
+        <span className="text-3xl font-bold">{count}</span>
+      </div>
+
+      <div className="mt-3 border-t border-gray-200" />
+
+      <p className="mt-3 text-sm font-bold text-gray-700">{label}</p>
+    </div>
+  );
+}
+
+export default StatCard;

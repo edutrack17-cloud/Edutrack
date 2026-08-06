@@ -70,7 +70,7 @@ function EditAttendanceModal({
         </div>
 
         <div className="px-6 py-6">
-          <AttendanceForm formik={formik} />
+          <AttendanceForm formik={formik} date={attendance.date} />
         </div>
 
         <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
