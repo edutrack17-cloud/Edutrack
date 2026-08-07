@@ -329,7 +329,7 @@ function RFIDAttendancePage() {
   const todaysRecords = attendance.filter((r) => r.date === getTodayIso());
 
   return (
-    <div className="font-primary relative flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-lg shadow-md lg:flex-row">
+    <div className="font-primary relative flex min-h-[calc(85vh-2rem)] flex-col overflow-hidden rounded-lg shadow-md lg:flex-row">
       {/* Catches RFID reader keystrokes (UID + Enter) no matter what's
           on screen. Visually hidden, always focused. */}
       <input

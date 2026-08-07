@@ -1,10 +1,7 @@
 import * as Yup from "yup";
 
-// Letters (incl. ñ), spaces, hyphens, and apostrophes -> covers names
-// like "Dela Cruz", "O'Brien", "Mary-Jane", "Peña".
 const NAME_REGEX = /^[a-zA-ZñÑ'-]+(?:\s[a-zA-ZñÑ'-]+)*$/;
 
-// PH mobile numbers: 09 + 9 digits (e.g. 09171234567).
 const MOBILE_REGEX = /^09\d{9}$/;
 
 // DepEd LRNs are 12 digits.
@@ -35,9 +32,7 @@ const enrollSchema = Yup.object({
 
   rfid: Yup.string().required("Please tap or add a student RFID"),
 
-  // Matches students.admission_type ENUM(regular, transferred_in) from
-  // the ERD - .oneOf() as a safety net in case a stray value ever ends
-  // up in formik state some other way (e.g. bad initial data on Edit).
+
   admissionType: Yup.string()
     .required("Please select an admission type")
     .oneOf(["regular", "transferred_in"], "Invalid admission type"),
@@ -48,9 +43,6 @@ const enrollSchema = Yup.object({
     .min(2, "First name is too short")
     .max(50, "First name is too long"),
 
-  // Middle name is intentionally optional — not every student has
-  // one on record — but if it's filled in, it still has to look
-  // like an actual name.
   middleName: Yup.string()
     .matches(NAME_REGEX, "Middle name should only contain letters")
     .max(50, "Middle name is too long"),
@@ -83,7 +75,7 @@ const enrollSchema = Yup.object({
     .required("Guardian name is required")
     .matches(NAME_REGEX, "Guardian name should only contain letters")
     .min(2, "Guardian name is too short")
-    .max(100, "Guardian name is too long"),
+    .max(100, "Guardian name is too long"), 
 
   guardianMobile: Yup.string()
     .required("Guardian mobile number is required")
