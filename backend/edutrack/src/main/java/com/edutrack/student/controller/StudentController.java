@@ -1,6 +1,7 @@
 package com.edutrack.student.controller;
 
 import com.edutrack.section.enums.GradeLevel;
+import com.edutrack.student.dto.request.BulkPromotionRequest;
 import com.edutrack.student.dto.request.CreateStudentRequest;
 import com.edutrack.student.dto.request.UpdateStudentStatusRequest;
 import com.edutrack.student.dto.request.UpdateStudentRequest;
@@ -13,6 +14,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("api/student")
@@ -67,5 +70,12 @@ public class StudentController {
     public ResponseEntity<StudentEditResponse> graduateStudent(@PathVariable Long studentId, @RequestBody UpdateStudentStatusRequest updateStudentStatusRequest){
         StudentEditResponse graduatedStudent = studentService.graduateStudent(studentId, updateStudentStatusRequest);
         return ResponseEntity.ok(graduatedStudent);
+    }
+
+    //BULK PROMOTE
+    @PatchMapping("/grade-level/promote")
+    public ResponseEntity<List<StudentResponse>> promoteStudents(@RequestBody BulkPromotionRequest promotionRequest){
+        List<StudentResponse> promotedStudents = studentService.promoteStudents(promotionRequest);
+        return ResponseEntity.ok(promotedStudents);
     }
 }

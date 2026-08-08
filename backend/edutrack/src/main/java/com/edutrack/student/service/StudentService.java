@@ -6,6 +6,7 @@ import com.edutrack.section.exception.SectionNotFound;
 import com.edutrack.section.repository.SectionRepository;
 import com.edutrack.section.service.SectionService;
 import com.edutrack.shared.exception.NoChangesDetected;
+import com.edutrack.student.dto.request.BulkPromotionRequest;
 import com.edutrack.student.dto.request.CreateStudentRequest;
 import com.edutrack.student.dto.request.UpdateStudentRequest;
 import com.edutrack.student.dto.response.StudentEditResponse;
@@ -22,6 +23,7 @@ import com.edutrack.studentsectionassignment.enums.ExitType;
 import com.edutrack.studentsectionassignment.exception.SectionAssignmentNotFound;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
+import org.springframework.cglib.core.Local;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -29,6 +31,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Period;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
@@ -51,6 +56,7 @@ public class StudentService {
         return studentSectionAssignmentRepository.findByStudent_StudentIdAndLeftAtIsNull(studentId).orElseThrow(() -> new SectionAssignmentNotFound(studentId));
     }
 
+
     private boolean hasText(String field){
         return field != null && !field.isBlank();
     }
@@ -71,12 +77,21 @@ public class StudentService {
     public StudentResponse enrollStudent(CreateStudentRequest studentRequest){
        Section sectionToBeAssigned = getBySectionId(studentRequest.sectionId());
 
+       int age = Period.between(
+               studentRequest.birthDate(),
+               LocalDate.now()
+       ).getYears();
+
         if (studentRepository.existsByLrn(studentRequest.lrn())){
             throw new StudentAlreadyExists(studentRequest.lrn());
         }
 
         if (studentRepository.existsByRfid(studentRequest.rfid())){
             throw new RFIDAlreadyExists();
+        }
+
+        if (age < 9){
+            throw new StudentUnderAge();
         }
 
        //STUDENT CREATION
@@ -118,6 +133,7 @@ public class StudentService {
         Student studentToUpdate = getByStudentId(studentId);
         String middleName = updateStudentRequest.middleName();
         boolean fieldsChanged = false;
+
 
         if (updateStudentRequest.firstName() != null &&
             !updateStudentRequest.firstName().isBlank() &&
@@ -186,6 +202,15 @@ public class StudentService {
         if (updateStudentRequest.birthDate() != null &&
             !studentToUpdate.getBirthDate().equals(updateStudentRequest.birthDate())){
 
+            int age = Period.between(
+                    updateStudentRequest.birthDate(),
+                    LocalDate.now()
+            ).getYears();
+
+            if (age < 9){
+                throw new StudentUnderAge();
+            }
+
             studentToUpdate.setBirthDate(updateStudentRequest.birthDate());
             fieldsChanged = true;
         }
@@ -202,6 +227,41 @@ public class StudentService {
         }
 
         return studentMapper.toStudentEditResponseDTO(studentToUpdate);
+    }
+
+    //BULK PROMOTION
+    @Transactional
+    public List<StudentResponse> promoteStudents(BulkPromotionRequest promotionRequest){
+        Section promotedStudentSection = getBySectionId(promotionRequest.targetSectionId());
+        List<Student> studentsToUpdate = promotionRequest.studentIds().stream().map(this::getByStudentId).toList();
+        LocalDate now = LocalDate.now();
+
+        List<StudentResponse> responses = new ArrayList<>();
+
+        studentsToUpdate.forEach(student -> {
+            StudentSectionAssignment currentAssignment =
+                    studentSectionAssignmentRepository.findByStudentAndLeftAtIsNull(student)
+                            .orElseThrow(() -> new StudentNotFound(student.getStudentId()));
+
+            currentAssignment.setLeftAt(now);
+            currentAssignment.setUpdatedAt(now);
+            currentAssignment.setExitType(ExitType.promoted);
+
+            StudentSectionAssignment newAssignment = new StudentSectionAssignment();
+            newAssignment.setStudent(student);
+            newAssignment.setSection(promotedStudentSection);
+            newAssignment.setAssignedAt(now);
+
+            StudentResponse response =
+                    studentMapper.toStudentResponseDTO(
+                            student,
+                            promotedStudentSection
+                    );
+
+            responses.add(response);
+        });
+
+        return responses;
     }
 
     //DROP STUDENT

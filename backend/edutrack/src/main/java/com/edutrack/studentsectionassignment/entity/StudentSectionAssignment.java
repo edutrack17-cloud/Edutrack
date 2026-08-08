@@ -29,6 +29,7 @@ public class StudentSectionAssignment {
 
     private LocalDate leftAt;
 
+    @Enumerated(EnumType.STRING)
     private ExitType exitType;
 
     @Column(columnDefinition = "TEXT")
