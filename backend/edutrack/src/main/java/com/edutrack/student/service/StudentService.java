@@ -11,14 +11,12 @@ import com.edutrack.student.dto.request.UpdateStudentRequest;
 import com.edutrack.student.dto.response.StudentEditResponse;
 import com.edutrack.student.dto.response.StudentResponse;
 import com.edutrack.student.entity.Student;
+import com.edutrack.student.enums.AdmissionType;
 import com.edutrack.student.enums.StudentStatus;
-import com.edutrack.student.exception.RFIDAlreadyExists;
-import com.edutrack.student.exception.StudentAlreadyDropped;
-import com.edutrack.student.exception.StudentAlreadyExists;
-import com.edutrack.student.exception.StudentNotFound;
+import com.edutrack.student.exception.*;
 import com.edutrack.student.mapper.StudentMapper;
 import com.edutrack.student.repository.StudentRepository;
-import com.edutrack.student.dto.request.DropStudentRequest;
+import com.edutrack.student.dto.request.UpdateStudentStatusRequest;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.enums.ExitType;
 import com.edutrack.studentsectionassignment.exception.SectionAssignmentNotFound;
@@ -53,6 +51,9 @@ public class StudentService {
         return studentSectionAssignmentRepository.findByStudent_StudentIdAndLeftAtIsNull(studentId).orElseThrow(() -> new SectionAssignmentNotFound(studentId));
     }
 
+    private boolean hasText(String field){
+        return field != null && !field.isBlank();
+    }
     public StudentService(StudentRepository studentRepository,
                           StudentMapper studentMapper,
                           SectionRepository sectionRepository,
@@ -189,6 +190,13 @@ public class StudentService {
             fieldsChanged = true;
         }
 
+        if (updateStudentRequest.admissionType() != null &&
+            studentToUpdate.getAdmissionType() != updateStudentRequest.admissionType()){
+
+            studentToUpdate.setAdmissionType(updateStudentRequest.admissionType());
+            fieldsChanged = true;
+        }
+
         if (!fieldsChanged){
             throw new NoChangesDetected();
         }
@@ -198,7 +206,7 @@ public class StudentService {
 
     //DROP STUDENT
     @Transactional
-    public StudentEditResponse dropStudent(Long studentId, DropStudentRequest dropStudentRequest){
+    public StudentEditResponse dropStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
         Student studentToDrop = getByStudentId(studentId);
 
         if (studentToDrop.getStudentStatus().equals(StudentStatus.dropped)){
@@ -210,15 +218,69 @@ public class StudentService {
 
         //UPDATE STUDENT SECTION ASSIGNMENT ENTITY
         StudentSectionAssignment assignmentToUpdate = getByAssignmentStudentId(studentId);
-        assignmentToUpdate.setLeftAt(LocalDate.now());
+        assignmentToUpdate.setLeftAt(updateStudentStatusRequest.leftAt());
+        assignmentToUpdate.setUpdatedAt(LocalDate.now());
         assignmentToUpdate.setExitType(ExitType.dropped);
 
-        if (dropStudentRequest.remarks() != null &&
-            !dropStudentRequest.remarks().isBlank()){
-            assignmentToUpdate.setRemarks(dropStudentRequest.remarks());
+        if (updateStudentStatusRequest.remarks() != null &&
+            !updateStudentStatusRequest.remarks().isBlank()){
+            assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
         }
 
         return studentMapper.toStudentEditResponseDTO(studentToDrop);
     }
+
+    //TRANSFER OUT STUDENT
+    @Transactional
+    public StudentEditResponse transferOutStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
+        Student studentToTransfer = getByStudentId(studentId);
+
+        if (studentToTransfer.getStudentStatus().equals(StudentStatus.transferred_out)){
+            throw new StudentAlreadyTransferredOut();
+        }
+
+        //UPDATE STUDENT ENTITY
+        studentToTransfer.setStudentStatus(StudentStatus.transferred_out);
+
+        //UPDATE STUDENT SECTION ASSIGNMENT ENTITY
+        StudentSectionAssignment assignmentToUpdate = getByAssignmentStudentId(studentId);
+        assignmentToUpdate.setLeftAt(updateStudentStatusRequest.leftAt());
+        assignmentToUpdate.setUpdatedAt(LocalDate.now());
+        assignmentToUpdate.setExitType(ExitType.transferred_out);
+
+        if (updateStudentStatusRequest.remarks() != null &&
+                !updateStudentStatusRequest.remarks().isBlank()){
+            assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
+        }
+
+        return studentMapper.toStudentEditResponseDTO(studentToTransfer);
+    }
+
+    //GRADUATED
+    @Transactional
+    public StudentEditResponse graduateStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
+        Student studentToGraduate = getByStudentId(studentId);
+
+        if (studentToGraduate.getStudentStatus() == StudentStatus.graduated){
+            throw new StudentAlreadyGraduated();
+        }
+
+        //UPDATE STUDENT ENTITY
+        studentToGraduate.setStudentStatus(StudentStatus.graduated);
+
+        //UPDATE STUDENT SECTION ASSIGNMENT
+        StudentSectionAssignment assignmentToUpdate = getByAssignmentStudentId(studentId);
+        assignmentToUpdate.setExitType(ExitType.graduated);
+        assignmentToUpdate.setLeftAt(updateStudentStatusRequest.leftAt());
+        assignmentToUpdate.setUpdatedAt(LocalDate.now());
+
+        if (updateStudentStatusRequest.remarks() != null &&
+                !updateStudentStatusRequest.remarks().isBlank()){
+            assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
+        }
+
+        return studentMapper.toStudentEditResponseDTO(studentToGraduate);
+    }
+
 
 }
