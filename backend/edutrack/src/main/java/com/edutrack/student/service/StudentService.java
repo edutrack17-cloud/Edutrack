@@ -116,7 +116,8 @@ public class StudentService {
         Specification<StudentSectionAssignment> filters = Specification
                 .where(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
                 .and(StudentSectionAssignmentSpecification.hasSection(sectionName))
-                .and(StudentSectionAssignmentSpecification.hasStudentStatus(studentStatus));
+                .and(StudentSectionAssignmentSpecification.hasStudentStatus(studentStatus))
+                .and(StudentSectionAssignmentSpecification.isCurrent());
 
         return studentSectionAssignmentRepository
                 .findAll(filters, pageable)
@@ -251,6 +252,8 @@ public class StudentService {
             newAssignment.setStudent(student);
             newAssignment.setSection(promotedStudentSection);
             newAssignment.setAssignedAt(now);
+
+            studentSectionAssignmentRepository.save(newAssignment);
 
             StudentResponse response =
                     studentMapper.toStudentResponseDTO(

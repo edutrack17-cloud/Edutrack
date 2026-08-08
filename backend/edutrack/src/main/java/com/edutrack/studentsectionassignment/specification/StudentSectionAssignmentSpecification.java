@@ -30,4 +30,9 @@ public class StudentSectionAssignmentSpecification {
             return criteriaBuilder.equal(root.get("section").get("sectionName"), sectionName);
         };
     }
+
+    public static Specification<StudentSectionAssignment> isCurrent(){
+        return (root, query, criteriaBuilder) ->
+                criteriaBuilder.isNull(root.get("leftAt"));
+    }
 }

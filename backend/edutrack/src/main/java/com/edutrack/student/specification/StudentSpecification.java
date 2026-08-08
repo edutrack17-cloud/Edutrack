@@ -4,6 +4,7 @@ import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.student.entity.Student;
 import com.edutrack.student.enums.StudentStatus;
+import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import org.springframework.data.jpa.domain.Specification;
 
 public class StudentSpecification {
@@ -30,4 +31,6 @@ public class StudentSpecification {
             return criteriaBuilder.equal(root.get("studentStatus"), studentStatus);
         };
     }
+
+
 }
