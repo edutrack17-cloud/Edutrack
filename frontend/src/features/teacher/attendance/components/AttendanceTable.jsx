@@ -1,17 +1,18 @@
 import React from "react";
 import AttendanceStatus from "./AttendanceStatus";
 
-// This table is now READ-ONLY. Recording attendance (RFID taps, manual
-// Time In/Out, walk-in "Add Attendance") all happens on the dedicated
+// This table is READ-ONLY. Recording attendance (RFID taps, manual
+// Time In/Out, walk-in "Add Attendance") and confirming raw taps
+// (attendance.is_confirmed in the ERD) both happen on the dedicated
 // RFID Attendance page instead — this page is purely for
 // viewing/reporting on whatever ends up in the backend's attendance
-// table, so there's no Action column, kebab menu, or edit modals here
-// anymore. Once GET /api/attendance is wired up on both pages, records
-// created on the RFID page should just show up here too.
+// table, so there's no Action column, kebab menu, edit modals, or
+// confirmation tab here anymore. Once GET /api/attendance is wired up
+// on both pages, records created/confirmed on the RFID page should
+// just show up here too.
 function AttendanceTable({
   attendance,
   searchTerm = "",
-  activeTab = "all",
   level = "",
   section = "",
   status = "",
@@ -21,8 +22,6 @@ function AttendanceTable({
       !searchTerm ||
       record.name.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesTab = activeTab !== "unconfirmed" || !record.isConfirmed;
-
     const matchesLevel = !level || record.gradeLevel === level;
 
     const matchesSection = !section || record.section === section;
@@ -31,7 +30,6 @@ function AttendanceTable({
 
     return (
       matchesSearch &&
-      matchesTab &&
       matchesLevel &&
       matchesSection &&
       matchesStatus

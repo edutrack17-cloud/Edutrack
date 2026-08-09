@@ -7,6 +7,9 @@ import {
   FileSpreadsheet,
   UserPlus,
   GraduationCap,
+  Layers,
+  FileText,
+  Users,
   Menu,
   X,
 } from "lucide-react";
@@ -14,22 +17,43 @@ import schoolLogo from "../../assets/images/logo.jpg";
 
 const ICON_SIZE = 18;
 
+// TODO: once auth/roles exist (see the route-guarding TODO in
+// AppRoutes.jsx), MainLayout should get the role from the logged-in
+// user's session instead of guessing it from the current path.
+const TEACHER_NAV_ITEMS = [
+  { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { name: "RFID Attendance", path: "/rfid-attendance", icon: IdCard },
+  { name: "Attendance", path: "/attendance", icon: ClipboardCheck },
+  { name: "SF2 Attendance", path: "/sf2-attendance", icon: FileSpreadsheet },
+  { name: "Enrollment", path: "/enrollment", icon: UserPlus },
+  { name: "Promote Student", path: "/promote-student", icon: GraduationCap },
+];
+
+// "Section & Level" and "Logs & Reports" don't have pages built yet -
+// the links are here to match the admin sidebar design, but won't show
+// content until those pages exist.
+const ADMIN_NAV_ITEMS = [
+  { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { name: "Attendance", path: "/attendance", icon: ClipboardCheck },
+  { name: "SF2 Attendance", path: "/sf2-attendance", icon: FileSpreadsheet },
+  { name: "Enrollment", path: "/enrollment", icon: UserPlus },
+  { name: "Promote Student", path: "/promote-student", icon: GraduationCap },
+  { name: "Section & Level", path: "/section-level", icon: Layers },
+  { name: "Logs & Reports", path: "/logs-reports", icon: FileText },
+  { name: "User Management", path: "/user-management", icon: Users },
+];
+
 function Sidebar({
   isCollapsed,
   onToggleCollapse,
   isMobileOpen,
   onCloseMobile,
+  role = "teacher",
+  personName = "IORI YAGAMI",
 }) {
-  const teacher = "IORI YAGAMI";
-
-  const navigationItems = [
-    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-    { name: "RFID Attendance", path: "/rfid-attendance", icon: IdCard },
-    { name: "Attendance", path: "/attendance", icon: ClipboardCheck },
-    { name: "SF2 Attendance", path: "/sf2-attendance", icon: FileSpreadsheet },
-    { name: "Enrollment", path: "/enrollment", icon: UserPlus },
-    { name: "Promote Student", path: "/promote-student", icon: GraduationCap },
-  ];
+  const isAdmin = role === "admin";
+  const navigationItems = isAdmin ? ADMIN_NAV_ITEMS : TEACHER_NAV_ITEMS;
+  const subtitle = isAdmin ? "Administrator" : personName;
 
   function getLinkClasses({ isActive }) {
     let baseClasses =
@@ -104,7 +128,7 @@ function Sidebar({
               <h1 className="text-base font-bold leading-tight">
                 ELEMENTARY SCHOOL
               </h1>
-              <p className="mt-1 text-sm text-white/80">{teacher}</p>
+              <p className="mt-1 text-sm text-white/80">{subtitle}</p>
             </div>
           )}
         </div>

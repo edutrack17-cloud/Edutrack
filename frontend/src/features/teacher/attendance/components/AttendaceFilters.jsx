@@ -5,10 +5,8 @@ import { ChevronDown } from "lucide-react";
 // gray/muted when a dropdown has no value selected yet, colored once
 // something is chosen. Status only has two real options here (Present/
 // Absent), matching attendance.status ENUM('present', 'absent') in the
-// ERD - no "late", per your earlier answer.
+// ERD - no "late".
 function AttendaceFilters({
-  activeTab,
-  onTabChange,
   level,
   section,
   status,
@@ -22,33 +20,8 @@ function AttendaceFilters({
     "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 sm:right-4";
   const wrapperClassName = "relative min-w-[90px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
 
-  function getTabClass(tabKey) {
-    const isActive = activeTab === tabKey;
-    return isActive
-      ? "rounded-md bg-primary px-3 py-2 text-xs font-semibold text-white transition-colors sm:text-sm"
-      : "rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-500 transition-colors hover:border-primary sm:text-sm";
-  }
-
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-      {/* Tabs: "All Students" vs "Needs Confirmation" (rows where
-          attendance.is_confirmed = false in the ERD - usually raw RFID
-          scans a teacher hasn't reviewed yet). */}
-      <button
-        type="button"
-        onClick={() => onTabChange("all")}
-        className={getTabClass("all")}
-      >
-        All Students
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onTabChange("unconfirmed")}
-        className={getTabClass("unconfirmed")}
-      >
-        Needs Confirmation
-      </button>
 
       <div className={wrapperClassName}>
         <select

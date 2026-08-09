@@ -61,10 +61,6 @@ function AttendancePage() {
   // though nothing on this page writes to it anymore.
   const [attendance] = useState(MOCK_ATTENDANCE);
 
-  // "all" students, or only rows still needing a teacher's confirmation
-  // (attendance.is_confirmed = false in the ERD).
-  const [activeTab, setActiveTab] = useState("all");
-
   const [search, setSearch] = useState("");
 
   const [level, setLevel] = useState("");
@@ -101,8 +97,6 @@ function AttendancePage() {
     <div className="rounded-lg bg-white p-4 sm:p-6">
       <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <AttendaceFilters
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
           level={level}
           section={section}
           status={status}
@@ -118,7 +112,6 @@ function AttendancePage() {
         <AttendanceTable
           attendance={attendance}
           searchTerm={search}
-          activeTab={activeTab}
           level={level}
           section={section}
           status={status}

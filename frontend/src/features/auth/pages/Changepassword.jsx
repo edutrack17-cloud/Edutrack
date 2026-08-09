@@ -5,16 +5,23 @@ import { Lock } from "lucide-react";
 import Input from "../../../components/ui/Input";
 import Button from "../../../components/ui/Button";
 import changePasswordSchema from "./ChangepasswordSchema";
+import { changePassword } from "../authService";
+
 
 function ChangePassword() {
   async function handleChangePassword(values, formikHelpers) {
     formikHelpers.setStatus(undefined);
 
     try {
-      // TODO: Connect to Spring Boot Change Password API
-      console.log("Change password submitted:", values);
+      // TODO: BACKEND CONNECTION - see changePassword() in authService.js
+      // PATCH /api/auth/change-password
+      await changePassword({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+      });
 
       formikHelpers.resetForm();
+
       formikHelpers.setStatus({
         type: "success",
         message: "Password updated successfully.",
@@ -23,6 +30,7 @@ function ChangePassword() {
       formikHelpers.setStatus({
         type: "error",
         message:
+          error?.response?.data?.message ||
           "Unable to update password. Please check your current password and try again.",
       });
     }
@@ -41,22 +49,13 @@ function ChangePassword() {
   });
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center rounded-lg bg-white p-4 sm:p-6">
-          <div className="w-full max-w-md rounded-lg border border-gray-300 shadow-md bg-white p-2 font-primary sm:p-8">
-            <div className="mb-6 flex flex-col items-center text-center">
-              <div className="mb-3 h-20 w-20 overflow-hidden rounded-full border-4 border-white">
-                <img src="/school.png" alt="School Logo" className="h-full w-full object-cover" />
-              </div>
-              <h1 className="text-lg font-extrabold text-primary sm:text-xl">
-                CECILIO M. SALIBA
-              </h1>
-              <h1 className="text-lg font-extrabold text-primary sm:text-xl">
-                ELEMENTARY SCHOOL
-              </h1>
-              <p className="mt-1 text-sm text-gray">Student Attendance System</p>
-            </div>
-
-        <form onSubmit={formik.handleSubmit} className="flex flex-col gap-4">
+    <div className="justify-start rounded-lg bg-white p-5 sm:p-6 sm:pl-16">
+      <div className="w-full min-h-50 rounded-lg border border-gray-300 bg-white p-2 font-primary shadow-md sm:p-8">
+        <form
+          onSubmit={formik.handleSubmit}
+          className="flex flex-col gap-4"
+        >
+          {/* Current Password */}
           <Input
             label="Current Password"
             icon={<Lock size={18} />}
@@ -71,6 +70,7 @@ function ChangePassword() {
             touched={formik.touched.currentPassword}
           />
 
+          {/* New Password */}
           <Input
             label="New Password"
             icon={<Lock size={18} />}
@@ -85,6 +85,7 @@ function ChangePassword() {
             touched={formik.touched.newPassword}
           />
 
+          {/* Confirm New Password */}
           <Input
             label="Confirm New Password"
             icon={<Lock size={18} />}
@@ -99,6 +100,7 @@ function ChangePassword() {
             touched={formik.touched.confirmNewPassword}
           />
 
+          {/* Success / Error Message */}
           {formik.status && (
             <p
               className={`text-sm ${
@@ -111,6 +113,7 @@ function ChangePassword() {
             </p>
           )}
 
+          {/* Update Password Button */}
           <Button
             type="submit"
             disabled={formik.isSubmitting}
