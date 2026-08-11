@@ -14,5 +14,6 @@ public record StudentEditResponse(
    String guardianPhoneNumber,
    String rfid,
    StudentStatus studentStatus,
-   AdmissionType admissionType
+   AdmissionType admissionType,
+   String gradeAndSection
 ) {}

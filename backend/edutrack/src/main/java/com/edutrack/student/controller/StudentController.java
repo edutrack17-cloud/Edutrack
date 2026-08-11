@@ -1,10 +1,7 @@
 package com.edutrack.student.controller;
 
 import com.edutrack.section.enums.GradeLevel;
-import com.edutrack.student.dto.request.BulkPromotionRequest;
-import com.edutrack.student.dto.request.CreateStudentRequest;
-import com.edutrack.student.dto.request.UpdateStudentStatusRequest;
-import com.edutrack.student.dto.request.UpdateStudentRequest;
+import com.edutrack.student.dto.request.*;
 import com.edutrack.student.dto.response.StudentEditResponse;
 import com.edutrack.student.dto.response.StudentResponse;
 import com.edutrack.student.enums.StudentStatus;
@@ -77,5 +74,12 @@ public class StudentController {
     public ResponseEntity<List<StudentResponse>> promoteStudents(@RequestBody BulkPromotionRequest promotionRequest){
         List<StudentResponse> promotedStudents = studentService.promoteStudents(promotionRequest);
         return ResponseEntity.ok(promotedStudents);
+    }
+
+    //SECTION TRANSFER
+    @PatchMapping("{studentId}/section-assignment/transfer")
+    public ResponseEntity<StudentEditResponse> transferStudent(@PathVariable Long studentId, @RequestBody TransferSectionRequest transferSectionRequest){
+        StudentEditResponse newStudentSection = studentService.transferStudent(studentId, transferSectionRequest);
+        return ResponseEntity.ok(newStudentSection);
     }
 }
