@@ -9,7 +9,7 @@ import DashboardPage from "../features/teacher/dashboard/Dashboardpage";
 import SF2AttendancePage from "../features/teacher/Sf2Attendance/Sf2attendancepage";
 import PromoteStudentPage from "../features/teacher/Promote-Student/Promotestudentpage";
 import UserManagementPage from "../features/admin/Usermanagement/Usermanagementpage";
-import SectionLevelpage from "../features/admin/LevelandSection/Sectionlevelpage";
+import SectionlevelPage from "../features/admin/SectionandLevel/Sectionlevelpage";
 
 function AppRoutes() {
   return (
@@ -29,7 +29,7 @@ function AppRoutes() {
             only be reachable by role="admin" accounts once auth/role
             checks exist. For now it's open like the other routes. */}
         <Route path="/user-management" element={<UserManagementPage />} />
-        <Route path="/section-level" element={<SectionLevelpage />} />
+        <Route path="/section-level" element={<SectionlevelPage />} />
         <Route path="/change-password" element={<ChangePassword />} />
       </Route>
     </Routes>

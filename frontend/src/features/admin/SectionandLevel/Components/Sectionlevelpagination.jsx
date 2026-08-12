@@ -14,7 +14,7 @@ function Sectionlevelpagination({ currentPage, totalPages, onPageChange }) {
   }
 
   return (
-    <div className="flex w-full items-center justify-center rounded-md bg-primary p-1 text-white sm:w-auto">
+    <div className="flex w-full items-center justify-center gap-3 rounded-lg bg-primary px-3 py-2.5 text-white sm:gap-8">
       <button
         type="button"
         onClick={goToPrevious}
@@ -26,7 +26,7 @@ function Sectionlevelpagination({ currentPage, totalPages, onPageChange }) {
         <ChevronLeft size={18} strokeWidth={2.5} className="hidden sm:block" />
       </button>
 
-      <span className="mx-3 text-center text-[11px] font-semibold whitespace-nowrap sm:mx-8 sm:text-sm">
+      <span className="text-center text-[11px] font-semibold whitespace-nowrap sm:text-sm">
         Page {currentPage} of {totalPages}
       </span>
 
