@@ -1,7 +1,9 @@
 package com.edutrack.student.service;
 
+import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
+import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.section.exception.SectionNotFound;
 import com.edutrack.section.repository.SectionRepository;
 import com.edutrack.section.service.SectionService;
@@ -96,6 +98,14 @@ public class StudentService {
 
         if (age < 9){
             throw new StudentUnderAge();
+        }
+
+        if (sectionToBeAssigned.getSectionStatus() == SectionStatus.archived){
+            throw new InactiveSectionNotAllowed();
+        }
+
+        if (sectionToBeAssigned.getSchoolYear().getSchoolYearStatus() != SchoolYearStatus.active){
+            throw new InactiveSectionNotAllowed();
         }
 
        //STUDENT CREATION
@@ -213,10 +223,20 @@ public class StudentService {
         }
 
         if (updateStudentRequest.sectionId() != null){
+            Section sectionRequest = getBySectionId(updateStudentRequest.sectionId());
+
             StudentSectionAssignment assignment =
                     studentSectionAssignmentRepository
                             .findByStudent_StudentIdAndLeftAtIsNull(studentId)
                             .orElseThrow(() -> new SectionAssignmentNotFound(studentId));
+
+            if (sectionRequest.getSectionStatus() == SectionStatus.archived){
+                throw new InactiveSectionNotAllowed();
+            }
+
+            if (sectionRequest.getSchoolYear().getSchoolYearStatus() != SchoolYearStatus.active){
+                throw new InactiveSectionNotAllowed();
+            }
 
             if (assignment.getSection().getSectionId() != updateStudentRequest.sectionId()){
                 Section section = sectionRepository
@@ -243,6 +263,13 @@ public class StudentService {
         Section promotedStudentSection = getBySectionId(promotionRequest.targetSectionId());
         List<Student> studentsToUpdate = promotionRequest.studentIds().stream().map(this::getByStudentId).toList();
 
+        if (promotedStudentSection.getSectionStatus() == SectionStatus.archived){
+            throw new InactiveSectionNotAllowed();
+        }
+
+        if (promotedStudentSection.getSchoolYear().getSchoolYearStatus() != SchoolYearStatus.active){
+            throw new InactiveSectionNotAllowed();
+        }
 
         List<StudentResponse> responses = new ArrayList<>();
 
@@ -369,6 +396,14 @@ public class StudentService {
                     studentToTransfer.getMiddleName(),
                     studentToTransfer.getLastName()),
                     newSectionName);
+        }
+
+        if (selectedSection.getSectionStatus() != SectionStatus.active){
+            throw new InactiveSectionNotAllowed();
+        }
+
+        if (selectedSection.getSchoolYear().getSchoolYearStatus() != SchoolYearStatus.active){
+            throw new InactiveSectionNotAllowed();
         }
 
         //UPDATE CURRENT SECTION ASSIGNMENT

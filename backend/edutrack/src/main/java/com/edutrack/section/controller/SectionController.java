@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/section")
 public class SectionController {
@@ -42,6 +44,12 @@ public class SectionController {
                 .ok(sectionService.getSection(fullName, gradeLevel, sectionStatus, pageable));
     }
 
+    //SECTION DROPDOWN
+    @GetMapping("dropdown")
+    public ResponseEntity<List<SectionResponse>> sectionDropdown(@RequestParam(required = false) GradeLevel gradeLevel){
+        return ResponseEntity.ok(sectionService.sectionDropDown(gradeLevel));
+    }
+
     //UPDATE
     @PatchMapping("/{sectionId}")
     public ResponseEntity<SectionResponse> updateSection(
@@ -52,16 +60,19 @@ public class SectionController {
         return ResponseEntity.ok(response);
     }
 
-
+    //ARCHIVE
     @PatchMapping("{sectionId}/section-status/archive")
     public ResponseEntity<SectionResponse> archiveSection(@PathVariable Integer sectionId) {
         SectionResponse response = sectionService.archiveSection(sectionId);
         return ResponseEntity.ok(response);
     }
 
+    //RESTORE
     @PatchMapping("{sectionId}/section-status/active")
     public ResponseEntity<SectionResponse> restoreSection(@PathVariable Integer sectionId) {
         SectionResponse response = sectionService.restoreSection(sectionId);
         return ResponseEntity.ok(response);
     }
+
+
 }

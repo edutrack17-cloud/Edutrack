@@ -1,5 +1,6 @@
 package com.edutrack.section.specification;
 
+import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
@@ -35,6 +36,12 @@ public class SectionSpecification {
             if (gradeLevel == null) return criteriaBuilder.conjunction();
 
             return criteriaBuilder.equal(root.get("gradeLevel"), gradeLevel);
+        };
+    }
+
+    public static Specification<Section> hasSchoolYearStatus(){
+        return (root, query, criteriaBuilder) -> {
+            return criteriaBuilder.equal(root.get("schoolYear").get("schoolYearStatus"), SchoolYearStatus.active);
         };
     }
 }

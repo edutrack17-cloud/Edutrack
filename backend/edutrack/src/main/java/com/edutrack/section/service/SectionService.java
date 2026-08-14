@@ -29,6 +29,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @Transactional(readOnly = true)
 public class SectionService {
@@ -82,6 +84,19 @@ public class SectionService {
                 .and(SectionSpecification.hasGradeLevel(gradeLevel)
                 .and(SectionSpecification.hasStatus(sectionStatus))));
         return sectionRepository.findAll(filters ,pageable).map(sectionMapper::toResponseDTO);
+    }
+
+    //SECTION DROPDOWN
+    public List<SectionResponse> sectionDropDown(GradeLevel gradeLevel){
+        Specification<Section> filters = Specification
+                .where(SectionSpecification.hasStatus(SectionStatus.active))
+                .and(SectionSpecification.hasGradeLevel(gradeLevel))
+                .and(SectionSpecification.hasSchoolYearStatus());
+
+        return sectionRepository.findAll(filters)
+                .stream()
+                .map(sectionMapper::toResponseDTO)
+                .toList();
     }
 
     //UPDATE

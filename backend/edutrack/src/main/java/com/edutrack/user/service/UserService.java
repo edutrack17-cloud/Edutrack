@@ -3,11 +3,15 @@ package com.edutrack.user.service;
 import com.edutrack.user.dto.request.AdminCreateUserRequest;
 import com.edutrack.user.dto.response.AdminCreateUserResponse;
 import com.edutrack.user.entity.User;
+import com.edutrack.user.enums.AccountStatus;
+import com.edutrack.user.enums.UserRole;
 import com.edutrack.user.exception.UsernameAlreadyExists;
 import com.edutrack.user.mapper.UserMapper;
 import com.edutrack.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class UserService {
@@ -29,6 +33,15 @@ public class UserService {
         User userToBeSaved = userMapper.toEntity(request);
         User savedUser = userRepository.save(userToBeSaved);
         return userMapper.toResponseDTO(savedUser);
+    }
+
+    //TEACHER DROPDOWN
+    public List<AdminCreateUserResponse> teacherDropdown(){
+        return userRepository
+                .findByUserRoleAndAccountStatus(UserRole.teacher, AccountStatus.active)
+                .stream()
+                .map(userMapper::toResponseDTO)
+                .toList();
     }
 
 }

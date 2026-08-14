@@ -1,9 +1,13 @@
 package com.edutrack.user.repository;
 
 import com.edutrack.user.entity.User;
+import com.edutrack.user.enums.AccountStatus;
+import com.edutrack.user.enums.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+import java.util.List;
 
+public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
+    List<User> findByUserRoleAndAccountStatus(UserRole role, AccountStatus accountStatus);
 }
