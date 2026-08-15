@@ -7,8 +7,6 @@ const MESSAGES = {
   userId: "Adviser is required.",
 };
 
-// getSectionFormSchema(mode) -> Yup.object()
-// mode: "add" | "edit"
 export function getSectionFormSchema(mode = "add") {
   return Yup.object({
     sectionName: Yup.string().trim().required(MESSAGES.sectionName),

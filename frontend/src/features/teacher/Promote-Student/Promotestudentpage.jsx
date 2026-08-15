@@ -99,7 +99,6 @@ function PromoteStudentPage() {
  
   return (
     <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
-      {/* Toolbar - flexbox, same responsive pattern as the other pages */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <PromoteStudentFilters
           gradeLevel={gradeLevel}

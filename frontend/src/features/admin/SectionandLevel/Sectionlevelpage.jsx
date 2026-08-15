@@ -25,11 +25,16 @@ export default function Sectionlevelpage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const [gradeLevel, setGradeLevel] = useState("");
+
+  // No default status filter - dropdown shows "Status" placeholder on
+  // first load, and the table shows all sections (active + archived)
+  // until the user explicitly picks a filter.
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+  
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // 1-based, matches Sectionlevelpagination.jsx - converted to 0-based
-  // right before calling getSections().
+  
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -45,14 +50,25 @@ export default function Sectionlevelpage() {
       setIsLoading(true);
       setErrorMessage("");
       const response = await getSections({
-        search,
+        search: debouncedSearch,
         gradeLevel,
         status,
         page: currentPage - 1,
         size: PAGE_SIZE,
       });
+      const newTotalPages = response.totalPages || 1;
+      setTotalPages(newTotalPages);
+
+      // If the page we just asked for no longer exists (e.g. the last
+      // section on this page was just archived, or a filter shrank the
+      // result set), fall back to the new last page instead of showing
+      // a false "No sections found" for a page that isn't really empty.
+      if (currentPage > newTotalPages) {
+        setCurrentPage(newTotalPages);
+        return;
+      }
+
       setSections(response.content);
-      setTotalPages(response.totalPages || 1);
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -60,20 +76,31 @@ export default function Sectionlevelpage() {
     }
   }
 
+
+  useEffect(() => {
+    const debounceId = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(debounceId);
+  }, [search]);
+
   useEffect(() => {
     loadSections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, gradeLevel, status, currentPage]);
+  }, [debouncedSearch, gradeLevel, status, currentPage]);
 
+  // getSchoolYears() hits a confirmed working endpoint (GET /api/school-year).
+  // getTeachers() is still a placeholder - UserController has no GET
+  // endpoint to list teachers yet, so it currently resolves to [] until
+  // that's built. See Sectionlevelservice.js for both.
   useEffect(() => {
-    setCurrentPage(1);
-  }, [search, gradeLevel, status]);
+    getTeachers().then(setAdvisers); // safe: getTeachers() already catches its own errors and falls back to []
 
-  // CONNECT: no endpoints yet - see getTeachers()/getSchoolYears() in
-  // Sectionlevelservice.js.
-  useEffect(() => {
-    getTeachers().then(setAdvisers);
-    getSchoolYears().then(setSchoolYears);
+    getSchoolYears()
+      .then(setSchoolYears)
+      .catch((error) => {
+        setErrorMessage(error.message);
+      });
   }, []);
 
   function handleOpenAdd() {
@@ -88,7 +115,24 @@ export default function Sectionlevelpage() {
     setIsModalOpen(true);
   }
 
-  // CONNECT: POST/PATCH /api/section - see createSection()/updateSection()
+  function handleGradeLevelChange(event) {
+    setGradeLevel(event.target.value);
+    setCurrentPage(1);
+  }
+
+  function handleStatusChange(event) {
+    setStatus(event.target.value);
+    setCurrentPage(1);
+  }
+
+  function handleSearchChange(event) {
+    // Just updates what's shown in the input - the debounce effect
+    // above is what actually commits this to debouncedSearch (and
+    // resets the page) once typing pauses.
+    setSearch(event.target.value);
+  }
+
+ 
   async function handleSubmitSection(formData) {
     if (modalMode === "edit") {
       await updateSection(selectedSection.sectionId, formData);
@@ -125,21 +169,21 @@ export default function Sectionlevelpage() {
   return (
     <div className="space-y-4 p-4 sm:p-6">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <Sectionlevelfilters
             gradeLevel={gradeLevel}
             status={status}
-            onGradeLevelChange={(event) => setGradeLevel(event.target.value)}
-            onStatusChange={(event) => setStatus(event.target.value)}
+            onGradeLevelChange={handleGradeLevelChange}
+            onStatusChange={handleStatusChange}
           />
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Sectionlevelsearchinput value={search} onChange={(event) => setSearch(event.target.value)} />
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <Sectionlevelsearchinput value={search} onChange={handleSearchChange} />
 
             <button
               type="button"
               onClick={handleOpenAdd}
-              className="flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-white shadow-sm transition sm:text-sm"
+              className="flex w-full shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition sm:w-auto sm:py-2 sm:text-sm"
             >
               Add Section
             </button>

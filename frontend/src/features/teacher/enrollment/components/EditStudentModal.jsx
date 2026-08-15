@@ -12,6 +12,20 @@ import RfidFormModal from "./RfidFormModal";
 import StudentForm from "./StudentForm";
 import enrollSchema from "../enrollmentSchema";
 
+// Best-effort split of StudentResponse's combined "fullName" - see the
+// BACKEND GAP note in initialValues below for why this exists at all.
+function splitFullName(fullName) {
+  if (!fullName) return { firstName: "", middleName: "", lastName: "" };
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
+  if (parts.length === 2) return { firstName: parts[0], middleName: "", lastName: parts[1] };
+  return {
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
+}
+
 function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] }) {
   const [isRfidModalOpen, setIsRfidModalOpen] = useState(false);
 
@@ -22,36 +36,39 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
     // Student A and then Student B would keep showing Student A's data.
     enableReinitialize: true,
     initialValues: {
-      // NOTE: student.gradeLevel is a string like "Grade 7" from mock
-      // data, but this form's Level dropdown expects a raw number (see
-      // the GRADE_LEVELS comment in StudentForm.jsx) - this is the same
-      // pre-existing mismatch noted there, so this will show unselected
-      // for the current mock data. Not something introduced here.
-      level: student?.level ?? "",
-      section: student?.sectionId ?? "",
+      // BACKEND GAP: GET /api/student only returns StudentResponse,
+      // which has a single combined "fullName" (not firstName/
+      // middleName/lastName), and StudentController has no GET-by-id
+      // endpoint to fetch the split fields either. Until the backend
+      // adds one, we best-effort split fullName on whitespace: first
+      // word -> firstName, last word -> lastName, anything in between
+      // -> middleName. This is unreliable for names with more than 3
+      // parts, so double-check/re-type the name fields before saving.
+      level: student?.section?.gradeLevel ?? "",
+      section: student?.section?.sectionId ?? "",
       lrn: student?.lrn ?? "",
       rfid: student?.rfid ?? "",
       admissionType: student?.admissionType ?? "",
-      firstName: student?.firstName ?? "",
-      middleName: student?.middleName ?? "",
-      lastName: student?.lastName ?? "",
-      birthdate: student?.birthdate ?? "",
-      address: student?.address ?? "",
-      guardianName: student?.guardianName ?? "",
-      guardianMobile: student?.guardianMobile ?? "",
+      firstName: splitFullName(student?.fullName).firstName,
+      middleName: splitFullName(student?.fullName).middleName,
+      lastName: splitFullName(student?.fullName).lastName,
+      birthdate: student?.birthDate ?? "",
+      guardianName: student?.guardian ?? "",
+      guardianMobile: student?.guardianPhoneNumber ?? "",
     },
     validationSchema: enrollSchema,
-    onSubmit: (values, helpers) => {
-      // TODO: BACKEND CONNECTION
-      // PUT /api/students/{student.id}
-      // Body: the full updated student object (values above).
-      // Expected response: the updated student record.
-      // On success: StudentTable should update this student's row in
-      // its local "students" state with the returned data (currently
-      // done immediately via onSubmit below, without waiting for a
-      // real server response).
-      onSubmit?.(student?.id, values);
-      onClose();
+    onSubmit: async (values, helpers) => {
+      // PATCH /api/student/{studentId} - called by StudentTable's
+      // handleEditSubmit (via enrollmentService.updateStudent), which
+      // this onSubmit prop points to.
+      try {
+        await onSubmit?.(student?.studentId, values);
+        onClose();
+      } catch (error) {
+        helpers.setStatus(error.message);
+      } finally {
+        helpers.setSubmitting(false);
+      }
     },
   });
 
@@ -82,15 +99,19 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
             sections={sections}
             onRfidClick={() => setIsRfidModalOpen(true)}
           />
+          {formik.status && (
+            <p className="mt-4 text-sm text-danger">{formik.status}</p>
+          )}
         </div>
 
         <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
           <button
             type="button"
             onClick={formik.handleSubmit}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            disabled={formik.isSubmitting}
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Save Changes
+            {formik.isSubmitting ? "Saving..." : "Save Changes"}
           </button>
           <button
             type="button"

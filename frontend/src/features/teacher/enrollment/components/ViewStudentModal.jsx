@@ -20,13 +20,10 @@ function InfoField({ label, value }) {
 }
 
 function ViewStudentModal({ isOpen, onClose, student }) {
-  // TODO: BACKEND CONNECTION
-  // GET /api/students/{student.id}
-  // Right now this modal just displays whatever student object is
-  // already sitting in StudentTable's local state. Once the backend is
-  // ready, this could re-fetch the freshest copy of the student here
-  // instead of trusting the table row's cached data, in case it
-  // changed since the table was last loaded.
+  // BACKEND NOTE: there is no GET /api/student/{id} single-record
+  // endpoint, so this modal displays whatever StudentResponse object
+  // is already sitting in StudentTable's local state (from the last
+  // GET /api/student list load) rather than re-fetching fresh data.
 
   if (!isOpen || !student) return null;
 
@@ -52,8 +49,8 @@ function ViewStudentModal({ isOpen, onClose, student }) {
               Enrollment Information
             </h3>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
-              <InfoField label="Level" value={student.gradeLevel} />
-              <InfoField label="Section" value={student.section} />
+              <InfoField label="Level" value={student.section?.gradeLevel} />
+              <InfoField label="Section" value={student.section?.sectionName} />
               <InfoField label="LRN" value={student.lrn} />
               <InfoField label="RFID UID" value={student.rfid} />
               <InfoField label="Admission Type" value={admissionTypeLabel} />
@@ -64,14 +61,12 @@ function ViewStudentModal({ isOpen, onClose, student }) {
             <h3 className="mb-4 mt-2 text-sm font-bold tracking-wide text-primary uppercase">
               Student Information
             </h3>
+            {/* StudentResponse only exposes a single combined "fullName",
+                not separate first/middle/last, so that's all we can show
+                here until the backend exposes them individually. */}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
-              <InfoField label="First Name" value={student.firstName} />
-              <InfoField label="Middle Name" value={student.middleName} />
-              <InfoField label="Last Name" value={student.lastName} />
-              <InfoField label="Birthdate" value={student.birthdate} />
-              <div className="sm:col-span-2">
-                <InfoField label="Address" value={student.address} />
-              </div>
+              <InfoField label="Name" value={student.fullName} />
+              <InfoField label="Birthdate" value={student.birthDate} />
             </div>
           </div>
 
@@ -80,8 +75,8 @@ function ViewStudentModal({ isOpen, onClose, student }) {
               Parent / Guardian Information
             </h3>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
-              <InfoField label="Guardian Name" value={student.guardianName} />
-              <InfoField label="Guardian Mobile Number" value={student.guardianMobile} />
+              <InfoField label="Guardian Name" value={student.guardian} />
+              <InfoField label="Guardian Mobile Number" value={student.guardianPhoneNumber} />
             </div>
           </div>
         </div>

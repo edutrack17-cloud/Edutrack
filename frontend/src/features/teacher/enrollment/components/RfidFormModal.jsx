@@ -79,7 +79,6 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
           <button
             type="button"

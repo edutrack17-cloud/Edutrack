@@ -6,8 +6,8 @@ import StudentForm from "./StudentForm";
 import enrollSchema from "../enrollmentSchema";
 
 const EMPTY_FORM = {
-  level: "",
-  section: "",
+  level: "", // UI-only, used to filter the Section dropdown - not sent to the backend (CreateStudentRequest has no gradeLevel field, only sectionId)
+  sectionId: "",
   lrn: "",
   rfid: "",
   // Matches students.admission_type ENUM(regular, transferred_in) from
@@ -17,17 +17,16 @@ const EMPTY_FORM = {
   firstName: "",
   middleName: "",
   lastName: "",
-  birthdate: "",
-  address: "",
-  guardianName: "",
-  guardianMobile: "",
+  birthDate: "",
+  guardian: "",
+  guardianPhoneNumber: "",
 };
 
 function EnrollStudentModal({
   isOpen,
   onClose,
   onSubmit,
-  sections = [], // TODO: pass in real data from GET /api/sections once Spring Boot is ready
+  sections = [], // now populated from EnrollmentPage.jsx via getSections() in enrollmentService.js (GET /api/section/dropdown)
 }) {
   const [isRfidModalOpen, setIsRfidModalOpen] = useState(false);
 
@@ -35,17 +34,21 @@ function EnrollStudentModal({
     initialValues: EMPTY_FORM,
     validationSchema: enrollSchema,
     onSubmit: (values, helpers) => {
-      // TODO: BACKEND CONNECTION
-      //   1. POST /api/students            (create the student row)
-      //      Body: values above (level, section, lrn, rfid, admissionType,
-      //      firstName, middleName, lastName, birthdate, address,
-      //      guardianName, guardianMobile).
-      //   2. POST /api/student-section-assignments (assign to the section)
-      //   Expected response: the newly created student record (with its
-      //   generated id).
+      // BACKEND CONNECTION
+      //   1. POST /api/student  (createSection... i.e. enrollStudent())
+      //      Body: CreateStudentRequest - lrn, firstName, middleName,
+      //      lastName, birthDate, guardian, guardianPhoneNumber, rfid,
+      //      admissionType, sectionId (int). "level" is UI-only (used
+      //      to filter the Section dropdown above) and is intentionally
+      //      NOT included - CreateStudentRequest has no gradeLevel field,
+      //      since grade level is an attribute of the Section, not the
+      //      Student.
+      //   Expected response: StudentResponse (includes a nested
+      //   "section" object, not a flat section name/gradeLevel).
       //   On success: StudentTable's local "students" state should have
       //   the new student appended (currently just logged via onSubmit).
-      onSubmit?.(values);
+      const { level, ...payload } = values;
+      onSubmit?.({ ...payload, sectionId: Number(payload.sectionId) });
       helpers.resetForm();
       onClose();
     },

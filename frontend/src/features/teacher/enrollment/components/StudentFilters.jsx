@@ -1,14 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-// Status options live here (not just inline in JSX) so both the closed
-// button and the open list can share the same label/color mapping.
-// Semantic colors come straight from index.css (success/danger/warning) —
-// no new theme colors introduced.
+// CONFIRMED via StudentStatus.java: enrolled | dropped | transferred_out
+// | graduated (lowercase). Previously this used "Dropped"/"Transferred"
+// (wrong casing, and "Transferred" isn't even the real value -
+// "transferred_out" is) - StudentTable.jsx already uses the correct
+// values via getStudentStatusColorClass()/getStudentStatusLabel(), this
+// was the one place still out of sync with it.
 const STATUS_OPTIONS = [
   { value: "", label: "Status", textClass: "text-gray-500", hoverClass: "hover:bg-gray-100", selectedBgClass: "bg-gray-100" },
-  { value: "Dropped", label: "Dropped", textClass: "text-danger", hoverClass: "hover:bg-danger/10", selectedBgClass: "bg-danger/10" },
-  { value: "Transferred", label: "Transferred", textClass: "text-warning", hoverClass: "hover:bg-warning/10", selectedBgClass: "bg-warning/10" },
+  { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "hover:bg-success/10", selectedBgClass: "bg-success/10" },
+  { value: "dropped", label: "Dropped", textClass: "text-danger", hoverClass: "hover:bg-danger/10", selectedBgClass: "bg-danger/10" },
+  { value: "transferred_out", label: "Transferred", textClass: "text-warning", hoverClass: "hover:bg-warning/10", selectedBgClass: "bg-warning/10" },
+  { value: "graduated", label: "Graduated", textClass: "text-primary", hoverClass: "hover:bg-primary/10", selectedBgClass: "bg-primary/10" },
 ];
 
 function StudentFilters({
@@ -18,6 +22,8 @@ function StudentFilters({
   onLevelChange,
   onSectionChange,
   onStatusChange,
+  gradeLevels = [],
+  sections = [],
 }) {
   const selectClassName = "w-full appearance-none rounded-md border border-gray/50 shadow-sm bg-white py-2 pl-3 pr-9 text-xs font-medium text-gray-500 outline-none cursor-pointer sm:pr-10 sm:text-sm";
   // Same visual footprint as selectClassName, but without a baked-in text
@@ -80,15 +86,11 @@ function StudentFilters({
           className={selectClassName}
         >
           <option value="">Grade Level</option>
-
-          {/* TODO: BACKEND CONNECTION
-              GET /api/grade-levels
-              Load all available grade levels.
-          */}
-
-          <option value="Grade 4">Grade 4</option>
-          <option value="Grade 5">Grade 5</option>
-          <option value="Grade 6">Grade 6</option>
+          {gradeLevels.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
 
         <ChevronDown size={16} className={iconClassName} />
@@ -101,16 +103,16 @@ function StudentFilters({
           className={selectClassName}
         >
           <option value="">Section</option>
-
-          {/* TODO: BACKEND CONNECTION
-              GET /api/sections?gradeLevel={level}
-              Load sections that belong to the selected grade level.
-              For now this list is static and NOT filtered by level yet.
-          */}
-
-          <option value="Apple">Apple</option>
-          <option value="Rose">Rose</option>
-          <option value="Jade">Jade</option>
+          {/* Value is the section NAME, not its id - StudentController.getStudents()
+              filters by "sectionName" (a String param), so that's what
+              this needs to send. Not filtered by the selected level here;
+              EnrollmentPage can pass an already-level-filtered list in
+              if that's the desired behavior. */}
+          {sections.map((s) => (
+            <option key={s.id} value={s.name}>
+              {s.name}
+            </option>
+          ))}
         </select>
 
         <ChevronDown size={16} className={iconClassName} />
@@ -141,12 +143,8 @@ function StudentFilters({
           className={`${iconClassName} transition-transform ${isStatusOpen ? "rotate-180" : ""}`}
         />
 
-        {/* TODO: BACKEND CONNECTION
-            GET /api/enrollment-status
-            Or, since this maps to the students.student_status ENUM
-            in the database (enrolled/dropped/transferred), this list
-            may just stay hardcoded here instead of an API call.
-        */}
+        {/* Values now match StudentTable.jsx's getStudentStatusColorClass()/
+            getStudentStatusLabel() exactly. */}
 
         {isStatusOpen && (
           <ul

@@ -4,10 +4,10 @@ const NAME_REGEX = /^[a-zA-ZñÑ'-]+(?:\s[a-zA-ZñÑ'-]+)*$/;
 
 const MOBILE_REGEX = /^09\d{9}$/;
 
-// DepEd LRNs are 12 digits.
-// NOTE: the old placeholder in the form ("2022156783") only had 10
-// digits — if your school actually uses a shorter/different LRN
-// format, just change LRN_REGEX below to match.
+// Student.java's `lrn` column is @Column(length = 12), and the ERD's
+// students.lrn is also expected to be a 12-digit DepEd LRN, so the
+// form keeps validating for exactly 12 digits even though
+// CreateStudentRequest's @Size(max = 15) would technically allow more.
 const LRN_REGEX = /^\d{12}$/;
 
 function calculateAge(birthdateValue) {
@@ -24,14 +24,17 @@ function calculateAge(birthdateValue) {
 const enrollSchema = Yup.object({
   level: Yup.string().required("Please select a grade level"),
 
-  section: Yup.string().required("Please select a section"),
+  // Renamed from "section" - must match the actual formik field name
+  // used by StudentForm.jsx/EnrollStudentModal.jsx/EditStudentModal.jsx
+  // ("sectionId"), or Yup validates a key that doesn't exist in values
+  // and the real field never shows its required-field error.
+  sectionId: Yup.string().required("Please select a section"),
 
   lrn: Yup.string()
     .required("LRN is required")
     .matches(LRN_REGEX, "LRN must be exactly 12 digits"),
 
   rfid: Yup.string().required("Please tap or add a student RFID"),
-
 
   admissionType: Yup.string()
     .required("Please select an admission type")
@@ -41,43 +44,48 @@ const enrollSchema = Yup.object({
     .required("First name is required")
     .matches(NAME_REGEX, "First name should only contain letters")
     .min(2, "First name is too short")
-    .max(50, "First name is too long"),
+    .max(100, "First name is too long"),
 
   middleName: Yup.string()
     .matches(NAME_REGEX, "Middle name should only contain letters")
-    .max(50, "Middle name is too long"),
+    .max(100, "Middle name is too long"),
 
   lastName: Yup.string()
     .required("Last name is required")
     .matches(NAME_REGEX, "Last name should only contain letters")
     .min(2, "Last name is too short")
-    .max(50, "Last name is too long"),
+    .max(100, "Last name is too long"),
 
-  birthdate: Yup.date()
+  // Renamed from "birthdate" (lowercase d) - form field is "birthDate".
+  birthDate: Yup.date()
     .typeError("Please enter a valid date")
     .required("Birthdate is required")
     .max(new Date(), "Birthdate cannot be in the future")
     .test(
       "min-age",
-      "Student must be at least 8 years old",
+      // Matches StudentService.enrollStudent()'s backend rule
+      // (age < 9 -> StudentUnderAge) - kept in sync so an 8-year-old
+      // doesn't pass this form only to get rejected on submit.
+      "Student must be at least 9 years old",
       (value) => {
         if (!value) return false;
-        return calculateAge(value) >= 8;
+        return calculateAge(value) >= 9;
       }
     ),
 
-  address: Yup.string()
-    .required("Address is required")
-    .min(5, "Address is too short")
-    .max(200, "Address is too long"),
+  // NOTE: "address" was removed - CreateStudentRequest/UpdateStudentRequest
+  // have no address field, and the ERD's students table has no address
+  // column either, so there was nowhere on the backend for it to go.
 
-  guardianName: Yup.string()
+  // Renamed from "guardianName" - backend field is just "guardian".
+  guardian: Yup.string()
     .required("Guardian name is required")
     .matches(NAME_REGEX, "Guardian name should only contain letters")
     .min(2, "Guardian name is too short")
-    .max(100, "Guardian name is too long"), 
+    .max(100, "Guardian name is too long"),
 
-  guardianMobile: Yup.string()
+  // Renamed from "guardianMobile" - backend field is "guardianPhoneNumber".
+  guardianPhoneNumber: Yup.string()
     .required("Guardian mobile number is required")
     .matches(MOBILE_REGEX, "Enter a valid PH mobile number (e.g. 09171234567)"),
 });

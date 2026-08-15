@@ -10,6 +10,14 @@ export function getSectionStatusColorClass(status) {
   return status === "archived" ? "text-secondary" : "text-success";
 }
 
+function formatGradeLevel(gradeLevel) {
+  if (!gradeLevel) return "—";
+  return gradeLevel
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function Sectiontable({ sections, onEdit, onToggleStatus }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -71,7 +79,7 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
               <td className={`${tdClass} text-left font-semibold text-gray-700`}>
                 {section.sectionName}
               </td>
-              <td className={tdClass}>{section.gradeLevel.replace("_", " ")}</td>
+              <td className={tdClass}>{formatGradeLevel(section.gradeLevel)}</td>
               <td className={tdClass}>{section.adviser || "—"}</td>
               <td className={tdClass}>
                 <span className={`text-sm font-semibold ${getSectionStatusColorClass(section.sectionStatus)}`}>
@@ -95,16 +103,18 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
                     style={{ top: menuPosition.top, left: menuPosition.left }}
                     className="fixed z-50 w-44 rounded-xl border border-gray-200 bg-white py-2 text-left shadow-xl"
                   >
-                    <button
-                      onClick={() => {
-                        setOpenMenuId(null);
-                        onEdit?.(section);
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
-                    >
-                      <Pencil size={16} />
-                      Edit
-                    </button>
+                    {section.sectionStatus !== "archived" && (
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          onEdit?.(section);
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
+                      >
+                        <Pencil size={16} />
+                        Edit
+                      </button>
+                    )}
 
                     <button
                       onClick={() => {
@@ -113,14 +123,14 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
                       }}
                       className={`flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition ${
                         section.sectionStatus === "archived"
-                          ? "text-gray-700 hover:bg-gray/10"
+                          ? "text-success hover:bg-success/10"
                           : "text-secondary hover:bg-secondary/10"
                       }`}
                     >
                       {section.sectionStatus === "archived" ? (
                         <>
                           <ArchiveRestore size={16} />
-                          Activate
+                          Unarchive
                         </>
                       ) : (
                         <>

@@ -10,15 +10,22 @@ import React, { useEffect, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
 import { getActiveSchoolYear, getAssignableSections } from "../Usermanagementservice";
 
-const GRADE_LEVELS = [4, 5, 6];
+// Values match sections.grade_level ENUM(grade_4, grade_5, grade_6) in the
+// ERD - same values used by GRADE_LEVEL_OPTIONS in Sectionlevelservice.js,
+// kept as a local copy since this modal lives under a different feature.
+const GRADE_LEVEL_OPTIONS = [
+  { value: "grade_4", label: "Grade 4" },
+  { value: "grade_5", label: "Grade 5" },
+  { value: "grade_6", label: "Grade 6" },
+];
 
 // Fallback only - used while the backend isn't reachable yet. See
 // getAssignableSections() in Usermanagementservice.js for the real call:
 // GET /api/sections?gradeLevel=&schoolYearId={currentActiveSchoolYearId}
 const MOCK_SECTIONS_BY_LEVEL = {
-  4: [{ id: 1, name: "Apple" }, { id: 2, name: "Rose" }, { id: 3, name: "Jade" }],
-  5: [{ id: 4, name: "Apple" }, { id: 5, name: "Rose" }, { id: 6, name: "Jade" }],
-  6: [{ id: 7, name: "Apple" }, { id: 8, name: "Rose" }, { id: 9, name: "Jade" }],
+  grade_4: [{ id: 1, name: "Apple" }, { id: 2, name: "Rose" }, { id: 3, name: "Jade" }],
+  grade_5: [{ id: 4, name: "Apple" }, { id: 5, name: "Rose" }, { id: 6, name: "Jade" }],
+  grade_6: [{ id: 7, name: "Apple" }, { id: 8, name: "Rose" }, { id: 9, name: "Jade" }],
 };
 
 function Assignsectionmodal({ isOpen, onClose, user, onConfirm }) {
@@ -51,7 +58,7 @@ function Assignsectionmodal({ isOpen, onClose, user, onConfirm }) {
         if (!cancelled) setSections(result);
       } catch (error) {
         console.warn("getAssignableSections() not reachable yet, using mock data:", error.message);
-        if (!cancelled) setSections(MOCK_SECTIONS_BY_LEVEL[Number(gradeLevel)] || []);
+        if (!cancelled) setSections(MOCK_SECTIONS_BY_LEVEL[gradeLevel] || []);
       } finally {
         if (!cancelled) setIsLoadingSections(false);
       }
@@ -108,9 +115,9 @@ function Assignsectionmodal({ isOpen, onClose, user, onConfirm }) {
                   className="w-full appearance-none rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm text-gray-700 outline-none focus:border-primary"
                 >
                   <option value="">Select Level</option>
-                  {GRADE_LEVELS.map((lvl) => (
-                    <option key={lvl} value={lvl}>
-                      Grade {lvl}
+                  {GRADE_LEVEL_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
                     </option>
                   ))}
                 </select>

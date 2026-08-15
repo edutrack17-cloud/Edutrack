@@ -3,11 +3,20 @@ import { ChevronDown, Rss } from "lucide-react";
 import Input from "../../../../components/ui/Input";
 
 
-const GRADE_LEVELS = [4, 5, 6];
+// Matches GradeLevel.java (Grade_4, Grade_5, Grade_6) - SectionResponse.gradeLevel
+// comes back as this exact enum name (e.g. "Grade_4"), NOT a raw number.
+// Previously this was [4, 5, 6], which meant the client-side section
+// filter below could never actually match anything once real section
+// data (with string gradeLevel values) was wired in.
+const GRADE_LEVEL_OPTIONS = [
+  { value: "Grade_4", label: "Grade 4" },
+  { value: "Grade_5", label: "Grade 5" },
+  { value: "Grade_6", label: "Grade 6" },
+];
 
 function StudentForm({ formik, sections = [], onRfidClick }) {
   const filteredSections = formik.values.level
-    ? sections.filter((s) => s.gradeLevel === Number(formik.values.level))
+    ? sections.filter((s) => s.gradeLevel === formik.values.level)
     : sections;
 
   // "Today or later" isn't allowed for a birthdate, so the latest
@@ -22,7 +31,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
     formik.setFieldValue("level", event.target.value);
     // Reset the chosen section whenever the level changes, since the
     // previous section might not belong to the new level.
-    formik.setFieldValue("section", "");
+    formik.setFieldValue("sectionId", "");
   }
 
   // Same visual rule Input.jsx uses for placeholder vs. typed text:
@@ -60,9 +69,9 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
                 className={selectClass(formik.touched.level && formik.errors.level, Boolean(formik.values.level))}
               >
                 <option value="" className="text-gray-700">Select Level</option>
-                {GRADE_LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl} className="text-gray-700">
-                    Grade {lvl}
+                {GRADE_LEVEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="text-gray-700">
+                    {opt.label}
                   </option>
                 ))}
               </select>
@@ -80,11 +89,11 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             <label className={fieldLabelClass}>Section</label>
             <div className="relative">
               <select
-                name="section"
-                value={formik.values.section}
+                name="sectionId"
+                value={formik.values.sectionId}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                className={selectClass(formik.touched.section && formik.errors.section, Boolean(formik.values.section))}
+                className={selectClass(formik.touched.sectionId && formik.errors.sectionId, Boolean(formik.values.sectionId))}
               >
                 <option value="" className="text-gray-700">Select Section</option>
                 {filteredSections.map((s) => (
@@ -98,8 +107,8 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
                 className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
               />
             </div>
-            {formik.touched.section && formik.errors.section && (
-              <p className={errorTextClass}>{formik.errors.section}</p>
+            {formik.touched.sectionId && formik.errors.sectionId && (
+              <p className={errorTextClass}>{formik.errors.sectionId}</p>
             )}
           </div>
 
@@ -214,34 +223,19 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
           />
           <Input
             label="Birthdate"
-            id="birthdate"
-            name="birthdate"
+            id="birthDate"
+            name="birthDate"
             type="date"
-            value={formik.values.birthdate}
+            value={formik.values.birthDate}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            error={formik.errors.birthdate}
-            touched={formik.touched.birthdate}
+            error={formik.errors.birthDate}
+            touched={formik.touched.birthDate}
             labelClassName={inputLabelClass}
             inputClassName="[&::-webkit-calendar-picker-indicator]:opacity-40"
             max={maxBirthdate}
           />
 
-          <div className="sm:col-span-2">
-            <Input
-              label="Address"
-              id="address"
-              name="address"
-              type="text"
-              value={formik.values.address}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              error={formik.errors.address}
-              touched={formik.touched.address}
-              placeholder="Tejero, General Trias, Cavite"
-              labelClassName={inputLabelClass}
-            />
-          </div>
         </div>
       </div>
 
@@ -252,27 +246,27 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
           <Input
             label="Guardian Name"
-            id="guardianName"
-            name="guardianName"
+            id="guardian"
+            name="guardian"
             type="text"
-            value={formik.values.guardianName}
+            value={formik.values.guardian}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            error={formik.errors.guardianName}
-            touched={formik.touched.guardianName}
+            error={formik.errors.guardian}
+            touched={formik.touched.guardian}
             placeholder="Juan Dela Cruz"
             labelClassName={inputLabelClass}
           />
           <Input
             label="Guardian Mobile Number"
-            id="guardianMobile"
-            name="guardianMobile"
+            id="guardianPhoneNumber"
+            name="guardianPhoneNumber"
             type="text"
-            value={formik.values.guardianMobile}
+            value={formik.values.guardianPhoneNumber}
             onChange={formik.handleChange}
             onBlur={formik.handleBlur}
-            error={formik.errors.guardianMobile}
-            touched={formik.touched.guardianMobile}
+            error={formik.errors.guardianPhoneNumber}
+            touched={formik.touched.guardianPhoneNumber}
             placeholder="09xxxxxxxxx"
             labelClassName={inputLabelClass}
           />
