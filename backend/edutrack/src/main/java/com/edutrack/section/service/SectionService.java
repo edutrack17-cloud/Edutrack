@@ -1,18 +1,20 @@
 package com.edutrack.section.service;
 
 import com.edutrack.schoolyear.entity.SchoolYear;
+import com.edutrack.schoolyear.enums.SchoolYearStatus;
+import com.edutrack.schoolyear.exception.ActiveSchoolYearNotFound;
+import com.edutrack.schoolyear.exception.SchoolYearAlreadyActive;
+import com.edutrack.schoolyear.exception.SchoolYearAlreadyExists;
 import com.edutrack.schoolyear.exception.SchoolYearNotFound;
 import com.edutrack.schoolyear.repository.SchoolYearRepository;
 import com.edutrack.section.dto.request.CreateSectionRequest;
+import com.edutrack.section.dto.request.NewSchoolYearRequest;
 import com.edutrack.section.dto.request.UpdateSectionRequest;
 import com.edutrack.section.dto.response.SectionResponse;
 import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
-import com.edutrack.section.exception.AlreadyActive;
-import com.edutrack.section.exception.AlreadyArchived;
-import com.edutrack.section.exception.SectionAlreadyExists;
-import com.edutrack.section.exception.SectionNotFound;
+import com.edutrack.section.exception.*;
 import com.edutrack.section.mapper.SectionMapper;
 import com.edutrack.section.repository.SectionRepository;
 import com.edutrack.section.specification.SectionSpecification;
@@ -177,5 +179,61 @@ public class SectionService {
 
         sectionToRestore.setSectionStatus(SectionStatus.active);
         return sectionMapper.toResponseDTO(sectionToRestore);
+    }
+
+    //START NEW SCHOOL YEAR
+    @Transactional
+    public List<SectionResponse> newSchoolYear(NewSchoolYearRequest request){
+        SchoolYear currentSchoolYear = schoolYearRepository
+                .findBySchoolYearStatus(SchoolYearStatus.active)
+                .orElseThrow(ActiveSchoolYearNotFound::new);
+
+        SchoolYear sourceSchoolYear = getBySchoolYearId(request.sourceSchoolYearId());
+        SchoolYear targetSchoolYear = getBySchoolYearId(request.targetSchoolYearId());
+
+        if (sourceSchoolYear.getSchoolYearId().equals(targetSchoolYear.getSchoolYearId())) {
+            throw new SameSchoolYearNotAllowed();
+        }
+
+        if (targetSchoolYear.getSchoolYearStatus() != SchoolYearStatus.planning) {
+            throw new SchoolYearNotPlanning();
+        }
+
+        if (sectionRepository.countBySchoolYear(targetSchoolYear) > 0) {
+            throw new SchoolYearAlreadyHasSections();
+        }
+
+        List<Section> sectionsToClone;
+
+        if (request.gradeLevel() == null){
+            sectionsToClone = sectionRepository.findAllBySchoolYear_SchoolYearId(sourceSchoolYear.getSchoolYearId());
+        } else {
+            sectionsToClone = sectionRepository.findAllBySchoolYear_SchoolYearIdAndGradeLevel(sourceSchoolYear.getSchoolYearId(), request.gradeLevel());
+        }
+
+        if (sectionsToClone.isEmpty()) {
+            throw new SchoolYearSectionsNotFound();
+        }
+
+        currentSchoolYear.setSchoolYearStatus(SchoolYearStatus.closed);
+        targetSchoolYear.setSchoolYearStatus(SchoolYearStatus.active);
+
+        List<Section> newSections = sectionsToClone.stream()
+                .map(oldSection -> {
+                    Section newSection = new Section();
+                    newSection.setSectionName(oldSection.getSectionName());
+                    newSection.setGradeLevel(oldSection.getGradeLevel());
+                    newSection.setUser(oldSection.getUser());
+                    newSection.setSchoolYear(targetSchoolYear);
+                    newSection.setSectionStatus(SectionStatus.active);
+                    return newSection;
+                })
+                .toList();
+
+        List<Section> savedSections = sectionRepository.saveAll(newSections);
+
+        return savedSections.stream()
+                .map(sectionMapper::toResponseDTO)
+                .toList();
     }
 }

@@ -1,6 +1,7 @@
 package com.edutrack.section.controller;
 
 import com.edutrack.section.dto.request.CreateSectionRequest;
+import com.edutrack.section.dto.request.NewSchoolYearRequest;
 import com.edutrack.section.dto.request.UpdateSectionRequest;
 import com.edutrack.section.dto.response.SectionResponse;
 import com.edutrack.section.entity.Section;
@@ -72,6 +73,12 @@ public class SectionController {
     public ResponseEntity<SectionResponse> restoreSection(@PathVariable Integer sectionId) {
         SectionResponse response = sectionService.restoreSection(sectionId);
         return ResponseEntity.ok(response);
+    }
+
+    //START NEW SCHOOL YEAR
+    @PostMapping("school-year/new-school-year")
+    public ResponseEntity<List<SectionResponse>> startNewSchoolYear(@RequestBody NewSchoolYearRequest request){
+        return ResponseEntity.ok(sectionService.newSchoolYear(request));
     }
 
 
