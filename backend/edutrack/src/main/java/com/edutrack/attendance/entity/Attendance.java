@@ -18,14 +18,9 @@ public class Attendance {
     @JoinColumn(name = "assignment_id")
     private StudentSectionAssignment studentSectionAssignment;
 
-    @ManyToOne
-    @JoinColumn(name = "studentId", nullable = false)
-    private Student student;
+    private LocalDateTime dateTimeIn;
 
-    @Column(nullable = false)
-    private LocalDateTime datetimeIn = LocalDateTime.now();
-
-    private LocalDateTime datetimeOut;
+    private LocalDateTime dateTimeOut;
 
     @Enumerated(EnumType.STRING)
     private AttendanceStatus attendanceStatus;
@@ -41,28 +36,28 @@ public class Attendance {
         this.attendanceId = attendanceId;
     }
 
-    public Student getStudent() {
-        return student;
+    public StudentSectionAssignment getStudentSectionAssignment() {
+        return studentSectionAssignment;
     }
 
-    public void setStudent(Student student) {
-        this.student = student;
+    public void setStudentSectionAssignment(StudentSectionAssignment studentSectionAssignment) {
+        this.studentSectionAssignment = studentSectionAssignment;
     }
 
-    public LocalDateTime getDatetimeIn() {
-        return datetimeIn;
+    public LocalDateTime getDateTimeIn() {
+        return dateTimeIn;
     }
 
-    public void setDatetimeIn(LocalDateTime datetimeIn) {
-        this.datetimeIn = datetimeIn;
+    public void setDateTimeIn(LocalDateTime dateTimeIn) {
+        this.dateTimeIn = dateTimeIn;
     }
 
-    public LocalDateTime getDatetimeOut() {
-        return datetimeOut;
+    public LocalDateTime getDateTimeOut() {
+        return dateTimeOut;
     }
 
-    public void setDatetimeOut(LocalDateTime datetimeOut) {
-        this.datetimeOut = datetimeOut;
+    public void setDateTimeOut(LocalDateTime dateTimeOut) {
+        this.dateTimeOut = dateTimeOut;
     }
 
     public AttendanceStatus getAttendanceStatus() {

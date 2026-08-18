@@ -18,4 +18,6 @@ public interface StudentSectionAssignmentRepository
     Optional<StudentSectionAssignment> findByStudentAndLeftAtIsNull(
             Student student
     );
+
+    Optional<StudentSectionAssignment> findByStudent_RfidAndLeftAtIsNull(String rfid);
 }
