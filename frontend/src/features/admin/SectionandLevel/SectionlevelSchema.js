@@ -1,24 +1,21 @@
 import * as Yup from "yup";
 
-const MESSAGES = {
-  sectionName: "Section name is required.",
-  gradeLevel: "Grade level is required.",
-  schoolYear: "School year is required.",
-  userId: "Adviser is required.",
-};
+const sectionNameField = Yup.string()
+  .trim()
+  .required("Section name is required.")
+  .max(100, "Section name must not exceed 100 characters");
+
+const gradeLevelField = Yup.string().required("Grade level is required.");
+
+const schoolYearField = Yup.string();
+const userIdField = Yup.string();
 
 export function getSectionFormSchema(mode = "add") {
   return Yup.object({
-    sectionName: Yup.string().trim().required(MESSAGES.sectionName),
-    gradeLevel: Yup.string().required(MESSAGES.gradeLevel),
-    schoolYear:
-      mode === "add"
-        ? Yup.string().required(MESSAGES.schoolYear)
-        : Yup.string().notRequired(),
-    userId:
-      mode === "add"
-        ? Yup.string().required(MESSAGES.userId)
-        : Yup.string().notRequired(),
+    sectionName: sectionNameField,
+    gradeLevel: gradeLevelField,
+    schoolYear: mode === "add" ? schoolYearField.required("School year is required.") : schoolYearField,
+    userId: mode === "add" ? userIdField.required("Adviser is required.") : userIdField,
   });
 }
 

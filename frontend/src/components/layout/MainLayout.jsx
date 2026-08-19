@@ -12,6 +12,7 @@ const pageTitles = {
   "/enrollment": "Enrollment",
   "/promote-student": "Promote Student",
   "/rfid-attendance": "RFID Attendance",
+  "/school-year": "School Year",
   "/section-level": "Section & Level",
   "/logs-reports": "Logs & Reports",
   "/user-management": "User Management",
@@ -21,7 +22,7 @@ const pageTitles = {
 // Only used as a FALLBACK for as long as there's no auth backend to
 // log in against (see the TODO in AppRoutes.jsx). Once real login
 // works, useAuth().role takes over and this is never consulted.
-const ADMIN_ONLY_PATHS = ["/user-management", "/section-level", "/logs-reports"];
+const ADMIN_ONLY_PATHS = ["/user-management", "/section-level", "/logs-reports", "/school-year"];
 
 function MainLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);

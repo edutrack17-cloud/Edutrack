@@ -1,0 +1,98 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
+
+// Same "no hover, only the selected state is highlighted" treatment as
+// Sectionlevelfilters.jsx's STATUS_OPTIONS - hoverClass is "" (not
+// undefined) on purpose so FilterDropdown knows to skip the gray
+// hover fallback and only light up the currently selected option.
+const STATUS_OPTIONS = [
+  { value: "", label: "Status", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
+  { value: "planning", label: "Planning", textClass: "text-warning", hoverClass: "", selectedBgClass: "bg-warning/10" },
+  { value: "active", label: "Active", textClass: "text-success", hoverClass: "", selectedBgClass: "bg-success/10" },
+  { value: "archived", label: "Archived", textClass: "text-secondary", hoverClass: "", selectedBgClass: "bg-secondary/10" },
+];
+
+// Same trigger/wrapper sizing as Sectionlevelfilters.jsx so both pages
+// share identical dropdown height, radius, and text scale.
+const triggerClass =
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+
+function useClickOutside(isOpen, ref, onClose) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) onClose();
+    }
+    function handleEscapeKey(event) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [isOpen, ref, onClose]);
+}
+
+function SchoolYearFilters({ status, onStatusChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
+
+  const selected = STATUS_OPTIONS.find((option) => option.value === status) || STATUS_OPTIONS[0];
+
+  function handleSelect(nextValue) {
+    onStatusChange({ target: { value: nextValue } });
+    setIsOpen(false);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      <div className={wrapperClass} ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className={`${triggerClass} ${selected.textClass}`}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-label="Filter by status"
+        >
+          <span className="truncate">{selected.label}</span>
+          <ChevronDown
+            size={16}
+            className={`shrink-0 transition-transform ${selected.textClass} ${isOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {isOpen && (
+          <ul
+            role="listbox"
+            className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          >
+            {STATUS_OPTIONS.map((option) => {
+              const isSelected = option.value === selected.value;
+              return (
+                <li key={option.value || "all"} role="option" aria-selected={isSelected}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(option.value)}
+                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition ${option.textClass} ${option.hoverClass === "" ? "" : "hover:bg-gray-100"} ${isSelected ? `${option.selectedBgClass} font-medium` : ""}`}
+                  >
+                    {option.label}
+                    {isSelected && <Check size={14} />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default SchoolYearFilters;

@@ -1,77 +1,66 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SearchInput from "../enrollment/components/SearchInput";
 import AttendaceFilters from "./components/AttendaceFilters";
 import AttendanceTable from "./components/AttendanceTable";
 import Pagination from "./components/Pagination";
+import { fetchAttendance } from "./Attendanceservice";
 
-// TODO: mock only - replace with Spring Boot GET /api/attendance.
-// This page is now READ-ONLY — recording attendance (RFID taps,
-// manual Time In/Out, walk-in "Add Attendance") all happens on the
-// dedicated RFID Attendance page. Once that page's writes and this
-// page's GET /api/attendance both hit the same backend table, records
-// created there will just show up here.
-const MOCK_ATTENDANCE = [
-  {
-    id: 1, // attendance_id
-    studentId: 1,
-    assignmentId: 1,
-    date: "2026-08-05",
-    rfid: "090941037",
-    name: "Yuri Sakazaki",
-    gradeLevel: "Grade 4",
-    section: "Apple",
-    timeIn: "07:00",
-    timeOut: "17:00",
-    status: "Present",
-    isConfirmed: true,
-  },
-  {
-    id: 2,
-    studentId: 2,
-    assignmentId: 2,
-    date: "2026-08-05",
-    rfid: "090941038",
-    name: "Kyo Kusanagi",
-    gradeLevel: "Grade 4",
-    section: "Rose",
-    timeIn: "07:15",
-    timeOut: "17:00",
-    status: "Present",
-    isConfirmed: false,
-  },
-  {
-    id: 3,
-    studentId: 3,
-    assignmentId: 3,
-    date: "2026-08-05",
-    rfid: "090941039",
-    name: "Iori Yagami",
-    gradeLevel: "Grade 5",
-    section: "Jade",
-    timeIn: "",
-    timeOut: "",
-    status: "Absent",
-    isConfirmed: false,
-  },
-];
-
+// Connected to GET /api/attendance — see Attendanceservice.js for TODOs.
+// READ-ONLY page; recording attendance happens on the RFID Attendance page.
 function AttendancePage() {
-  // TODO: BACKEND CONNECTION — GET /api/attendance. Kept as state (not
-  // a plain const) so a future fetch/refresh can update it, even
-  // though nothing on this page writes to it anymore.
-  const [attendance] = useState(MOCK_ATTENDANCE);
+  const [attendance, setAttendance] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   const [search, setSearch] = useState("");
 
   const [level, setLevel] = useState("");
   const [section, setSection] = useState("");
-  // Matches attendance.status ENUM('present', 'absent') - no "late".
+  // ERD only shows present/absent; "late" mismatch flagged in Attendanceservice.js
   const [status, setStatus] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
-  // TODO: BACKEND CONNECTION — totalPages should come from the API
-  // response once GET /api/attendance is wired up.
-  const totalPages = 1;
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Reset to page 1 whenever filters/search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [level, section, status, search]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadAttendance() {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const { records, totalPages: fetchedTotalPages } = await fetchAttendance({
+          page: currentPage,
+          level,
+          section,
+          status,
+          search,
+        });
+        if (!ignore) {
+          setAttendance(records);
+          setTotalPages(fetchedTotalPages);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setLoadError(error.message);
+          setAttendance([]);
+        }
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
+    }
+
+    loadAttendance();
+
+    return () => {
+      ignore = true;
+    };
+  }, [currentPage, level, section, status, search]);
 
   function handleSearchChange(event) {
     setSearch(event.target.value);
@@ -108,14 +97,27 @@ function AttendancePage() {
         <SearchInput value={search} onChange={handleSearchChange} />
       </div>
 
+      {loadError && (
+        <p className="mt-4 text-sm text-danger">
+          Failed to load attendance: {loadError}
+        </p>
+      )}
+
       <div className="mt-6">
-        <AttendanceTable
-          attendance={attendance}
-          searchTerm={search}
-          level={level}
-          section={section}
-          status={status}
-        />
+        {isLoading ? (
+          <p className="py-6 text-center text-sm text-gray">
+            Loading attendance…
+          </p>
+        ) : (
+          // Client-side filtering kept as fallback in case backend doesn't filter yet
+          <AttendanceTable
+            attendance={attendance}
+            searchTerm={search}
+            level={level}
+            section={section}
+            status={status}
+          />
+        )}
       </div>
 
       <div className="mt-4">

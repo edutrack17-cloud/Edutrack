@@ -2,7 +2,7 @@
 //
 // Reuses StudentForm.jsx (same fields as EnrollStudentModal) but with
 // three differences: pre-filled initial values from the selected
-// student, a different title/button text, and PUT instead of POST on
+// student, a different title/button text, and PATCH instead of POST on
 // submit.
 
 import React, { useState } from "react";
@@ -35,7 +35,7 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
     // formik only reads initialValues once on first mount, so editing
     // Student A and then Student B would keep showing Student A's data.
     enableReinitialize: true,
-    initialValues: {
+    initialValues: (() => {
       // BACKEND GAP: GET /api/student only returns StudentResponse,
       // which has a single combined "fullName" (not firstName/
       // middleName/lastName), and StudentController has no GET-by-id
@@ -44,25 +44,47 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
       // word -> firstName, last word -> lastName, anything in between
       // -> middleName. This is unreliable for names with more than 3
       // parts, so double-check/re-type the name fields before saving.
-      level: student?.section?.gradeLevel ?? "",
-      section: student?.section?.sectionId ?? "",
-      lrn: student?.lrn ?? "",
-      rfid: student?.rfid ?? "",
-      admissionType: student?.admissionType ?? "",
-      firstName: splitFullName(student?.fullName).firstName,
-      middleName: splitFullName(student?.fullName).middleName,
-      lastName: splitFullName(student?.fullName).lastName,
-      birthdate: student?.birthDate ?? "",
-      guardianName: student?.guardian ?? "",
-      guardianMobile: student?.guardianPhoneNumber ?? "",
-    },
+      // Split once (not once per field) since it's a pure function of
+      // student.fullName and formik re-runs this on every reinitialize.
+      const { firstName, middleName, lastName } = splitFullName(student?.fullName);
+      return {
+        level: student?.section?.gradeLevel ?? "",
+        sectionId: student?.section?.sectionId ?? "",
+        lrn: student?.lrn ?? "",
+        rfid: student?.rfid ?? "",
+        admissionType: student?.admissionType ?? "",
+        firstName,
+        middleName,
+        lastName,
+        birthDate: student?.birthDate ?? "",
+        guardian: student?.guardian ?? "",
+        guardianPhoneNumber: student?.guardianPhoneNumber ?? "",
+      };
+    })(),
     validationSchema: enrollSchema,
     onSubmit: async (values, helpers) => {
       // PATCH /api/student/{studentId} - called by StudentTable's
       // handleEditSubmit (via enrollmentService.updateStudent), which
       // this onSubmit prop points to.
       try {
-        await onSubmit?.(student?.studentId, values);
+        const payload = { ...values };
+
+        // Only send sectionId if it actually changed. StudentService.
+        // updateStudent() re-validates sectionId's section (archived?
+        // inactive school year?) whenever it's present in the request -
+        // even if it's the SAME section the student is already in. The
+        // Section dropdown here is built from getSections(), which only
+        // lists ACTIVE sections, so if this student's current section
+        // has since been archived, it won't be selected and Formik
+        // still holds the original (now-archived) id. Sending that
+        // unchanged id back would fail an unrelated edit (e.g. just
+        // updating guardian phone) with "inactive section", even though
+        // the section itself isn't part of what's being changed.
+        if (String(values.sectionId) === String(student?.section?.sectionId ?? "")) {
+          delete payload.sectionId;
+        }
+
+        await onSubmit?.(student?.studentId, payload);
         onClose();
       } catch (error) {
         helpers.setStatus(error.message);

@@ -15,9 +15,18 @@ const GRADE_LEVEL_OPTIONS = [
 ];
 
 function StudentForm({ formik, sections = [], onRfidClick }) {
+  // Archived sections can still be returned by getSections() (kept for
+  // StudentFilters' use case - see the comment there), but they should
+  // never be pickable here: submitting one always fails server-side
+  // with InactiveSectionNotAllowed, and nothing about how it's shown
+  // in a plain <option> would tell the admin why. sectionStatus may be
+  // missing on data fetched before this field existed, so treat that
+  // (undefined) as active rather than silently hiding every section.
+  const activeSections = sections.filter((s) => s.status !== "archived");
+
   const filteredSections = formik.values.level
-    ? sections.filter((s) => s.gradeLevel === formik.values.level)
-    : sections;
+    ? activeSections.filter((s) => s.gradeLevel === formik.values.level)
+    : activeSections;
 
   // "Today or later" isn't allowed for a birthdate, so the latest
   // selectable day is yesterday. <input type="date"> requires this

@@ -1,41 +1,41 @@
 // features/teacher/Promote-Student/components/PromoteStudentModal.jsx
-
 import React, { useEffect, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
+import { getTargetSections } from "../promotestudentservice";
 
-// TODO: BACKEND CONNECTION
-// GET /api/sections?gradeLevel=&schoolYearId={nextPlanningSchoolYearId}
-//
-// IMPORTANT:
-// These sections should come from the next planning school year.
-// Promotion means moving students into next year's section.
+// Matches GradeLevel.java - only these 3 exist, no Grade_7 to promote
+// a Grade_6 student into (that's the graduation case below).
+const GRADE_LEVEL_ORDER = ["Grade_4", "Grade_5", "Grade_6"];
 
-const NEXT_YEAR_SECTIONS = [
-  { id: 101, name: "Apple", gradeLevel: 5 },
-  { id: 102, name: "Rose", gradeLevel: 5 },
-  { id: 103, name: "Jade", gradeLevel: 5 },
-  { id: 104, name: "Apple", gradeLevel: 6 },
-  { id: 105, name: "Rose", gradeLevel: 6 },
-  { id: 106, name: "Jade", gradeLevel: 6 },
-];
+function formatGradeLevel(gradeLevel) {
+  if (!gradeLevel) return "—";
+  return gradeLevel.replace("_", " ");
+}
 
+function nextGradeLevels(currentGradeLevel) {
+  const currentIndex = GRADE_LEVEL_ORDER.indexOf(currentGradeLevel);
+  if (currentIndex === -1) return [];
+  return GRADE_LEVEL_ORDER.slice(currentIndex + 1);
+}
 
-function PromoteStudentModal({ isOpen, onClose, students, onConfirm }) {
+function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmitting }) {
   const [targetLevel, setTargetLevel] = useState("");
   const [targetSection, setTargetSection] = useState("");
+  const [targetSections, setTargetSections] = useState([]);
+  const [sectionsError, setSectionsError] = useState("");
 
-  const currentGradeLevel = students?.[0]?.gradeLevel ?? null;
-  const currentSectionName = students?.[0]?.sectionName ?? "";
+  // StudentResponse nests this under .section, and gradeLevel is the
+  // "Grade_4" string enum, not a bare number.
+  const currentGradeLevel = students?.[0]?.section?.gradeLevel ?? null;
+  const currentSectionName = students?.[0]?.section?.sectionName ?? "";
 
-  const isGraduating = currentGradeLevel === 6;
+  const isGraduating = currentGradeLevel === "Grade_6";
+  const availableLevels = nextGradeLevels(currentGradeLevel);
 
-  const availableLevels = [4, 5, 6].filter(
-    (level) => level > (currentGradeLevel ?? 0)
-  );
-
-
+  // Reset target level whenever the modal opens for a new selection.
   useEffect(() => {
     if (!isOpen) return;
+    setSectionsError("");
 
     if (isGraduating) {
       setTargetLevel("");
@@ -43,51 +43,46 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm }) {
       return;
     }
 
-    const nextLevel = currentGradeLevel + 1;
-
-    const sections = NEXT_YEAR_SECTIONS.filter(
-      (section) => section.gradeLevel === nextLevel
-    );
-
-    setTargetLevel(String(nextLevel));
-    setTargetSection(sections[0] ? String(sections[0].id) : "");
-
+    setTargetLevel(availableLevels[0] ?? "");
+    // targetSection gets picked once real sections load below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentGradeLevel, isGraduating]);
 
+  // PLACEHOLDER (see getTargetSections in promotestudentservice.js for
+  // the full explanation): ideally this would fetch sections from the
+  // school's NEXT (planning) school year, so promoting a student
+  // doesn't touch their current-year roster. The backend doesn't
+  // support that yet - GET /section/dropdown only accepts `gradeLevel`
+  // and always returns current-active-school-year sections - so this
+  // currently shows the SAME active-year sections as the page-level
+  // filter row. "Promote" today moves a student to a next-grade-level
+  // section within the current school year. Swap to a real planning-
+  // year fetch once the backend adds support for it.
+  useEffect(() => {
+    if (!isOpen || isGraduating || !targetLevel) {
+      setTargetSections([]);
+      return;
+    }
+
+    getTargetSections(targetLevel)
+      .then((sections) => {
+        setTargetSections(sections);
+        setTargetSection((prev) =>
+          sections.some((s) => String(s.id) === prev) ? prev : sections[0] ? String(sections[0].id) : ""
+        );
+      })
+      .catch((error) => setSectionsError(error.message));
+  }, [isOpen, targetLevel, isGraduating]);
 
   if (!isOpen || !students || students.length === 0) {
     return null;
   }
 
-
-  const filteredSections = targetLevel
-    ? NEXT_YEAR_SECTIONS.filter(
-        (section) => section.gradeLevel === Number(targetLevel)
-      )
-    : [];
-
-
-  function handleLevelChange(event) {
-    const level = event.target.value;
-
-    setTargetLevel(level);
-
-    const sections = NEXT_YEAR_SECTIONS.filter(
-      (section) => section.gradeLevel === Number(level)
-    );
-
-    setTargetSection(sections[0] ? String(sections[0].id) : "");
-  }
-
-
   function handleConfirm() {
-    const studentIds = students.map((student) => student.id);
+    const studentIds = students.map((student) => student.studentId);
 
     if (isGraduating) {
-      onConfirm(studentIds, {
-        isGraduation: true,
-      });
-
+      onConfirm(studentIds, { isGraduation: true });
       return;
     }
 
@@ -95,131 +90,122 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm }) {
 
     onConfirm(studentIds, {
       isGraduation: false,
-      targetLevel: Number(targetLevel),
+      targetLevel,
       targetSectionId: Number(targetSection),
     });
   }
-  
-  const canConfirm = isGraduating || Boolean(targetSection);
+
+  const canConfirm = !isSubmitting && (isGraduating || Boolean(targetSection));
+  const showNoTargetSectionsWarning =
+    !isGraduating && targetLevel && targetSections.length === 0 && !sectionsError;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-800">
+        <div className="flex items-center border-b border-gray-200 px-6 py-4">
+          <div className="w-6" />
+          <h2 className="flex-1 text-center text-lg font-semibold text-primary">
             {isGraduating ? "Graduate Student" : "Promote Student"}
             {students.length > 1 ? "s" : ""}
           </h2>
-
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-500 hover:bg-gray-100"
-          >
+          <button onClick={onClose} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100">
             <X size={20} />
           </button>
         </div>
+
         <div className="flex flex-col gap-4 px-6 py-5">
           <div>
             <p className="mb-1 text-sm font-semibold text-primary">
               Selected Student{students.length > 1 ? "s" : ""} ({students.length})
             </p>
             <div className="max-h-28 overflow-y-auto rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+              {/* StudentResponse only has a combined fullName, not
+                  firstName/lastName - same backend gap EditStudentModal
+                  already works around. */}
               {students.map((student) => (
-                <p key={student.id}>
-                  {student.firstName} {student.lastName}
-                </p>
+                <p key={student.studentId}>{student.fullName}</p>
               ))}
             </div>
           </div>
 
           <div>
-            <p className="mb-1 text-sm font-semibold text-primary">
-              Current Level and Section
-            </p>
+            <p className="mb-1 text-sm font-semibold text-primary">Current Level and Section</p>
             <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-              Grade {currentGradeLevel} - {currentSectionName}
+              {formatGradeLevel(currentGradeLevel)} - {currentSectionName}
             </div>
           </div>
-                    {isGraduating ? (
+
+          {sectionsError && <p className="text-sm text-danger">{sectionsError}</p>}
+
+          {isGraduating ? (
             <p className="rounded-lg bg-warning/10 p-3 text-sm text-gray-700">
-              Grade 6 is the highest level in this school.
-              Confirming will mark{" "}
-              {students.length > 1 ? "these students" : "this student"}
-              {" "}
-              as{" "}
-              <span className="font-semibold text-warning">
-                Graduated
-              </span>
-              instead of moving them to a new section.
+              Grade 6 is the highest level in this school. Confirming will mark{" "}
+              {students.length > 1 ? "these students" : "this student"} as{" "}
+              <span className="font-semibold text-warning">Graduated</span> instead of moving them
+              to a new section.
             </p>
           ) : (
             <div className="flex flex-col gap-4">
-              <p className="text-sm font-semibold text-primary">
-                Promote to Grade Level
-              </p>
+              <p className="text-sm font-semibold text-primary">Promote to Grade Level</p>
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-2">
-                  <label className="text-xs font-semibold text-gray-500">
-                    Level
-                  </label>
+                  <label className="text-xs font-semibold text-gray-500">Level</label>
                   <div className="relative">
                     <select
                       value={targetLevel}
-                      onChange={handleLevelChange}
+                      onChange={(event) => setTargetLevel(event.target.value)}
                       className="w-full appearance-none rounded-lg border border-gray-300 py-2 pl-3 pr-10 text-sm text-gray-700 outline-none focus:border-primary"
                     >
                       {availableLevels.map((level) => (
                         <option key={level} value={level}>
-                          Grade {level}
+                          {formatGradeLevel(level)}
                         </option>
                       ))}
                     </select>
-                    <ChevronDown
-                      size={16}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                    />
+                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   </div>
                 </div>
+
                 <div className="flex flex-1 flex-col gap-2">
-                  <label className="text-xs font-semibold text-gray-500">
-                    Section
-                  </label>
+                  <label className="text-xs font-semibold text-gray-500">Section</label>
                   <div className="relative">
                     <select
                       value={targetSection}
                       onChange={(event) => setTargetSection(event.target.value)}
-                      className="w-full appearance-none rounded-lg border border-gray-300 py-2 pl-3 pr-10 text-sm text-gray-700 outline-none focus:border-primary"
+                      disabled={targetSections.length === 0}
+                      className="w-full appearance-none rounded-lg border border-gray-300 py-2 pl-3 pr-10 text-sm text-gray-700 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
                     >
-                      <option value="">
-                        Select Section
-                      </option>
-                      {filteredSections.map((section) => (
+                      <option value="">Select Section</option>
+                      {targetSections.map((section) => (
                         <option key={section.id} value={section.id}>
                           {section.name}
                         </option>
                       ))}
                     </select>
-                    <ChevronDown
-                      size={16}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                    />
+                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   </div>
                 </div>
               </div>
+
+              {showNoTargetSectionsWarning && (
+                <p className="text-sm text-warning">
+                  No active sections found for {formatGradeLevel(targetLevel)} yet. Ask an admin to
+                  create one before promoting students here.
+                </p>
+              )}
             </div>
           )}
         </div>
 
         <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
-
           <button
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm}
             className="flex-1 rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isGraduating ? "Graduate" : "Promote"}
+            {isSubmitting ? "Saving..." : isGraduating ? "Graduate" : "Promote"}
           </button>
-
           <button
             type="button"
             onClick={onClose}
@@ -232,4 +218,5 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm }) {
     </div>
   );
 }
+
 export default PromoteStudentModal;

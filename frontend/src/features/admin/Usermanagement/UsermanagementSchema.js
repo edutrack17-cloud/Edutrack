@@ -29,6 +29,12 @@ const passwordField = Yup.string()
   .matches(/[0-9]/, "Password must contain at least one number")
   .required("Password is required");
 
+const newPasswordField = Yup.string()
+  .test("min", "Password must be at least 8 characters", (value) => !value || value.length >= 8)
+  .test("max", "Password must not exceed 20 characters", (value) => !value || value.length <= 20)
+  .test("letter", "Password must contain at least one letter", (value) => !value || /[a-zA-Z]/.test(value))
+  .test("number", "Password must contain at least one number", (value) => !value || /[0-9]/.test(value));
+
 const firstNameField = Yup.string()
   .required("First name is required")
   .max(100, "First name must not exceed 100 characters");
@@ -59,4 +65,5 @@ export const editUserSchema = Yup.object({
   middleName: middleNameField,
   lastName: lastNameField,
   role: roleField,
+  newPassword: newPasswordField,
 });

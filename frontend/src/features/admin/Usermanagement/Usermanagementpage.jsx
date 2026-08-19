@@ -28,27 +28,33 @@ const MOCK_USERS = [
 
 function Usermanagementpage() {
   const [users, setUsers] = useState(MOCK_USERS);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [viewingUser, setViewingUser] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
   const [assigningUser, setAssigningUser] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // GET /api/users?role=&status=&search=&page=
-  // Falls back to the mock list above so the UI still works today -
-  // once the backend's actually up, this quietly starts returning
-  // real data instead.
+  // GET /api/teachers - the only list endpoint that actually exists
+  // today. See Usermanagementservice.js: getUsers() filters/paginates
+  // client-side as a stopgap since the backend doesn't support that yet,
+  // and only returns ACTIVE teachers (no disabled accounts, no admins).
+  // Falls back to the mock list above if the request fails outright.
   const loadUsers = useCallback(async () => {
     try {
+      setErrorMessage("");
       const data = await getUsers({ role, status, search, page: currentPage });
-      setUsers(data);
+      setUsers(data.content ?? data);
+      setTotalPages(data.totalPages ?? 1);
     } catch (error) {
       console.warn("getUsers() not reachable yet, using mock data:", error.message);
+      setErrorMessage(error.message);
     }
   }, [role, status, search, currentPage]);
 
@@ -74,47 +80,57 @@ function Usermanagementpage() {
 
   async function handleCreateSubmit(formData) {
     try {
-      // TODO: BACKEND CONNECTION - see createUser() in Usermanagementservice.js
-      // users.role is ENUM(admin, teacher) in the DB - lowercase only in
-      // the request payload, same pattern as handleToggleStatus below.
-      // Local state stays capitalized ("Admin"/"Teacher") to match how
-      // it's displayed and filtered everywhere else in this page.
-      const created = await createUser({ ...formData, role: formData.role.toLowerCase() });
-      setUsers((prev) => [...prev, { ...created, role: formData.role }]);
+      setErrorMessage("");
+      // POST /api/createTeacher - see createUser() in Usermanagementservice.js.
+      // Role is never sent - the backend always saves userRole = teacher
+      // regardless (see Createusermodal.jsx, Role is locked to "Teacher").
+      await createUser(formData);
+      await loadUsers(); // re-pull from GET /api/teachers so the new row is real, not guessed
     } catch (error) {
       console.error("createUser failed:", error.message);
+      setErrorMessage(error.message);
     }
   }
 
   async function handleEditSubmit(userId, formData) {
     try {
-      // TODO: BACKEND CONNECTION - see updateUser() in Usermanagementservice.js
-      await updateUser(userId, { ...formData, role: formData.role.toLowerCase() });
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...formData } : u)));
+      setErrorMessage("");
+      // NOT AVAILABLE YET - updateUser() throws until the backend adds
+      // an update endpoint (see Usermanagementservice.js). This will
+      // surface that as a visible error instead of failing silently.
+      await updateUser(userId, formData);
+      await loadUsers();
     } catch (error) {
       console.error("updateUser failed:", error.message);
+      setErrorMessage(error.message);
     }
   }
 
   async function handleToggleStatus(user) {
     const nextStatus = user.status === "Active" ? "Disabled" : "Active";
     try {
-      // TODO: BACKEND CONNECTION - see toggleUserStatus() in Usermanagementservice.js
+      setErrorMessage("");
+      // NOT AVAILABLE YET - toggleUserStatus() throws until the backend
+      // adds a status endpoint (see Usermanagementservice.js).
       await toggleUserStatus(user.id, nextStatus.toLowerCase());
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)));
+      await loadUsers();
     } catch (error) {
       console.error("toggleUserStatus failed:", error.message);
+      setErrorMessage(error.message);
     }
   }
 
   async function handleAssignConfirm(userId, sectionId) {
     try {
-      // TODO: BACKEND CONNECTION - see assignTeacherToSection() in Usermanagementservice.js
+      setErrorMessage("");
+      // PATCH /api/section/{sectionId} - see assignTeacherToSection() in
+      // Usermanagementservice.js. This one's live and working.
       await assignTeacherToSection(userId, sectionId);
       setAssigningUser(null);
       loadUsers(); // re-pull so the row picks up its new grade level/section
     } catch (error) {
       console.error("assignTeacherToSection failed:", error.message);
+      setErrorMessage(error.message);
     }
   }
 
@@ -141,6 +157,8 @@ function Usermanagementpage() {
         </div>
       </div>
 
+      {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
+
       <Usermanagementtable
         users={filteredUsers}
         onView={setViewingUser}
@@ -149,7 +167,7 @@ function Usermanagementpage() {
         onToggleStatus={handleToggleStatus}
       />
 
-      <Usermanagementpagination currentPage={currentPage} totalPages={1} onPageChange={setCurrentPage} />
+      <Usermanagementpagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
 
       <Createusermodal
         isOpen={isCreateOpen}

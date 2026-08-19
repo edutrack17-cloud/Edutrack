@@ -127,7 +127,16 @@ function EnrollmentPage() {
   // CONNECTED: POST /api/student via enrollStudent() in enrollmentService.js
   async function handleSubmitNewStudent(values) {
     await enrollStudent(values);
-    await loadStudents();
+    // Jump back to page 1 so the newly-enrolled student is actually
+    // visible, instead of silently staying on whatever page the admin
+    // was on. If already on page 1, setCurrentPage(1) is a no-op state
+    // change and won't re-trigger the loadStudents() effect below, so
+    // call it directly in that case to still refresh the list.
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      await loadStudents();
+    }
   }
 
   return (

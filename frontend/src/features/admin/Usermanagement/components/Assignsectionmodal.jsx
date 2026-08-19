@@ -8,11 +8,15 @@
 
 import React, { useEffect, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
-import { getActiveSchoolYear, getAssignableSections } from "../Usermanagementservice";
+import { getAssignableSections } from "../Usermanagementservice";
 
-// Values match sections.grade_level ENUM(grade_4, grade_5, grade_6) in the
-// ERD - same values used by GRADE_LEVEL_OPTIONS in Sectionlevelservice.js,
-// kept as a local copy since this modal lives under a different feature.
+// Values match the DB's grade_level ENUM(grade_4, grade_5, grade_6) -
+// confirmed lowercase in the ERD. This was briefly "fixed" to capital
+// "Grade_4" based on Sectionlevelservice.js's GRADE_LEVEL_OPTIONS, but
+// that was a mistake - reverted back to lowercase, since lowercase is
+// what the ERD/DB actually defines. Sectionlevelservice.js's capitalized
+// version is the one that likely needs checking against the real
+// GradeLevel.java enum, not this file.
 const GRADE_LEVEL_OPTIONS = [
   { value: "grade_4", label: "Grade 4" },
   { value: "grade_5", label: "Grade 5" },
@@ -21,7 +25,9 @@ const GRADE_LEVEL_OPTIONS = [
 
 // Fallback only - used while the backend isn't reachable yet. See
 // getAssignableSections() in Usermanagementservice.js for the real call:
-// GET /api/sections?gradeLevel=&schoolYearId={currentActiveSchoolYearId}
+// GET /api/section/dropdown?gradeLevel= (reuses the Section module's
+// dropdown endpoint, which already filters to active sections in the
+// current active school year on the backend).
 const MOCK_SECTIONS_BY_LEVEL = {
   grade_4: [{ id: 1, name: "Apple" }, { id: 2, name: "Rose" }, { id: 3, name: "Jade" }],
   grade_5: [{ id: 4, name: "Apple" }, { id: 5, name: "Rose" }, { id: 6, name: "Jade" }],
@@ -53,8 +59,7 @@ function Assignsectionmodal({ isOpen, onClose, user, onConfirm }) {
     setIsLoadingSections(true);
     (async () => {
       try {
-        const activeYear = await getActiveSchoolYear();
-        const result = await getAssignableSections(gradeLevel, activeYear.id);
+        const result = await getAssignableSections(gradeLevel);
         if (!cancelled) setSections(result);
       } catch (error) {
         console.warn("getAssignableSections() not reachable yet, using mock data:", error.message);
@@ -77,8 +82,9 @@ function Assignsectionmodal({ isOpen, onClose, user, onConfirm }) {
 
   function handleConfirm() {
     if (!sectionId) return;
-    // TODO: BACKEND CONNECTION - see assignTeacherToSection() in Usermanagementservice.js
-    // PATCH /api/sections/{sectionId}/adviser  Body: { adviserId: user.id }
+    // See assignTeacherToSection() in Usermanagementservice.js - reuses
+    // the Section module's own update endpoint (PATCH /api/section/{id}
+    // with { userId }) instead of a dedicated /adviser route.
     onConfirm(user.id, Number(sectionId));
   }
 

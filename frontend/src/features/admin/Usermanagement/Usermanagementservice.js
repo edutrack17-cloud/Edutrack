@@ -1,15 +1,3 @@
-// features/admin/Usermanagement/Usermanagementservice.js
-//
-// All admin/User Management API calls live here. Endpoints match the
-// paths already referenced in the modal components' TODO comments -
-// see Createusermodal.jsx, Editusermodal.jsx, Assignsectionmodal.jsx,
-// and Usermanagementfilter.jsx for exactly where each function gets
-// called from.
-//
-// "users" and "sections" are separate tables in the ERD - assigning a
-// teacher to a section PATCHes sections.adviser_id, it does NOT touch
-// the users row itself.
-
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 async function request(path, options = {}) {
@@ -24,12 +12,11 @@ async function request(path, options = {}) {
       const body = await response.json();
       message = body.message || message;
     } catch {
-      // no JSON body on the error response - keep the generic message
+   
     }
     throw new Error(message);
   }
 
-  // Some PATCH/DELETE responses may come back as 204 No Content
   if (response.status === 204) return null;
   return response.json();
 }
@@ -45,60 +32,89 @@ function buildQuery(params) {
   return queryString ? `?${queryString}` : "";
 }
 
-// GET /api/users?role=&status=&search=&page=
-export async function getUsers({ role, status, search, page } = {}) {
-  const query = buildQuery({ role, status, search, page });
-  return request(`/users${query}`);
+
+function splitFullName(fullName) {
+  const parts = (fullName || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", middleName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
+  return {
+    firstName: parts[0],
+    lastName: parts[parts.length - 1],
+    middleName: parts.slice(1, -1).join(" "),
+  };
 }
 
-// POST /api/users - see Createusermodal.jsx
+
+function mapTeacherResponse(teacher) {
+  return {
+    id: teacher.userId,
+    username: teacher.username,
+    ...splitFullName(teacher.fullName),
+    role: teacher.userRole === "admin" ? "Admin" : "Teacher",
+    status: teacher.accountStatus === "active" ? "Active" : "Disabled",
+
+    assignedGradeLevel: undefined,
+    assignedSectionName: undefined,
+  };
+}
+
+export async function getUsers({ status, search, page = 1, size = 10 } = {}) {
+  const data = await request("/teachers");
+  let mapped = data.map(mapTeacherResponse);
+
+  if (search) {
+    const term = search.toLowerCase();
+    mapped = mapped.filter(
+      (u) =>
+        `${u.firstName} ${u.middleName} ${u.lastName}`.toLowerCase().includes(term) ||
+        u.username.toLowerCase().includes(term)
+    );
+  }
+  if (status) {
+    mapped = mapped.filter((u) => u.status.toLowerCase() === status.toLowerCase());
+  }
+
+  const totalPages = Math.max(1, Math.ceil(mapped.length / size));
+  const start = (page - 1) * size;
+  const content = mapped.slice(start, start + size);
+
+  return { content, totalPages };
+}
+
 export async function createUser(formData) {
-  return request("/users", {
+  const created = await request("/createTeacher", {
     method: "POST",
-    body: JSON.stringify(formData),
+    body: JSON.stringify({
+      username: formData.username,
+      password: formData.password,
+      firstName: formData.firstName,
+      middleName: formData.middleName,
+      lastName: formData.lastName,
+    }),
   });
+  return mapTeacherResponse(created);
 }
 
-// PUT /api/users/{userId} - see Editusermodal.jsx
 export async function updateUser(userId, formData) {
-  return request(`/users/${userId}`, {
-    method: "PUT",
-    body: JSON.stringify(formData),
-  });
+  throw new Error("Editing users isn't available yet - the backend has no update endpoint.");
 }
 
-// PATCH /api/users/{userId}/status  Body: { status: 'active' | 'disabled' }
-// Matches users.account_status ENUM(active, disabled) - powers the
-// Activate/Deactivate kebab action in Usermanagementtable.jsx.
+
 export async function toggleUserStatus(userId, status) {
-  return request(`/users/${userId}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ status }),
-  });
+  throw new Error("Activating/deactivating users isn't available yet - the backend has no status endpoint.");
 }
 
-// GET /api/sections?gradeLevel=&schoolYearId={currentActiveSchoolYearId}
-// see Assignsectionmodal.jsx. Needs the CURRENT active school year's
-// sections (not the next/planning one - that's Promote Student's job),
-// since assigning an adviser here is a live, current-year action.
-export async function getAssignableSections(gradeLevel, schoolYearId) {
-  const query = buildQuery({ gradeLevel, schoolYearId });
-  return request(`/sections${query}`);
-}
 
-// GET /api/school-years/active
-// Small helper so callers don't each have to know how to look up the
-// current active school year - getAssignableSections() needs its id.
-export async function getActiveSchoolYear() {
-  return request("/school-years/active");
-}
-
-// PATCH /api/sections/{sectionId}/adviser  Body: { adviserId: userId }
-// see Assignsectionmodal.jsx. Sets sections.adviser_id - a property of
-// the SECTION, not the user - so this never touches /users.
 export async function assignTeacherToSection(userId, sectionId) {
-  return request(`/sections/${sectionId}/adviser`, {
+  return request(`/section/${sectionId}`, {
     method: "PATCH",
-    body: JSON.stringify({ adviserId: userId }),
+    body: JSON.stringify({ userId }),
   });
+}
+
+
+export async function getAssignableSections(gradeLevel) {
+  const query = buildQuery({ gradeLevel });
+  const data = await request(`/section/dropdown${query}`);
+  return data.map((s) => ({ id: s.sectionId, name: s.sectionName }));
 }

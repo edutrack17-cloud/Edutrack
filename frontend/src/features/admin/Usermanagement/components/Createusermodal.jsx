@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useFormik } from "formik";
-import { X, ChevronDown, Eye, EyeOff } from "lucide-react";
+import { X, Eye, EyeOff } from "lucide-react";
 import { createUserSchema } from "../UsermanagementSchema";
 
 const EMPTY_FORM = {
@@ -9,7 +9,7 @@ const EMPTY_FORM = {
   firstName: "",
   middleName: "",
   lastName: "",
-  role: "",
+  role: "Teacher",
 };
 
 function Createusermodal({ isOpen, onClose, onSubmit }) {
@@ -147,26 +147,11 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
 
             <div>
               <label className={labelClass}>Role</label>
-              <div className="relative">
-                <select
-                  name="role"
-                  value={formik.values.role}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={`${inputClass(formik.touched.role && formik.errors.role)} appearance-none pr-9`}
-                >
-                  <option value="">Select Role</option>
-                  <option value="Admin">Admin</option>
-                  <option value="Teacher">Teacher</option>
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                />
+            
+          
+              <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500">
+                Teacher
               </div>
-              {formik.touched.role && formik.errors.role && (
-                <p className={errorClass}>{formik.errors.role}</p>
-              )}
             </div>
           </div>
         </div>

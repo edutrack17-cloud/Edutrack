@@ -168,7 +168,7 @@ function Usermanagementtable({ users, onView, onEdit, onAssignSection, onToggleS
               }`}
             >
               {openUser.status === "Active" ? <UserX size={16} /> : <UserCheck size={16} />}
-              {openUser.status === "Active" ? "Deactivate" : "Activate"}
+              {openUser.status === "Active" ? "Disable" : "Enable"}
             </button>
           </div>,
           document.body

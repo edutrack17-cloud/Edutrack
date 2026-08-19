@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { MoreHorizontal, Pencil, Archive, ArchiveRestore } from "lucide-react";
 
 const thClass =
-  "whitespace-nowrap px-3 py-3 text-center text-xs font-semibold text-white sm:px-6 sm:py-4 sm:text-sm";
+  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
 const tdClass =
-  "whitespace-nowrap px-3 py-3 text-center text-xs text-gray-700 sm:px-6 sm:py-4 sm:text-sm";
+  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
 
 export function getSectionStatusColorClass(status) {
   return status === "archived" ? "text-secondary" : "text-success";
@@ -54,7 +54,14 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
 
   return (
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
-      <table className="min-w-full border-collapse">
+      <table className="w-full min-w-160 table-fixed border-collapse">
+        <colgroup>
+          <col className="w-[22%]" />
+          <col className="w-[16%]" />
+          <col className="w-[26%]" />
+          <col className="w-[18%]" />
+          <col className="w-[18%]" />
+        </colgroup>
         <thead className="bg-primary">
           <tr>
             <th className={thClass}>Section</th>
@@ -76,18 +83,20 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
 
           {sections.map((section) => (
             <tr key={section.sectionId} className="border-b border-gray-200 transition hover:bg-gray-50">
-              <td className={`${tdClass} text-left font-semibold text-gray-700`}>
+              <td className={tdClass} title={section.sectionName}>
                 {section.sectionName}
               </td>
               <td className={tdClass}>{formatGradeLevel(section.gradeLevel)}</td>
-              <td className={tdClass}>{section.adviser || "—"}</td>
+              <td className={tdClass} title={section.adviser || undefined}>
+                {section.adviser || "—"}
+              </td>
               <td className={tdClass}>
                 <span className={`text-sm font-semibold ${getSectionStatusColorClass(section.sectionStatus)}`}>
                   {section.sectionStatus === "archived" ? "Archived" : "Active"}
                 </span>
               </td>
 
-              <td className="relative px-6 py-4 text-center">
+              <td className="relative px-3 py-1.5 text-center sm:px-4 sm:py-2">
                 <button
                   type="button"
                   data-kebab-trigger

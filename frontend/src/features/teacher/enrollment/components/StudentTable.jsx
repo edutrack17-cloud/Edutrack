@@ -43,7 +43,24 @@ export function getStudentStatusLabel(status) {
   return "Enrolled";
 }
 
-function ActionMenu({ menuRef, top, left, onView, onEdit, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
+// Backend's GradeLevel enum comes back as "Grade_4" / "Grade_5" / "Grade_6"
+// (see GradeLevel.java) - display it as "Grade 4" instead of the raw enum name.
+export function formatGradeLevel(gradeLevel) {
+  if (!gradeLevel) return "—";
+  return gradeLevel.replace("_", " ");
+}
+
+function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
+  // The backend's dropStudent()/transferOutStudent()/graduateStudent()
+  // each only guard against re-applying the SAME status (e.g.
+  // StudentAlreadyGraduated) - there's no check preventing an invalid
+  // cross-transition, so nothing stops "graduated" -> "dropped" from
+  // succeeding at the API level. Hide these actions once a student has
+  // already left (any status other than "enrolled") so that can't be
+  // triggered from the UI. View/Edit stay available regardless, since
+  // correcting a past student's record is still a valid use case.
+  const isEnrolled = studentStatus === "enrolled";
+
   return (
     <div
       ref={menuRef}
@@ -60,23 +77,27 @@ function ActionMenu({ menuRef, top, left, onView, onEdit, onMarkDropped, onMarkT
         Edit
       </button>
 
-      <button onClick={onMarkDropped} className={`${menuButtonClass} ${actionColorClass.dropped}`}>
-        <UserX size={16} />
-        Dropped
-      </button>
+      {isEnrolled && (
+        <>
+          <button onClick={onMarkDropped} className={`${menuButtonClass} ${actionColorClass.dropped}`}>
+            <UserX size={16} />
+            Dropped
+          </button>
 
-      <button onClick={onMarkTransferred} className={`${menuButtonClass} ${actionColorClass.transferred_out}`}>
-        <Shuffle size={16} />
-        Transferred
-      </button>
+          <button onClick={onMarkTransferred} className={`${menuButtonClass} ${actionColorClass.transferred_out}`}>
+            <Shuffle size={16} />
+            Transferred
+          </button>
 
-      {/* Graduate is also reachable in bulk from the Promote Student
-          screen, but exposed per-row here too since the backend has a
-          dedicated single-student endpoint for it. */}
-      <button onClick={onMarkGraduated} className={`${menuButtonClass} ${actionColorClass.graduated}`}>
-        <GraduationCap size={16} />
-        Graduate
-      </button>
+          {/* Graduate is also reachable in bulk from the Promote Student
+              screen, but exposed per-row here too since the backend has a
+              dedicated single-student endpoint for it. */}
+          <button onClick={onMarkGraduated} className={`${menuButtonClass} ${actionColorClass.graduated}`}>
+            <GraduationCap size={16} />
+            Graduate
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -222,7 +243,7 @@ function StudentTable({ students = [], sections = [], onChanged }) {
                 <td className={tdClass}>{student.lrn}</td>
                 <td className={tdClass}>{student.rfid}</td>
                 <td className={tdClass}>{student.fullName}</td>
-                <td className={tdClass}>{student.section?.gradeLevel ?? "—"}</td>
+                <td className={tdClass}>{formatGradeLevel(student.section?.gradeLevel)}</td>
                 <td className={tdClass}>{student.section?.sectionName ?? "—"}</td>
                 <td className={tdClass}>
                   <span className={`text-sm font-semibold ${getStudentStatusColorClass(student.studentStatus)}`}>
@@ -244,6 +265,7 @@ function StudentTable({ students = [], sections = [], onChanged }) {
                       menuRef={desktopMenuRef}
                       top={menuPosition.top}
                       left={menuPosition.left}
+                      studentStatus={student.studentStatus}
                       onView={() => handleView(student)}
                       onEdit={() => handleEdit(student)}
                       onMarkDropped={() => handleRequestStatusChange(student, "dropped")}
@@ -270,7 +292,7 @@ function StudentTable({ students = [], sections = [], onChanged }) {
               <div>
                 <p className="text-sm font-semibold text-primary">{student.fullName}</p>
                 <p className="text-xs text-gray">
-                  {student.section?.gradeLevel ?? "—"} - {student.section?.sectionName ?? "—"}
+                  {formatGradeLevel(student.section?.gradeLevel)} - {student.section?.sectionName ?? "—"}
                 </p>
               </div>
 
@@ -303,6 +325,7 @@ function StudentTable({ students = [], sections = [], onChanged }) {
                 menuRef={mobileMenuRef}
                 top={menuPosition.top}
                 left={menuPosition.left}
+                studentStatus={student.studentStatus}
                 onView={() => handleView(student)}
                 onEdit={() => handleEdit(student)}
                 onMarkDropped={() => handleRequestStatusChange(student, "dropped")}

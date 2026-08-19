@@ -1,11 +1,7 @@
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-// Small, presentation-only pagination bar: shows "Page X of Y" with
-// prev/next controls. All page-tracking logic (currentPage, totalPages,
-// fetching) lives in Sectionlevelpage.jsx - this component just renders
-// the current state and reports the user's intent via onPageChange.
-function Sectionlevelpagination({ currentPage, totalPages, onPageChange }) {
+function SchoolYearPagination({ currentPage, totalPages, onPageChange }) {
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= totalPages;
 
@@ -46,4 +42,4 @@ function Sectionlevelpagination({ currentPage, totalPages, onPageChange }) {
   );
 }
 
-export default Sectionlevelpagination;
+export default SchoolYearPagination;

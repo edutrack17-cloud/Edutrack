@@ -33,7 +33,7 @@ function EnrollStudentModal({
   const formik = useFormik({
     initialValues: EMPTY_FORM,
     validationSchema: enrollSchema,
-    onSubmit: (values, helpers) => {
+    onSubmit: async (values, helpers) => {
       // BACKEND CONNECTION
       //   1. POST /api/student  (createSection... i.e. enrollStudent())
       //      Body: CreateStudentRequest - lrn, firstName, middleName,
@@ -45,12 +45,26 @@ function EnrollStudentModal({
       //      Student.
       //   Expected response: StudentResponse (includes a nested
       //   "section" object, not a flat section name/gradeLevel).
-      //   On success: StudentTable's local "students" state should have
-      //   the new student appended (currently just logged via onSubmit).
+      //
+      // This must be awaited inside a try/catch: onSubmit (passed down
+      // from EnrollmentPage's handleSubmitNewStudent) hits the real
+      // POST /api/student endpoint and can reject - StudentService.
+      // enrollStudent() throws StudentAlreadyExists (duplicate LRN),
+      // RFIDAlreadyExists, StudentUnderAge, or InactiveSectionNotAllowed.
+      // Without the await, those errors were silently swallowed as
+      // unhandled promise rejections and the modal closed as if the
+      // student had been enrolled successfully - it hadn't been.
       const { level, ...payload } = values;
-      onSubmit?.({ ...payload, sectionId: Number(payload.sectionId) });
-      helpers.resetForm();
-      onClose();
+      try {
+        helpers.setStatus(undefined);
+        await onSubmit?.({ ...payload, sectionId: Number(payload.sectionId) });
+        helpers.resetForm();
+        onClose();
+      } catch (error) {
+        helpers.setStatus(error.message);
+      } finally {
+        helpers.setSubmitting(false);
+      }
     },
   });
 
@@ -85,15 +99,19 @@ function EnrollStudentModal({
             sections={sections}
             onRfidClick={() => setIsRfidModalOpen(true)}
           />
+          {formik.status && (
+            <p className="mt-4 text-sm text-danger">{formik.status}</p>
+          )}
         </div>
 
         <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
           <button
             type="button"
             onClick={formik.handleSubmit}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            disabled={formik.isSubmitting}
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Add
+            {formik.isSubmitting ? "Adding..." : "Add"}
           </button>
           <button
             type="button"

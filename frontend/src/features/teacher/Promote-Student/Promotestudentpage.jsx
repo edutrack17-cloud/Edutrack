@@ -1,102 +1,178 @@
-import React, { useState } from "react";
+// features/teacher/Promote-Student/PromoteStudentPage.jsx
+import React, { useEffect, useState } from "react";
 import PromoteStudentFilters from "./components/Promotestudentfilters";
 import SearchInput from "./components/Promotestudentsearchinput";
 import PromoteStudentTable from "./components/Promotestudenttable";
 import Pagination from "./components/Promotestudentpagination";
 import PromoteStudentModal from "./components/Promotestudentmodal";
+import {
+  getPromotableStudents,
+  getCurrentSections,
+  promoteStudents as promoteStudentsRequest,
+  graduateStudents as graduateStudentsRequest,
+} from "./promotestudentservice";
 
+const PAGE_SIZE = 10;
 
-// TODO: BACKEND CONNECTION
-// GET /api/students?status=enrolled&gradeLevel=&section=&search=
-// Only "enrolled" students should ever show up here - a dropped,
-// transferred, or already-graduated student has nothing to promote.
-const MOCK_STUDENTS = [
-  { id: 1, lrn: "090941037", rfid: "090941037", firstName: "Yuri", lastName: "Sakazaki", gradeLevel: 4, sectionId: 1, sectionName: "Apple" },
-  { id: 2, lrn: "090941038", rfid: "090941038", firstName: "Kyo", lastName: "Kusanagi", gradeLevel: 5, sectionId: 5, sectionName: "Rose" },
-  { id: 3, lrn: "090941039", rfid: "090941039", firstName: "Iori", lastName: "Yagami", gradeLevel: 6, sectionId: 9, sectionName: "Jade" },
+// Fixed enum, no backend list endpoint - same pattern as Enrollment's
+// getGradeLevels().
+const GRADE_LEVELS = [
+  { value: "Grade_4", label: "Grade 4" },
+  { value: "Grade_5", label: "Grade 5" },
+  { value: "Grade_6", label: "Grade 6" },
 ];
- 
+
 function PromoteStudentPage() {
-  const [students, setStudents] = useState(MOCK_STUDENTS);
- 
   const [gradeLevel, setGradeLevel] = useState("");
   const [section, setSection] = useState("");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
- 
+  const [totalPages, setTotalPages] = useState(1);
+
+  const [students, setStudents] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const [filterSections, setFilterSections] = useState([]);
+  const [sectionsError, setSectionsError] = useState("");
+
   const [selectedIds, setSelectedIds] = useState([]);
-  // Array of students currently open in the promote/graduate modal -
-  // either one row (from the kebab) or many (from bulk selection).
   const [promotingStudents, setPromotingStudents] = useState(null);
- 
-  // Bulk checkboxes are only usable once BOTH Grade Level and Section
-  // are picked - this is what keeps a bulk-promote action scoped to
-  // "one level and section" the way it was designed, instead of
-  // letting someone accidentally select students from different
-  // sections into a single promote action.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const canBulkSelect = Boolean(gradeLevel) && Boolean(section);
- 
-  const filteredStudents = students.filter((student) => {
-    const fullName = `${student.firstName} ${student.lastName}`.toLowerCase();
-    const matchesSearch =
-      !search || fullName.includes(search.toLowerCase()) || student.lrn.includes(search);
-    const matchesLevel = !gradeLevel || `Grade ${student.gradeLevel}` === gradeLevel;
-    const matchesSection = !section || student.sectionName === section;
-    return matchesSearch && matchesLevel && matchesSection;
-  });
- 
+
+  // Section filter options - CURRENT school year, since we're
+  // filtering already-enrolled students by their current section
+  // (not the section they'd be promoted into).
+  useEffect(() => {
+    getCurrentSections(gradeLevel)
+      .then(setFilterSections)
+      .catch((error) => setSectionsError(error.message));
+  }, [gradeLevel]);
+
+  // Only "enrolled" students can be promoted/graduated -
+  // getPromotableStudents() enforces studentStatus=enrolled server-side.
+  async function loadStudents() {
+    try {
+      setIsLoading(true);
+      setErrorMessage("");
+      const response = await getPromotableStudents({
+        gradeLevel,
+        section,
+        page: currentPage - 1,
+        size: PAGE_SIZE,
+      });
+      const newTotalPages = response.totalPages || 1;
+      setTotalPages(newTotalPages);
+
+      if (currentPage > newTotalPages) {
+        setCurrentPage(newTotalPages);
+        return;
+      }
+
+      setStudents(response.content ?? []);
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadStudents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gradeLevel, section, currentPage]);
+
+  // Client-side only, over the current page - no search param on
+  // GET /api/student yet, same limitation as Enrollment.
+  const visibleStudents = search
+    ? students.filter(
+        (s) =>
+          s.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+          s.lrn?.includes(search)
+      )
+    : students;
+
   function handleGradeLevelChange(event) {
     setGradeLevel(event.target.value);
     setSection("");
-    setSelectedIds([]); // changing the scope clears any in-progress bulk selection
+    setSelectedIds([]);
+    setCurrentPage(1);
   }
- 
+
   function handleSectionChange(event) {
     setSection(event.target.value);
     setSelectedIds([]);
+    setCurrentPage(1);
   }
- 
+
+  // Selection is per-page only (see the NOTE in handleToggleSelectAll
+  // below) - "students" state only ever holds the CURRENTLY loaded
+  // page. Without resetting selectedIds here, switching pages after
+  // selecting some students would silently drop those selections from
+  // the eventual promote request (handleBulkPromoteClick filters
+  // against "students", which no longer contains the old page's rows),
+  // while the "Promote Selected (N)" button count kept showing the old,
+  // now-inaccurate total. Clearing on page change makes the visible
+  // count and the actual promoted set always match.
+  function handlePageChange(newPage) {
+    setSelectedIds([]);
+    setCurrentPage(newPage);
+  }
+
+  // Works the same whether it's called once (single student clicked)
+  // or many times (bulk) - "Promote Selected (1)" is a valid single
+  // promote, no separate code path needed.
   function handleToggleSelect(studentId) {
     setSelectedIds((prev) =>
       prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
     );
   }
- 
+
+  // NOTE: only selects/deselects students on the CURRENT page - same
+  // pagination limitation as everywhere else in the app (no full
+  // dataset loaded client-side).
   function handleToggleSelectAll() {
-    const allIds = filteredStudents.map((s) => s.id);
+    const allIds = visibleStudents.map((s) => s.studentId);
     const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.includes(id));
     setSelectedIds(allSelected ? [] : allIds);
   }
- 
+
   function handleBulkPromoteClick() {
-    const selected = students.filter((s) => selectedIds.includes(s.id));
+    const selected = students.filter((s) => selectedIds.includes(s.studentId));
     setPromotingStudents(selected);
   }
- 
-  function handleConfirmPromote(studentIds, result) {
-    // TODO: BACKEND CONNECTION
-    // For each promoted/graduated student:
-    //   1. PATCH the CURRENT student_section_assignment row:
-    //        left_at = today,
-    //        exit_type = result.isGraduation ? 'graduated' : 'promoted'
-    //   2. If NOT graduating: POST a NEW student_section_assignment row
-    //        { student_id, section_id: result.targetSectionId, assigned_at: today }
-    //      (section_id must belong to the NEXT/planning school year)
-    //   3. If graduating: PATCH students.student_status = 'graduated'
-    //      (no new assignment row needed - they're done with this school)
-    console.log("Confirm promote:", { studentIds, result });
- 
-    // Either way, these students no longer belong on THIS list (their
-    // current grade/section changed, or they graduated) - remove them
-    // from local state until the real API confirms it.
-    setStudents((prev) => prev.filter((s) => !studentIds.includes(s.id)));
-    setSelectedIds((prev) => prev.filter((id) => !studentIds.includes(id)));
-    setPromotingStudents(null);
+
+  // Branches between the bulk-promote endpoint and the looped graduate
+  // endpoint, since BulkPromotionRequest can't represent graduation at all.
+  async function handleConfirmPromote(studentIds, result) {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+
+      if (result.isGraduation) {
+        await graduateStudentsRequest(studentIds);
+      } else {
+        await promoteStudentsRequest(studentIds, result.targetSectionId);
+      }
+
+      setSelectedIds((prev) => prev.filter((id) => !studentIds.includes(id)));
+      setPromotingStudents(null);
+      // Re-fetch instead of trusting local removal - this list only
+      // shows "enrolled" students, so promoted/graduated ones should
+      // now be gone from the real result set.
+      await loadStudents();
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
- 
+
   const allFilteredSelected =
-    filteredStudents.length > 0 && filteredStudents.every((s) => selectedIds.includes(s.id));
- 
+    visibleStudents.length > 0 && visibleStudents.every((s) => selectedIds.includes(s.studentId));
+
   return (
     <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -108,8 +184,10 @@ function PromoteStudentPage() {
           canBulkSelect={canBulkSelect}
           allSelected={allFilteredSelected}
           onToggleSelectAll={handleToggleSelectAll}
+          gradeLevels={GRADE_LEVELS}
+          sections={filterSections}
         />
- 
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} />
 
@@ -124,7 +202,10 @@ function PromoteStudentPage() {
           )}
         </div>
       </div>
- 
+
+      {sectionsError && <p className="text-sm text-red-500">{sectionsError}</p>}
+      {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
+
       {!canBulkSelect && (
         <p className="text-xs text-gray-500">
           {!gradeLevel && !section && (
@@ -134,37 +215,36 @@ function PromoteStudentPage() {
             </>
           )}
           {gradeLevel && !section && (
-            <>
-              Select a Section above to enable selection - check one or more students, then
-              click "Promote Selected".
-            </>
+            <>Select a Section above to enable selection - check one or more students, then click "Promote Selected".</>
           )}
           {!gradeLevel && section && (
-            <>
-              Select a Grade Level above to enable selection - check one or more students, then
-              click "Promote Selected".
-            </>
+            <>Select a Grade Level above to enable selection - check one or more students, then click "Promote Selected".</>
           )}
         </p>
       )}
- 
-      <PromoteStudentTable
-        students={filteredStudents}
-        selectedIds={selectedIds}
-        onToggleSelect={handleToggleSelect}
-        canBulkSelect={canBulkSelect}
-      />
- 
-      <Pagination currentPage={currentPage} totalPages={1} onPageChange={setCurrentPage} />
- 
+
+      {isLoading ? (
+        <p className="py-6 text-center text-sm text-gray-500">Loading students...</p>
+      ) : (
+        <PromoteStudentTable
+          students={visibleStudents}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          canBulkSelect={canBulkSelect}
+        />
+      )}
+
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
+
       <PromoteStudentModal
         isOpen={promotingStudents !== null}
         onClose={() => setPromotingStudents(null)}
         students={promotingStudents}
         onConfirm={handleConfirmPromote}
+        isSubmitting={isSubmitting}
       />
     </div>
   );
 }
- 
+
 export default PromoteStudentPage;

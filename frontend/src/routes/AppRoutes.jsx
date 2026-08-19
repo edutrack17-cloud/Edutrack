@@ -10,6 +10,7 @@ import SF2AttendancePage from "../features/teacher/Sf2Attendance/Sf2attendancepa
 import PromoteStudentPage from "../features/teacher/Promote-Student/Promotestudentpage";
 import UserManagementPage from "../features/admin/Usermanagement/Usermanagementpage";
 import SectionlevelPage from "../features/admin/SectionandLevel/Sectionlevelpage";
+import SchoolyearmanagementPage from "../features/admin/SchoolYear/SchoolyearmanagementPage"
 
 function AppRoutes() {
   return (
@@ -25,11 +26,10 @@ function AppRoutes() {
         <Route path="/enrollment" element={<EnrollmentPage />} />
         <Route path="/promote-student" element={<PromoteStudentPage />} />
         <Route path="/rfid-attendance" element={<RFIDAttendancePage />} />
-        {/* TODO: role-based route guarding - /user-management should
-            only be reachable by role="admin" accounts once auth/role
-            checks exist. For now it's open like the other routes. */}
+       
         <Route path="/user-management" element={<UserManagementPage />} />
         <Route path="/section-level" element={<SectionlevelPage />} />
+        <Route path="/school-year" element={<SchoolyearmanagementPage />} />
         <Route path="/change-password" element={<ChangePassword />} />
       </Route>
     </Routes>

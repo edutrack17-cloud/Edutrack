@@ -14,8 +14,27 @@ const studentApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// BACKEND GAP: there is no @ControllerAdvice/@ExceptionHandler on the
+// backend, so custom exceptions (StudentAlreadyExists, RFIDAlreadyExists,
+// StudentUnderAge, InactiveSectionNotAllowed, etc. - each with a real,
+// specific message set in their constructor) never actually reach the
+// client as JSON. They fall through to Spring Boot's default error body,
+// which has NO "message" field by default:
+//   { "timestamp": "...", "status": 500, "error": "Internal Server Error", "path": "/api/student" }
+// This checks every shape that's realistically possible - data.message
+// (a future custom handler), then data.error (today's default body),
+// then a plain string body - before giving up and using the fallback.
+// Once the backend adds a proper exception handler that returns
+// { "message": "..." }, this will pick it up automatically with no
+// frontend changes needed.
 function getErrorMessage(error, fallback) {
-  return error?.response?.data?.message || fallback;
+  const data = error?.response?.data;
+
+  if (typeof data === "string" && data.trim()) return data;
+  if (data?.message) return data.message;
+  if (data?.error) return data.error;
+
+  return fallback;
 }
 
 // CONNECTED: GET /api/section/dropdown
@@ -32,8 +51,17 @@ export async function getGradeLevels() {
 
 // CONNECTED: GET /api/section/dropdown?gradeLevel={gradeLevel}
 // gradeLevel is optional - omit it to get every section. Maps
-// SectionResponse's fields down to the { id, name, gradeLevel } shape
-// StudentForm.jsx / StudentFilters.jsx expect.
+// SectionResponse's fields down to { id, name, gradeLevel, status } -
+// "status" (sectionStatus: active | archived) is now included so
+// callers that are letting the admin PICK a section for a new/updated
+// assignment (StudentForm) can filter out archived ones themselves.
+// Without this, a section that's archived (or whose school year isn't
+// active) could still show up as a selectable option, and submitting
+// it fails server-side with InactiveSectionNotAllowed - a confusing
+// dead end since nothing in the dropdown itself signals it was a bad
+// choice. StudentFilters still gets the unfiltered list, since filtering
+// the STUDENT TABLE by an archived section is still a valid, useful
+// query (e.g. seeing who used to be in a since-archived section).
 export async function getSections(gradeLevel) {
   const params = {};
   if (gradeLevel) params.gradeLevel = gradeLevel;
@@ -44,6 +72,7 @@ export async function getSections(gradeLevel) {
       id: section.sectionId,
       name: section.sectionName,
       gradeLevel: section.gradeLevel,
+      status: section.sectionStatus,
     }));
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to load sections"));
