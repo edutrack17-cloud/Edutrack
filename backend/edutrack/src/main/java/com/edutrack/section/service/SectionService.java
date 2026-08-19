@@ -80,11 +80,12 @@ public class SectionService {
     }
 
     //READ
-    public Page<SectionResponse> getSection(String fullName, GradeLevel gradeLevel, SectionStatus sectionStatus, Pageable pageable){
+    public Page<SectionResponse> getSection(String fullName, GradeLevel gradeLevel, SectionStatus sectionStatus, String sectionName, Pageable pageable){
         Specification<Section> filters = Specification
-                .where(SectionSpecification.hasName(fullName)
-                .and(SectionSpecification.hasGradeLevel(gradeLevel)
-                .and(SectionSpecification.hasStatus(sectionStatus))));
+                .where(SectionSpecification.hasName(fullName))
+                .and(SectionSpecification.hasGradeLevel(gradeLevel))
+                .and(SectionSpecification.hasStatus(sectionStatus))
+                .and(SectionSpecification.hasSectionName(sectionName));
         return sectionRepository.findAll(filters ,pageable).map(sectionMapper::toResponseDTO);
     }
 

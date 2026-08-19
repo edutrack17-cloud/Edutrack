@@ -40,9 +40,10 @@ public class SectionController {
     public ResponseEntity<Page<SectionResponse>> getSection(@RequestParam(required = false) String fullName,
                                                             @RequestParam(required = false) GradeLevel gradeLevel,
                                                             @RequestParam(required = false) SectionStatus sectionStatus,
+                                                            @RequestParam(required = false) String sectionName,
                                                             Pageable pageable){
         return ResponseEntity
-                .ok(sectionService.getSection(fullName, gradeLevel, sectionStatus, pageable));
+                .ok(sectionService.getSection(fullName, gradeLevel, sectionStatus, sectionName, pageable));
     }
 
     //SECTION DROPDOWN

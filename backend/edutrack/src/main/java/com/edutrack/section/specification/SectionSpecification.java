@@ -9,6 +9,15 @@ import org.springframework.data.jpa.domain.Specification;
 
 public class SectionSpecification {
 
+    public static Specification<Section> hasSectionName(String sectionName){
+        return (root, query, criteriaBuilder) -> {
+            if (sectionName == null) return criteriaBuilder.conjunction();
+            String pattern = "%" + sectionName.toLowerCase() + "%";
+
+            return criteriaBuilder.like(criteriaBuilder.lower(root.get("sectionName")), pattern);
+        };
+    }
+
     public static Specification<Section> hasName(String fullName){
         return (root, query, criteriaBuilder) -> {
             if (fullName == null) return criteriaBuilder.conjunction();
