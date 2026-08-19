@@ -12,5 +12,5 @@ public record AttendanceResponse(
    LocalDateTime dateTimeIn,
    LocalDateTime dateTimeOut,
    AttendanceStatus attendanceStatus,
-   boolean isConfirmed
+   boolean confirmed
 ) {}

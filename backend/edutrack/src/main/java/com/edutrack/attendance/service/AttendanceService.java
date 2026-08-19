@@ -6,6 +6,8 @@ import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.enums.AttendanceStatus;
 import com.edutrack.attendance.exception.AlreadyHasARecord;
 import com.edutrack.attendance.exception.AssignmentNotFound;
+import com.edutrack.attendance.exception.AttendanceAlreadyConfirmed;
+import com.edutrack.attendance.exception.AttendanceNotFound;
 import com.edutrack.attendance.mapper.AttendanceMapper;
 import com.edutrack.attendance.repository.AttendanceRepository;
 import com.edutrack.attendance.specification.AttendanceSpecification;
@@ -36,14 +38,16 @@ public class AttendanceService {
     }
 
 
+    LocalDate today = LocalDate.now();
+
+    LocalDateTime startOfDay = today.atStartOfDay();
+    LocalDateTime startOfNextDay = today.plusDays(1).atStartOfDay();
+
+
     //CREATE
     @Transactional
     public AttendanceResponse createAttendance(TimeInAttendanceRequest timeInAttendanceRequest){
 
-        LocalDate today = LocalDate.now();
-
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime startOfNextDay = today.plusDays(1).atStartOfDay();
 
         StudentSectionAssignment studentToTimeIn = studentSectionAssignmentRepository.
                 findByStudent_RfidAndLeftAtIsNull(timeInAttendanceRequest.rfid())
@@ -60,7 +64,6 @@ public class AttendanceService {
             throw new AlreadyHasARecord();
         }
 
-
         Attendance newAttendance = new Attendance();
 
         newAttendance.setStudentSectionAssignment(studentToTimeIn);
@@ -70,6 +73,30 @@ public class AttendanceService {
 
         Attendance savedAttendance = attendanceRepository.save(newAttendance);
         return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
+    }
+
+    //CONFIRM ATTENDANCE
+    @Transactional
+    public AttendanceResponse confirmAttendance(TimeInAttendanceRequest timeInAttendanceRequest){
+        StudentSectionAssignment studentToConfirm = studentSectionAssignmentRepository
+                .findByStudent_RfidAndLeftAtIsNull(timeInAttendanceRequest.rfid())
+                .orElseThrow(AssignmentNotFound::new);
+
+        Specification<Attendance> filters = Specification
+                .where(AttendanceSpecification.hasAssignment(studentToConfirm.getAssignmentId()))
+                .and(AttendanceSpecification.timeInBetween(startOfDay, startOfNextDay));
+
+        Attendance attendanceToConfirm = attendanceRepository
+                .findOne(filters)
+                .orElseThrow(AttendanceNotFound::new);
+
+        if (attendanceToConfirm.isConfirmed()){
+            throw new AttendanceAlreadyConfirmed();
+        }
+
+        attendanceToConfirm.setConfirmed(true);
+        Attendance confirmedAttendance = attendanceRepository.save(attendanceToConfirm);
+        return attendanceMapper.toAttendanceResponseDTO(confirmedAttendance);
     }
 
 
