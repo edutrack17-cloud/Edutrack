@@ -4,6 +4,7 @@ import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -24,11 +25,17 @@ public class SectionSpecification {
 
             String pattern = "%" + fullName.toLowerCase() + "%";
 
-            Predicate firstNameSearch = criteriaBuilder.like(criteriaBuilder.lower(root.get("user").get("firstName")), pattern);
-            Predicate middleNameSearch = criteriaBuilder.like(criteriaBuilder.lower(root.get("user").get("middleName")), pattern);
-            Predicate lastNameSearch = criteriaBuilder.like(criteriaBuilder.lower(root.get("user").get("lastName")), pattern);
+            Expression<String> concatenatedName = criteriaBuilder.concat(
+                    criteriaBuilder.concat(
+                            criteriaBuilder.concat(
+                                    criteriaBuilder.lower(root.get("user").get("firstName")), " "),
+                            criteriaBuilder.lower(root.get("user").get("middleName"))),
+                    " ");
 
-            return criteriaBuilder.or(firstNameSearch, middleNameSearch, lastNameSearch);
+            concatenatedName = criteriaBuilder.concat(concatenatedName,
+                    criteriaBuilder.lower(root.get("user").get("lastName")));
+
+            return criteriaBuilder.like(concatenatedName, pattern);
         };
     }
 
