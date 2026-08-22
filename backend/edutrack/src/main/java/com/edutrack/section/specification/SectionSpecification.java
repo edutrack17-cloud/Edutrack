@@ -6,6 +6,7 @@ import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
+import org.aspectj.weaver.ast.Expr;
 import org.springframework.data.jpa.domain.Specification;
 
 public class SectionSpecification {
@@ -19,23 +20,28 @@ public class SectionSpecification {
         };
     }
 
-    public static Specification<Section> hasName(String fullName){
+    public static Specification<Section> hasAdviserName(String fullName){
         return (root, query, criteriaBuilder) -> {
-            if (fullName == null) return criteriaBuilder.conjunction();
+            if (fullName == null || fullName.isBlank()) return criteriaBuilder.conjunction();
 
             String pattern = "%" + fullName.toLowerCase() + "%";
 
-            Expression<String> concatenatedName = criteriaBuilder.concat(
+            Expression<String> firstName = root.get("user").get("firstName");
+            Expression<String> middleName = (root.get("user").get("middleName"));
+            Expression<String> lastName = root.get("user").get("lastName");
+            Expression<String> safeMiddleName = criteriaBuilder.coalesce(middleName, "");
+            Expression<String> firstNameAndMiddleName = criteriaBuilder.concat(
+                    criteriaBuilder.concat(firstName, " "),
+                    safeMiddleName
+            );
+
+            Expression<String> concatenatedFullName =
                     criteriaBuilder.concat(
-                            criteriaBuilder.concat(
-                                    criteriaBuilder.lower(root.get("user").get("firstName")), " "),
-                            criteriaBuilder.lower(root.get("user").get("middleName"))),
-                    " ");
+                            criteriaBuilder.concat(firstNameAndMiddleName, " "),
+                            lastName
+                    );
 
-            concatenatedName = criteriaBuilder.concat(concatenatedName,
-                    criteriaBuilder.lower(root.get("user").get("lastName")));
-
-            return criteriaBuilder.like(concatenatedName, pattern);
+            return criteriaBuilder.like(criteriaBuilder.lower(concatenatedFullName), pattern);
         };
     }
 
