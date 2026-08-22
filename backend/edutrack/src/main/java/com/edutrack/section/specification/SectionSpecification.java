@@ -9,6 +9,9 @@ import jakarta.persistence.criteria.Predicate;
 import org.aspectj.weaver.ast.Expr;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class SectionSpecification {
 
     public static Specification<Section> hasSectionName(String sectionName){
@@ -20,28 +23,44 @@ public class SectionSpecification {
         };
     }
 
-    public static Specification<Section> hasAdviserName(String fullName){
+    public static Specification<Section> hasAdviserName(String name) {
         return (root, query, criteriaBuilder) -> {
-            if (fullName == null || fullName.isBlank()) return criteriaBuilder.conjunction();
 
-            String pattern = "%" + fullName.toLowerCase() + "%";
+            if (name == null || name.isBlank()) {
+                return criteriaBuilder.conjunction();
+            }
 
-            Expression<String> firstName = root.get("user").get("firstName");
-            Expression<String> middleName = (root.get("user").get("middleName"));
-            Expression<String> lastName = root.get("user").get("lastName");
-            Expression<String> safeMiddleName = criteriaBuilder.coalesce(middleName, "");
-            Expression<String> firstNameAndMiddleName = criteriaBuilder.concat(
-                    criteriaBuilder.concat(firstName, " "),
-                    safeMiddleName
+            String[] nameParts = name.trim()
+                    .toLowerCase()
+                    .split("\\s+");
+
+            Expression<String> firstName =
+                    criteriaBuilder.lower(root.get("user").get("firstName"));
+
+            Expression<String> middleName =
+                    criteriaBuilder.lower(root.get("user").get("middleName"));
+
+            Expression<String> lastName =
+                    criteriaBuilder.lower(root.get("user").get("lastName"));
+
+            List<Predicate> namePredicates = new ArrayList<>();
+
+            for (String namePart : nameParts) {
+
+                String pattern = "%" + namePart + "%";
+
+                Predicate partMatches = criteriaBuilder.or(
+                        criteriaBuilder.like(firstName, pattern),
+                        criteriaBuilder.like(middleName, pattern),
+                        criteriaBuilder.like(lastName, pattern)
+                );
+
+                namePredicates.add(partMatches);
+            }
+
+            return criteriaBuilder.and(
+                    namePredicates.toArray(new Predicate[0])
             );
-
-            Expression<String> concatenatedFullName =
-                    criteriaBuilder.concat(
-                            criteriaBuilder.concat(firstNameAndMiddleName, " "),
-                            lastName
-                    );
-
-            return criteriaBuilder.like(criteriaBuilder.lower(concatenatedFullName), pattern);
         };
     }
 
