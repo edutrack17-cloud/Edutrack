@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Plus, CalendarSync } from "lucide-react";
 import Sectiontable from "./Components/Sectiontable";
 import Sectionlevelfilters from "./Components/Sectionlevelfilters";
 import Sectionlevelsearchinput from "./Components/Sectionlevelsearchinput";
 import Sectionlevelpagination from "./Components/Sectionlevelpagination";
 import Sectionformmodal from "./Components/Sectionformmodal";
 import ConfirmSectionStatusModal from "./Components/ConfirmSectionStatusModal";
-import { ToastContainer, useToasts } from "./Components/Toast";
+import NewSchoolYearModal from "./Components/Newschoolyearmodal";
+import { ToastContainer, useToasts } from "../../../components/ui/Toast";
 import {
   getSections,
   createSection,
@@ -14,6 +16,7 @@ import {
   restoreSection,
   getTeachers,
   getSchoolYears,
+  startNewSchoolYear,
 } from "./Sectionlevelservice";
 
 const PAGE_SIZE = 10;
@@ -22,17 +25,25 @@ function Sectionlevelpage() {
   const [sections, setSections] = useState([]);
   const [advisers, setAdvisers] = useState([]);
   const [schoolYears, setSchoolYears] = useState([]);
+  const [planningSchoolYears, setPlanningSchoolYears] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const [gradeLevel, setGradeLevel] = useState("");
 
- 
+
   const [status, setStatus] = useState("active");
   const [search, setSearch] = useState("");
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  // Remembers which field actually matched on page 1 of the current
+  // search ("section" or "adviser"), so page 2+ requests reuse that
+  // mode instead of re-running the section-name-then-adviser-name
+  // fallback dance every time - otherwise navigating to page 2 of an
+  // adviser-name match would silently re-query by section name, get
+  // zero results, and bounce the person back to page 1.
+  const [searchMode, setSearchMode] = useState("section");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -42,6 +53,8 @@ function Sectionlevelpage() {
   const [selectedSection, setSelectedSection] = useState(null);
 
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
+
+  const [isNewSchoolYearModalOpen, setIsNewSchoolYearModalOpen] = useState(false);
 
   const { toasts, showToast, dismissToast } = useToasts();
 
@@ -60,30 +73,84 @@ function Sectionlevelpage() {
     try {
       setIsLoading(true);
       setErrorMessage("");
-      const response = await getSections({
-        search: debouncedSearch,
-        gradeLevel,
-        status,
-        page: currentPage - 1,
-        size: PAGE_SIZE,
-        signal: controller.signal,
-      });
-      const newTotalPages = response.totalPages || 1;
-      setTotalPages(newTotalPages);
 
-      // If the page we just asked for no longer exists (e.g. the last
-      // section on this page was just archived, or a filter shrank the
-      // result set), fall back to the new last page instead of showing
-      // a false "No sections found" for a page that isn't really empty.
-      if (currentPage > newTotalPages) {
-        setCurrentPage(newTotalPages);
-        return;
+      let newTotalPages;
+      let pageContent;
+
+      if (debouncedSearch) {
+        let activeMode = searchMode;
+
+        if (currentPage === 1) {
+          let response = await getSections({
+            sectionSearch: debouncedSearch,
+            gradeLevel,
+            status,
+            page: 0,
+            size: PAGE_SIZE,
+            signal: controller.signal,
+          });
+
+          if (response.content.length === 0) {
+            response = await getSections({
+              search: debouncedSearch,
+              gradeLevel,
+              status,
+              page: 0,
+              size: PAGE_SIZE,
+              signal: controller.signal,
+            });
+            activeMode = "adviser";
+          } else {
+            activeMode = "section";
+          }
+
+          setSearchMode(activeMode);
+          newTotalPages = response.totalPages || 1;
+          setTotalPages(newTotalPages);
+          pageContent = response.content;
+        } else {
+          const response = await getSections({
+            ...(activeMode === "adviser"
+              ? { search: debouncedSearch }
+              : { sectionSearch: debouncedSearch }),
+            gradeLevel,
+            status,
+            page: currentPage - 1,
+            size: PAGE_SIZE,
+            signal: controller.signal,
+          });
+
+          newTotalPages = response.totalPages || 1;
+          setTotalPages(newTotalPages);
+
+          if (currentPage > newTotalPages) {
+            setCurrentPage(newTotalPages);
+            return;
+          }
+
+          pageContent = response.content;
+        }
+      } else {
+        const response = await getSections({
+          gradeLevel,
+          status,
+          page: currentPage - 1,
+          size: PAGE_SIZE,
+          signal: controller.signal,
+        });
+        newTotalPages = response.totalPages || 1;
+        setTotalPages(newTotalPages);
+
+        if (currentPage > newTotalPages) {
+          setCurrentPage(newTotalPages);
+          return;
+        }
+
+        pageContent = response.content;
       }
 
-      setSections(response.content);
+      setSections(pageContent);
     } catch (error) {
-      // A cancelled request isn't a real failure - a newer request
-      // already took over, so there's nothing to show the user.
       if (error.code === "ERR_CANCELED") return;
       setErrorMessage(error.message);
     } finally {
@@ -94,7 +161,7 @@ function Sectionlevelpage() {
 
   useEffect(() => {
     const debounceId = setTimeout(() => {
-      setDebouncedSearch(search);
+      setDebouncedSearch(search.trim().replace(/\s+/g, " "));
       setCurrentPage(1);
     }, 400);
     return () => clearTimeout(debounceId);
@@ -104,30 +171,70 @@ function Sectionlevelpage() {
     loadSections();
   }, [debouncedSearch, gradeLevel, status, currentPage]);
 
-  // Both hit confirmed working endpoints (GET /api/teachers, GET /api/school-year).
-  // getTeachers() only returns active teachers; getSchoolYears() only returns
-  // active/planning years - both filtered server-/service-side so this list
-  // only ever shows valid options. See Sectionlevelservice.js for both.
-  useEffect(() => {
-    getTeachers().then(setAdvisers); // safe: getTeachers() already catches its own errors and falls back to []
+  // Hits GET /api/school-year (active - for the section form's school-year
+  // field and as the "source" list for Start New School Year) and again
+  // with status=planning (the "target" list). Pulled into its own function
+  // (instead of an inline effect) so it can be re-run on demand - see
+  // handleOpenAdd/handleOpenEdit/handleOpenNewSchoolYear below - and not
+  // just once on page load. Without that, a school year created or
+  // status-changed on the School Year Management page wouldn't show up
+  // here until a full page reload.
+  async function loadSchoolYearOptions() {
+    try {
+      const [activeYears, planningYears] = await Promise.all([
+        getSchoolYears("active"),
+        getSchoolYears("planning"),
+      ]);
+      setSchoolYears(activeYears);
+      setPlanningSchoolYears(planningYears);
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
+  }
 
-    getSchoolYears()
-      .then(setSchoolYears)
-      .catch((error) => {
-        setErrorMessage(error.message);
-      });
+  // Pulled into its own function for the same reason as
+  // loadSchoolYearOptions above - so the Adviser field in Sectionformmodal
+  // can be refreshed on demand (a teacher added/removed elsewhere
+  // shouldn't require a full page reload to show up here).
+  async function loadAdvisers() {
+    const teachers = await getTeachers(); // safe: getTeachers() already catches its own errors and falls back to []
+    setAdvisers(teachers);
+  }
+
+  useEffect(() => {
+    loadAdvisers();
+    loadSchoolYearOptions();
   }, []);
 
+  // Re-fetches school years and advisers right before opening the
+  // Add Section modal, so its School Year / Adviser dropdowns always
+  // reflect whatever was last changed elsewhere (e.g. a school year
+  // archived/activated, or a teacher added) - not whatever was true when
+  // this page happened to load or was last opened.
   function handleOpenAdd() {
     setModalMode("add");
     setSelectedSection(null);
     setIsModalOpen(true);
+    loadSchoolYearOptions();
+    loadAdvisers();
   }
 
+  // Same refresh as handleOpenAdd above, for the Edit Section modal.
   function handleOpenEdit(section) {
     setModalMode("edit");
     setSelectedSection(section);
     setIsModalOpen(true);
+    loadSchoolYearOptions();
+    loadAdvisers();
+  }
+
+  // Re-fetches source/target school year options right before opening
+  // the modal, so it always reflects whatever was last created/changed
+  // on the School Year Management page - not whatever was true when
+  // THIS page happened to load.
+  function handleOpenNewSchoolYear() {
+    setIsNewSchoolYearModalOpen(true);
+    loadSchoolYearOptions();
   }
 
   function handleGradeLevelChange(event) {
@@ -141,9 +248,6 @@ function Sectionlevelpage() {
   }
 
   function handleSearchChange(event) {
-    // Just updates what's shown in the input - the debounce effect
-    // above is what actually commits this to debouncedSearch (and
-    // resets the page) once typing pauses.
     setSearch(event.target.value);
   }
 
@@ -186,6 +290,26 @@ function Sectionlevelpage() {
     }
   }
 
+  // CONNECT: POST /api/section/school-year/new-school-year
+  async function handleStartNewSchoolYear(payload) {
+    try {
+      const clonedSections = await startNewSchoolYear(payload);
+      showToast(`${clonedSections.length} section(s) carried over to the new school year.`);
+      try {
+        await loadSections();
+        await loadSchoolYearOptions();
+      } catch (error) {
+        showToast(
+          "New school year started, but the page couldn't refresh automatically. Please reload.",
+          "error"
+        );
+      }
+    } catch (error) {
+      loadSchoolYearOptions();
+      throw error;
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
@@ -198,14 +322,30 @@ function Sectionlevelpage() {
           />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <Sectionlevelsearchinput value={search} onChange={handleSearchChange} />
+            <Sectionlevelsearchinput
+              value={search}
+              onChange={handleSearchChange}
+              placeholder="Search by section or adviser"
+            />
 
+            {/* Primary, frequent, low-stakes action: solid fill so it
+                reads as the default thing you'd click on this page. */}
             <button
               type="button"
               onClick={handleOpenAdd}
-              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-auto"
+              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-32"
             >
+              <Plus size={15} strokeWidth={2.5} />
               Add Section
+            </button>
+
+           <button
+              type="button"
+              onClick={handleOpenNewSchoolYear}
+              title="Carries your current sections over into a school year you've already created and marked 'Planning' - it does not create a new school year record."
+              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-40" >
+              <CalendarSync size={15} strokeWidth={2.5} />
+              New School Year
             </button>
           </div>
         </div>
@@ -238,6 +378,14 @@ function Sectionlevelpage() {
         onConfirm={handleConfirmStatusChange}
         sectionName={statusChangeRequest?.section.sectionName}
         newStatus={statusChangeRequest?.nextStatus === "archived" ? "Archived" : "Active"}
+      />
+
+      <NewSchoolYearModal
+        isOpen={isNewSchoolYearModalOpen}
+        sourceSchoolYears={schoolYears}
+        targetSchoolYears={planningSchoolYears}
+        onClose={() => setIsNewSchoolYearModalOpen(false)}
+        onSubmit={handleStartNewSchoolYear}
       />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />

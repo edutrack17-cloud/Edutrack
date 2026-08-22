@@ -1,19 +1,50 @@
-// Generic confirm dialog, shared by both Archive and Activate.
+// Generic confirm dialog for all three school-year status changes
+// (Mark Planning / Mark Active / Archive), triggered from the kebab
+// menu in Schoolyeartable.jsx.
 
 import React, { useEffect, useState } from "react";
-import { X, Archive, ArchiveRestore, Loader2 } from "lucide-react";
+import { X, Archive, Hourglass, CircleCheck, Loader2 } from "lucide-react";
 
-function ConfirmSectionStatusModal({
+// Mirrors STATUS_ACTIONS in Schoolyeartable.jsx so the icon/color the
+// person sees in the kebab menu is the same one they see here.
+const STATUS_META = {
+  archived: {
+    verb: "Archive",
+    verbIng: "Archiving",
+    Icon: Archive,
+    badgeClass: "bg-secondary/10 text-secondary",
+    confirmButtonClass: "bg-secondary hover:bg-red-700",
+    bodyText: "It will be hidden from the active list until you restore it.",
+  },
+  planning: {
+    verb: "Mark Planning",
+    verbIng: "Marking Planning",
+    Icon: Hourglass,
+    badgeClass: "bg-warning/10 text-warning",
+    confirmButtonClass: "bg-warning hover:bg-amber-600",
+    bodyText: "It will be set aside as a planning year, ready to become Active later.",
+  },
+  active: {
+    verb: "Mark Active",
+    verbIng: "Marking Active",
+    Icon: CircleCheck,
+    badgeClass: "bg-success/10 text-success",
+    confirmButtonClass: "bg-success hover:bg-emerald-700",
+    bodyText: "It will become the current Active school year.",
+  },
+};
+
+function ConfirmSchoolYearStatusModal({
   isOpen,
   onClose,
   onConfirm,
-  sectionName,
+  schoolYearName,
   newStatus,
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset local submitting state whenever a fresh confirmation is opened,
-  // so a previous archive/activate action can't leave the buttons stuck
+  // so a previous status-change action can't leave the buttons stuck
   // disabled the next time this dialog is reused.
   useEffect(() => {
     if (isOpen) setIsSubmitting(false);
@@ -30,29 +61,16 @@ function ConfirmSectionStatusModal({
 
   if (!isOpen) return null;
 
-  const isArchiving = newStatus?.toLowerCase() === "archived";
-  const Icon = isArchiving ? Archive : ArchiveRestore;
-
-  // Button/title copy names the actual action ("Archive" / "Activate")
-  // instead of a generic "Confirm" - a person shouldn't have to read the
-  // body text to know what the button does.
-  const actionVerb = isArchiving ? "Archive" : "Activate";
-  const actionVerbIng = isArchiving ? "Archiving" : "Activating";
-  const bodyText = isArchiving
-    ? "It will be hidden from the active list until you activate it again."
-    : "It will show up in the active list again.";
-
-  const badgeClass = isArchiving ? "bg-secondary/10 text-secondary" : "bg-success/10 text-success";
-  const confirmButtonClass = isArchiving
-    ? "bg-secondary hover:bg-red-700"
-    : "bg-success hover:bg-emerald-700";
+  const statusKey = newStatus?.toLowerCase();
+  const meta = STATUS_META[statusKey] ?? STATUS_META.archived;
+  const { verb, verbIng, Icon, badgeClass, confirmButtonClass, bodyText } = meta;
 
   function handleBackdropClick(event) {
     if (event.target === event.currentTarget && !isSubmitting) onClose();
   }
 
   // Guards against double-submits (e.g. an eager double click) while the
-  // archive/activate request is in flight, and gives the person feedback
+  // status-change request is in flight, and gives the person feedback
   // that something is actually happening instead of a silently frozen modal.
   async function handleConfirmClick() {
     if (isSubmitting) return;
@@ -91,7 +109,7 @@ function ConfirmSectionStatusModal({
           </div>
           <div className="flex-1 pt-1">
             <h2 id="confirm-status-title" className="text-base font-bold text-primary">
-              {actionVerb} "{sectionName}"?
+              {verb} "{schoolYearName}"?
             </h2>
             <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
           </div>
@@ -113,7 +131,7 @@ function ConfirmSectionStatusModal({
             className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${confirmButtonClass}`}
           >
             {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-            {isSubmitting ? `${actionVerbIng}...` : actionVerb}
+            {isSubmitting ? `${verbIng}...` : verb}
           </button>
         </div>
       </div>
@@ -121,4 +139,4 @@ function ConfirmSectionStatusModal({
   );
 }
 
-export default ConfirmSectionStatusModal;
+export default ConfirmSchoolYearStatusModal;

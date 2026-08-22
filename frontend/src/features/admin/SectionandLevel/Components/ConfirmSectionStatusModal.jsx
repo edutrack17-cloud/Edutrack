@@ -9,7 +9,6 @@ function ConfirmSectionStatusModal({
   onConfirm,
   sectionName,
   newStatus,
-  statusColorClass,
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 

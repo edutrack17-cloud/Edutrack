@@ -20,9 +20,9 @@ function SchoolYearPagination({ currentPage, totalPages, onPageChange }) {
         onClick={handlePrev}
         disabled={isFirstPage}
         aria-label="Previous page"
-        className="rounded p-0.5 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex items-center justify-center rounded-md border border-gray-200 bg-white p-1 text-primary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-100 disabled:bg-white disabled:text-primary disabled:hover:bg-white"
       >
-        <ChevronLeft size={15} />
+        <ChevronLeft size={15} strokeWidth={2.5} />
       </button>
 
       <span>
@@ -34,9 +34,9 @@ function SchoolYearPagination({ currentPage, totalPages, onPageChange }) {
         onClick={handleNext}
         disabled={isLastPage}
         aria-label="Next page"
-        className="rounded p-0.5 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex items-center justify-center rounded-md border border-gray-200 bg-white p-1 text-primary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-primary disabled:hover:bg-white"
       >
-        <ChevronRight size={15} />
+        <ChevronRight size={15} strokeWidth={2.5} />
       </button>
     </div>
   );

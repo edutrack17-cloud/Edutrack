@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
-import { SCHOOL_YEAR_STATUS_OPTIONS, getOtherActiveSchoolYears } from "../Schoolyearservice";
+import { SCHOOL_YEAR_STATUS_OPTIONS } from "../Schoolyearservice";
 import { getSchoolYearFormSchema, emptySchoolYearForm } from "../Schoolyearschema";
 
 const inputClass = (hasError) =>
@@ -58,18 +58,6 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
             };
 
 
-      if (mode === "add" && values.schoolYearStatus === "active") {
-        const others = await getOtherActiveSchoolYears();
-        if (others.length > 0) {
-          setSubmitError(
-            `${others.map((sy) => sy.schoolYearName).join(", ")} is already marked Active. ` +
-              "Archive or unmark it first before creating a new Active school year."
-          );
-          setSubmitting(false);
-          return;
-        }
-      }
-
       await onSubmit(payload);
       onClose();
     } catch (error) {
@@ -104,7 +92,14 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
           onSubmit={handleFormSubmit}
           enableReinitialize
         >
-          {({ errors, touched, isSubmitting }) => (
+          {({ errors, touched, isSubmitting, dirty }) => {
+            // Mirrors Sectionformmodal.jsx: in edit mode, Save stays disabled
+            // until something actually changed, so a no-op "Save Changes"
+            // click can't reach the backend just to bounce off its own
+            // "No changes detected" error.
+            const isSaveDisabled = isSubmitting || (mode === "edit" && !dirty);
+
+            return (
             <Form>
               <div className="flex flex-col gap-3 px-4 py-5 sm:px-6">
                 <h3 className="text-base font-bold uppercase text-primary">
@@ -162,9 +157,7 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
                     </div>
                     <ErrorMessage name="schoolYearStatus" component="p" className={errorClass} />
                     <p className="mt-1 text-xs text-gray-500">
-                      Only one school year can be Active at a time. If another year is already
-                      Active, you'll need to archive or unmark it first before this one can be
-                      created as Active.
+                      Ideally only one school year should be Active at a time.
                     </p>
                   </div>
                 )}
@@ -175,7 +168,7 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
               <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSaveDisabled}
                   className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSubmitting ? "Saving..." : mode === "edit" ? "Save Changes" : "Add School Year"}
@@ -190,7 +183,8 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
                 </button>
               </div>
             </Form>
-          )}
+            );
+          }}
         </Formik>
       </div>
     </div>

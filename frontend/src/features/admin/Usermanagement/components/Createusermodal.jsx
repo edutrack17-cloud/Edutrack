@@ -9,7 +9,6 @@ const EMPTY_FORM = {
   firstName: "",
   middleName: "",
   lastName: "",
-  role: "Teacher",
 };
 
 function Createusermodal({ isOpen, onClose, onSubmit }) {
@@ -18,12 +17,21 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
   const formik = useFormik({
     initialValues: EMPTY_FORM,
     validationSchema: createUserSchema,
-    onSubmit: (values, helpers) => {
-      // TODO: BACKEND CONNECTION - see createUser() in Usermanagementservice.js
-      // POST /api/users
-      onSubmit?.(values);
-      helpers.resetForm();
-      onClose();
+    onSubmit: async (values, helpers) => {
+      // POST /api/createTeacher - see createUser() in Usermanagementservice.js
+      // `onSubmit` (from Usermanagementpage) now resolves to true/false
+      // instead of swallowing the error itself, so we only clear the
+      // form and close the modal once the request actually succeeded.
+      // Previously this closed/reset unconditionally, so a failed
+      // request (e.g. duplicate username) looked like a success and
+      // silently threw away whatever the admin had typed.
+      const success = await onSubmit?.(values);
+      if (success) {
+        helpers.resetForm();
+        onClose();
+      } else {
+        helpers.setSubmitting(false);
+      }
     },
   });
 
@@ -99,22 +107,24 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
                 <p className={errorClass}>{formik.errors.password}</p>
               )}
             </div>
+          </div>
 
-            <div>
-              <label className={labelClass}>First Name</label>
-              <input
-                name="firstName"
-                value={formik.values.firstName}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                placeholder="William"
-                className={inputClass(formik.touched.firstName && formik.errors.firstName)}
-              />
-              {formik.touched.firstName && formik.errors.firstName && (
-                <p className={errorClass}>{formik.errors.firstName}</p>
-              )}
-            </div>
+          <div className="w-full">
+            <label className={labelClass}>First Name</label>
+            <input
+              name="firstName"
+              value={formik.values.firstName}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="William"
+              className={inputClass(formik.touched.firstName && formik.errors.firstName)}
+            />
+            {formik.touched.firstName && formik.errors.firstName && (
+              <p className={errorClass}>{formik.errors.firstName}</p>
+            )}
+          </div>
 
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Middle Name</label>
               <input
@@ -144,15 +154,6 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
                 <p className={errorClass}>{formik.errors.lastName}</p>
               )}
             </div>
-
-            <div>
-              <label className={labelClass}>Role</label>
-            
-          
-              <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500">
-                Teacher
-              </div>
-            </div>
           </div>
         </div>
 
@@ -160,7 +161,8 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
           <button
             type="button"
             onClick={formik.handleSubmit}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            disabled={formik.isSubmitting}
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Add
           </button>

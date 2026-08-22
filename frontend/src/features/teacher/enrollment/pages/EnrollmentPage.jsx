@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import StudentFilters from "../components/StudentFilters";
 import SearchInput from "../components/SearchInput";
-import Button from "../../../../components/ui/Button";
 import Pagination from "../components/Pagination";
 import StudentTable from "../components/StudentTable";
 import EnrollStudentModal from "../components/EnrollStudentModal";
@@ -29,16 +29,29 @@ function EnrollmentPage() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  // Pulled into its own function (instead of an inline effect) so it can
+  // be re-run on demand - see handleAddStudent below - and not just once
+  // on page load. Without that, a section archived/restored on the
+  // Section Management page wouldn't be reflected here (in either the
+  // Section filter or the Add Student modal's Section dropdown) until a
+  // full page reload.
+  async function loadSections() {
+    try {
+      const data = await getSections();
+      setSections(data);
+      setSectionsError("");
+    } catch (error) {
+      setSectionsError(error.message);
+    }
+  }
+
   // Grade levels are a fixed enum (no backend list endpoint needed),
   // but the full section list (unfiltered by level) needs a real
   // fetch - used by both the Section filter dropdown and the Add
   // Student modal's Section dropdown.
   useEffect(() => {
     getGradeLevels().then(setGradeLevels);
-
-    getSections()
-      .then(setSections)
-      .catch((error) => setSectionsError(error.message));
+    loadSections();
   }, []);
 
   // GET /api/student - re-fetches whenever a filter or the page
@@ -140,56 +153,59 @@ function EnrollmentPage() {
   }
 
   return (
-    <div className="rounded-lg bg-white p-4 sm:p-6">
-      <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <StudentFilters
-          level={level}
-          section={section}
-          status={status}
-          onLevelChange={handleLevelChange}
-          onSectionChange={handleSectionChange}
-          onStatusChange={handleStatusChange}
-          gradeLevels={gradeLevels}
-          sections={sections}
-        />
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchInput
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+    <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
+      <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <StudentFilters
+            level={level}
+            section={section}
+            status={status}
+            onLevelChange={handleLevelChange}
+            onSectionChange={handleSectionChange}
+            onStatusChange={handleStatusChange}
+            gradeLevels={gradeLevels}
+            sections={sections}
           />
 
-          <Button
-            type="button"
-            onClick={handleAddStudent}
-            className="bg-primary px-5 py-2.5 text-white hover:bg-sky-700 w-full sm:w-auto"
-          >
-            Add Student
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <SearchInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            {/* Same markup/classes as Section Level's "Add Section" button,
+                so the two primary add-actions look identical. */}
+            <button
+              type="button"
+              onClick={handleAddStudent}
+              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-36"
+            >
+              <Plus size={15} strokeWidth={2.5} />
+              Add Student
+            </button>
+          </div>
         </div>
-      </div>
 
-      {sectionsError && <p className="mt-2 text-sm text-red-500">{sectionsError}</p>}
-      {errorMessage && <p className="mt-2 text-sm text-red-500">{errorMessage}</p>}
+        {sectionsError && <p className="text-sm text-red-500">{sectionsError}</p>}
+        {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
 
-      <div className="mt-6">
         {isLoading ? (
           <p className="py-6 text-center text-sm text-gray-500">Loading students...</p>
         ) : (
-          <StudentTable
-            students={visibleStudents}
-            sections={sections}
-            onChanged={loadStudents}
-          />
+          <div className="flex flex-col gap-3">
+            <StudentTable
+              students={visibleStudents}
+              sections={sections}
+              onChanged={loadStudents}
+              onRefreshSections={loadSections}
+            />
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          </div>
         )}
-      </div>
-
-      <div className="mt-4">
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
       </div>
 
       <EnrollStudentModal
@@ -197,6 +213,7 @@ function EnrollmentPage() {
         onClose={closeAddModal}
         onSubmit={handleSubmitNewStudent}
         sections={sections}
+        onRefreshSections={loadSections}
       />
     </div>
   );

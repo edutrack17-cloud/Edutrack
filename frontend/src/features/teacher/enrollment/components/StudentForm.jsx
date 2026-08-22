@@ -24,9 +24,12 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
   // (undefined) as active rather than silently hiding every section.
   const activeSections = sections.filter((s) => s.status !== "archived");
 
+  // Empty (not "all sections") until a level is chosen - picking level
+  // first, then only seeing that level's sections, is a lot friendlier
+  // than scrolling one long unfiltered list of every section.
   const filteredSections = formik.values.level
     ? activeSections.filter((s) => s.gradeLevel === formik.values.level)
-    : activeSections;
+    : [];
 
   // "Today or later" isn't allowed for a birthdate, so the latest
   // selectable day is yesterday. <input type="date"> requires this
@@ -50,7 +53,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
   const selectClass = (hasError, hasValue) =>
     `w-full py-2.5 pl-3 pr-9 rounded-lg border ${
       hasError ? "border-danger" : "border-gray-300"
-    } bg-white text-sm ${hasValue ? "text-gray-700" : "text-gray-500"} appearance-none transition-colors cursor-pointer focus:border-primary focus:outline-none`;
+    } bg-white text-sm ${hasValue ? "text-gray-700" : "text-gray-500"} appearance-none transition-colors cursor-pointer focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-50`;
 
   const fieldLabelClass = "mb-1 block text-sm font-semibold text-gray-700";
   // Passed into Input.jsx's "labelClassName" prop - gray-700 to match
@@ -102,9 +105,12 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
                 value={formik.values.sectionId}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
+                disabled={!formik.values.level}
                 className={selectClass(formik.touched.sectionId && formik.errors.sectionId, Boolean(formik.values.sectionId))}
               >
-                <option value="" className="text-gray-700">Select Section</option>
+                <option value="" className="text-gray-700">
+                  {formik.values.level ? "Select Section" : "Select a level first"}
+                </option>
                 {filteredSections.map((s) => (
                   <option key={s.id} value={s.id} className="text-gray-700">
                     {s.name}

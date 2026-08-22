@@ -21,18 +21,6 @@ async function request(path, options = {}) {
   return response.json();
 }
 
-function buildQuery(params) {
-  const query = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      query.set(key, value);
-    }
-  });
-  const queryString = query.toString();
-  return queryString ? `?${queryString}` : "";
-}
-
-
 function splitFullName(fullName) {
   const parts = (fullName || "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return { firstName: "", middleName: "", lastName: "" };
@@ -46,10 +34,15 @@ function splitFullName(fullName) {
 
 
 function mapTeacherResponse(teacher) {
+  const { firstName, middleName, lastName } = splitFullName(teacher.fullName);
   return {
     id: teacher.userId,
     username: teacher.username,
-    ...splitFullName(teacher.fullName),
+    fullName: teacher.fullName,
+    firstName,
+    middleName,
+    lastName,
+
     role: teacher.userRole === "admin" ? "Admin" : "Teacher",
     status: teacher.accountStatus === "active" ? "Active" : "Disabled",
 
@@ -102,19 +95,4 @@ export async function updateUser(userId, formData) {
 
 export async function toggleUserStatus(userId, status) {
   throw new Error("Activating/deactivating users isn't available yet - the backend has no status endpoint.");
-}
-
-
-export async function assignTeacherToSection(userId, sectionId) {
-  return request(`/section/${sectionId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ userId }),
-  });
-}
-
-
-export async function getAssignableSections(gradeLevel) {
-  const query = buildQuery({ gradeLevel });
-  const data = await request(`/section/dropdown${query}`);
-  return data.map((s) => ({ id: s.sectionId, name: s.sectionName }));
 }

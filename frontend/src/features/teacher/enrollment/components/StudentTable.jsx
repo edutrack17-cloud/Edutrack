@@ -106,7 +106,7 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkD
 // GET /api/student - this component no longer owns mock data or does
 // client-side search/level/section/status filtering, since those
 // filters are applied server-side via enrollmentService.getStudents().
-function StudentTable({ students = [], sections = [], onChanged }) {
+function StudentTable({ students = [], sections = [], onChanged, onRefreshSections }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
@@ -119,8 +119,11 @@ function StudentTable({ students = [], sections = [], onChanged }) {
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const thClass = "whitespace-nowrap px-3 py-3 text-center text-xs font-semibold text-white sm:px-6 sm:py-4 sm:text-sm";
-  const tdClass = "whitespace-nowrap px-3 py-3 text-center text-xs text-gray-700 sm:px-6 sm:py-4 sm:text-sm";
+  // Matches Sectiontable.jsx's density (px-3/4 py-2, truncate) so the two
+  // tables read as the same component family instead of two different
+  // scales of padding.
+  const thClass = "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
+  const tdClass = "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
 
   function toggleMenu(id, event) {
     if (openMenu === id) {
@@ -207,16 +210,24 @@ function StudentTable({ students = [], sections = [], onChanged }) {
   async function handleEditSubmit(studentId, values) {
     await updateStudent(studentId, values);
     setEditingStudent(null);
-    await onChanged?.(); // re-fetch the list from the parent
+    await onChanged?.(); 
   }
 
   return (
     <>
       {errorMessage && <p className="mb-3 text-sm text-danger">{errorMessage}</p>}
 
-      {/* ---- Desktop / tablet table ---- */}
       <div className="hidden w-full overflow-x-auto rounded-xl bg-white shadow-md sm:block">
-        <table className="min-w-full border-collapse">
+        <table className="w-full min-w-225 table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[13%]" />
+            <col className="w-[13%]" />
+            <col className="w-[22%]" />
+            <col className="w-[12%]" />
+            <col className="w-[15%]" />
+            <col className="w-[12%]" />
+            <col className="w-[13%]" />
+          </colgroup>
           <thead className="bg-primary">
             <tr>
               <th className={thClass}>LRN</th>
@@ -251,8 +262,9 @@ function StudentTable({ students = [], sections = [], onChanged }) {
                   </span>
                 </td>
 
-                <td className="relative px-6 py-4 text-center">
+                <td className="relative px-3 py-1.5 text-center sm:px-4 sm:py-2">
                   <button
+                    type="button"
                     data-kebab-trigger
                     onClick={(event) => toggleMenu(student.studentId, event)}
                     className="rounded-lg p-2 transition hover:bg-gray-100"
@@ -350,6 +362,7 @@ function StudentTable({ students = [], sections = [], onChanged }) {
         onSubmit={handleEditSubmit}
         student={editingStudent}
         sections={sections}
+        onRefreshSections={onRefreshSections}
       />
 
       <ConfirmStatusModal

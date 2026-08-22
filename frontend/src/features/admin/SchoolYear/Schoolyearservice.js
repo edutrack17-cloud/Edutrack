@@ -18,7 +18,7 @@ function getErrorMessage(error, fallback) {
 }
 
 // CONNECT: GET /api/school-year
-export async function getSchoolYears({ search, status, page = 0, size = 10 } = {}) {
+export async function getSchoolYears({ search, status, page = 0, size = 10, signal } = {}) {
   const params = {};
   if (search) params.schoolYearName = search;
   if (status) params.schoolYearStatus = status;
@@ -26,12 +26,13 @@ export async function getSchoolYears({ search, status, page = 0, size = 10 } = {
   params.size = size;
 
   try {
-    const { data } = await schoolYearApi.get("/school-year", { params });
+    const { data } = await schoolYearApi.get("/school-year", { params, signal });
     return {
       content: data.content || [],
       totalPages: data.totalPages || 1,
     };
   } catch (error) {
+    if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
     throw new Error(getErrorMessage(error, "Failed to load school years"));
   }
 }
@@ -90,22 +91,6 @@ export async function markAsPlanning(schoolYearId) {
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to mark school year as planning"));
   }
-}
-
-export async function getOtherActiveSchoolYears(excludeId) {
-  const { content } = await getSchoolYears({ status: "active", page: 0, size: 100 });
-  return content.filter((sy) => sy.schoolYearId !== excludeId);
-}
-
-// othersToArchive: pass the list already shown to the user in the
-// confirm modal so what gets archived always matches what they saw.
-// Falls back to a fresh fetch if not provided.
-export async function activateSchoolYearExclusive(schoolYearId, othersToArchive) {
-  const others = othersToArchive ?? (await getOtherActiveSchoolYears(schoolYearId));
-  for (const sy of others) {
-    await archiveSchoolYear(sy.schoolYearId);
-  }
-  return restoreSchoolYear(schoolYearId);
 }
 
 export default schoolYearApi;

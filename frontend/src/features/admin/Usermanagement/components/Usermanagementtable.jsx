@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal, Eye, Pencil, UserCog, UserCheck, UserX } from "lucide-react";
+import { MoreHorizontal, Eye, Pencil, UserCheck, UserX } from "lucide-react";
 
+// Same compact cell chrome as Sectiontable.jsx (Section & Level page):
+// table-fixed + colgroup so columns don't jump around, truncate so long
+// values ellipsize instead of wrapping, and the same padding/text-size
+// scale (xs on mobile, sm from sm: up).
 const thClass =
-  "whitespace-nowrap px-3 py-3 text-center text-xs font-semibold text-white sm:px-6 sm:py-4 sm:text-sm";
+  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
 const tdClass =
-  "whitespace-nowrap px-3 py-3 text-center text-xs text-gray-700 sm:px-6 sm:py-4 sm:text-sm";
+  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
 
-const MENU_WIDTH = 192; // px, matches w-48
+const MENU_WIDTH = 176; // px, matches Sectiontable.jsx's w-44 menu
 
 function getStatusClass(status) {
   return status === "Active" ? "text-success" : "text-danger";
@@ -20,7 +24,7 @@ function getStatusClass(status) {
 // element makes the browser clip overflow-y too, even though nothing
 // asked for that. Rendering the menu through a Portal (straight into
 // document.body) sidesteps this entirely, same fix as StudentTable.jsx.
-function Usermanagementtable({ users, onView, onEdit, onAssignSection, onToggleStatus }) {
+function Usermanagementtable({ users, onView, onEdit, onToggleStatus }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
@@ -63,7 +67,14 @@ function Usermanagementtable({ users, onView, onEdit, onAssignSection, onToggleS
 
   return (
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
-      <table className="min-w-full border-collapse">
+      <table className="w-full min-w-160 table-fixed border-collapse">
+        <colgroup>
+          <col className="w-[26%]" />
+          <col className="w-[22%]" />
+          <col className="w-[16%]" />
+          <col className="w-[18%]" />
+          <col className="w-[18%]" />
+        </colgroup>
         <thead className="bg-primary">
           <tr>
             <th className={thClass}>Full Name</th>
@@ -83,32 +94,44 @@ function Usermanagementtable({ users, onView, onEdit, onAssignSection, onToggleS
             </tr>
           )}
 
-          {users.map((user) => (
-            <tr key={user.id} className="border-b border-gray-200 transition hover:bg-gray-50">
-              <td className={tdClass}>
-                {user.firstName} {user.middleName ? `${user.middleName} ` : ""}
-                {user.lastName}
-              </td>
-              <td className={tdClass}>{user.username}</td>
-              <td className={tdClass}>{user.role}</td>
-              <td className={tdClass}>
-                <span className={`text-sm font-semibold ${getStatusClass(user.status)}`}>
-                  {user.status}
-                </span>
-              </td>
+          {users.map((user) => {
+            // Prefer the backend's own `fullName` (built by NameUtil on
+            // the Java side) over reconstructing it from
+            // firstName/middleName/lastName - those are only a
+            // best-effort guess split back out of `fullName`, and can
+            // scramble multi-word names. Fall back to the split parts
+            // only if `fullName` wasn't provided.
+            const fullName =
+              user.fullName ??
+              `${user.firstName} ${user.middleName ? `${user.middleName} ` : ""}${user.lastName}`;
+            return (
+              <tr key={user.id} className="border-b border-gray-200 transition hover:bg-gray-50">
+                <td className={tdClass} title={fullName}>
+                  {fullName}
+                </td>
+                <td className={tdClass} title={user.username}>
+                  {user.username}
+                </td>
+                <td className={tdClass}>{user.role}</td>
+                <td className={tdClass}>
+                  <span className={`text-sm font-semibold ${getStatusClass(user.status)}`}>
+                    {user.status}
+                  </span>
+                </td>
 
-              <td className={tdClass}>
-                <button
-                  type="button"
-                  data-kebab-trigger
-                  onClick={(event) => toggleMenu(user.id, event)}
-                  className="rounded-lg p-2 transition hover:bg-gray-100"
-                >
-                  <MoreHorizontal size={20} />
-                </button>
-              </td>
-            </tr>
-          ))}
+                <td className="truncate px-3 py-2 text-center sm:px-4 sm:py-2">
+                  <button
+                    type="button"
+                    data-kebab-trigger
+                    onClick={(event) => toggleMenu(user.id, event)}
+                    className="rounded-lg p-2 transition hover:bg-gray-100"
+                  >
+                    <MoreHorizontal size={20} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -140,19 +163,6 @@ function Usermanagementtable({ users, onView, onEdit, onAssignSection, onToggleS
               <Pencil size={16} />
               Edit
             </button>
-
-            {openUser.role === "Teacher" && (
-              <button
-                onClick={() => {
-                  setOpenMenuId(null);
-                  onAssignSection?.(openUser);
-                }}
-                className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/10"
-              >
-                <UserCog size={16} />
-                Assign Section
-              </button>
-            )}
 
             <div className="my-1 border-t border-gray-100" />
 

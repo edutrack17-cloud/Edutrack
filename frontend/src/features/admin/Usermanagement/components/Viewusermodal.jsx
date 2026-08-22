@@ -15,6 +15,10 @@ function InfoField({ label, value }) {
 function Viewusermodal({ isOpen, onClose, user }) {
   if (!isOpen || !user) return null;
 
+  const fullName =
+    user.fullName ??
+    `${user.firstName} ${user.middleName ? `${user.middleName} ` : ""}${user.lastName}`;
+
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
@@ -30,18 +34,12 @@ function Viewusermodal({ isOpen, onClose, user }) {
 
         <div className="grid grid-cols-2 gap-5 px-4 py-6 sm:px-6">
           <div className="col-span-2">
-            <InfoField
-              label="Full Name"
-              value={`${user.firstName} ${user.middleName ? `${user.middleName} ` : ""}${user.lastName}`}
-            />
+            <InfoField label="Full Name" value={fullName} />
           </div>
           <InfoField label="Username" value={user.username} />
           <InfoField label="Role" value={user.role} />
           <InfoField label="Status" value={user.status} />
 
-          {/* Only meaningful for teachers - derived from
-              sections.adviser_id, not a column on "users" itself. See
-              the ERD note in Usermanagementfilters.jsx. */}
           {user.role === "Teacher" && (
             <InfoField
               label="Assigned Section"

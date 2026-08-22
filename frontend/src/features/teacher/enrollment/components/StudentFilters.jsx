@@ -1,19 +1,104 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-// CONFIRMED via StudentStatus.java: enrolled | dropped | transferred_out
-// | graduated (lowercase). Previously this used "Dropped"/"Transferred"
-// (wrong casing, and "Transferred" isn't even the real value -
-// "transferred_out" is) - StudentTable.jsx already uses the correct
-// values via getStudentStatusColorClass()/getStudentStatusLabel(), this
-// was the one place still out of sync with it.
+
 const STATUS_OPTIONS = [
-  { value: "", label: "Status", textClass: "text-gray-500", hoverClass: "hover:bg-gray-100", selectedBgClass: "bg-gray-100" },
+  { value: "", label: "Status", textClass: "text-gray-700", hoverClass: "hover:bg-gray-100", selectedBgClass: "bg-gray-100" },
   { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "hover:bg-success/10", selectedBgClass: "bg-success/10" },
   { value: "dropped", label: "Dropped", textClass: "text-danger", hoverClass: "hover:bg-danger/10", selectedBgClass: "bg-danger/10" },
   { value: "transferred_out", label: "Transferred", textClass: "text-warning", hoverClass: "hover:bg-warning/10", selectedBgClass: "bg-warning/10" },
   { value: "graduated", label: "Graduated", textClass: "text-primary", hoverClass: "hover:bg-primary/10", selectedBgClass: "bg-primary/10" },
 ];
+
+const LEVEL_ALL = { value: "", label: "Grade Level", textClass: "text-gray-700" };
+const SECTION_ALL = { value: "", label: "Section", textClass: "text-gray-700" };
+
+const triggerClass =
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+const wrapperClass = "relative min-w-[90px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+
+function useClickOutside(isOpen, ref, onClose) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) onClose();
+    }
+    function handleEscapeKey(event) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [isOpen, ref, onClose]);
+}
+
+// Generic dropdown shared by Level, Section, and Status - a native
+// <select> can't animate its own arrow or color each option's text, and
+// three separately-styled controls previously looked inconsistent next
+// to each other.
+function FilterDropdown({ options, value, onChange, ariaLabel }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
+
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  function handleSelect(nextValue) {
+    // Build a minimal synthetic event so onChange (written to expect a
+    // native <select> onChange, i.e. e => e.target.value) keeps working
+    // unchanged - no need to touch EnrollmentPage.jsx at all.
+    onChange({ target: { value: nextValue } });
+    setIsOpen(false);
+  }
+
+  return (
+    <div className={wrapperClass} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={`${triggerClass} ${selected.textClass || "text-gray-700"}`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={ariaLabel}
+      >
+        <span className="truncate">{selected.label}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen && (
+        <ul
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+        >
+          {options.map((option) => {
+            const isSelected = option.value === selected.value;
+
+            return (
+              <li key={option.value || "all"} role="option" aria-selected={isSelected}>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(option.value)}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium transition ${option.textClass || "text-gray-700"} ${option.hoverClass || "hover:bg-gray-100"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-semibold` : ""}`}
+                >
+                  {option.label}
+                  {isSelected && <Check size={14} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function StudentFilters({
   level,
@@ -25,151 +110,42 @@ function StudentFilters({
   gradeLevels = [],
   sections = [],
 }) {
-  const selectClassName = "w-full appearance-none rounded-md border border-gray/50 shadow-sm bg-white py-2 pl-3 pr-9 text-xs font-medium text-gray-500 outline-none cursor-pointer sm:pr-10 sm:text-sm";
-  // Same visual footprint as selectClassName, but without a baked-in text
-  // color, since the Status button's text color changes with the
-  // selected option (text-success / text-danger / text-warning).
-  const statusButtonClassName = "w-full appearance-none rounded-md border border-gray/50 shadow-sm bg-white py-2 pl-3 pr-9 text-left text-xs font-medium outline-none cursor-pointer sm:pr-10 sm:text-sm";
-  const iconClassName = "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 sm:right-4";
-  // flex-1 + min-w lets each filter grow/shrink to share the row on mobile
-  // (wrapping via flex-wrap on the parent if they don't all fit); sm/md:
-  // lock them back to a fixed width once there's enough room.
-  const wrapperClassName = "relative min-w-[90px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+  const levelOptions = [
+    LEVEL_ALL,
+    ...gradeLevels.map((opt) => ({ value: opt.value, label: opt.label, textClass: "text-gray-700" })),
+  ];
 
-  const [isStatusOpen, setIsStatusOpen] = useState(false);
-  const statusDropdownRef = useRef(null);
-
-  const selectedStatus =
-    STATUS_OPTIONS.find((option) => option.value === status) || STATUS_OPTIONS[0];
-
-  // Close the Status dropdown on outside click or Escape — mirrors the
-  // same interaction pattern used for the kebab action menu in StudentTable.
-  useEffect(() => {
-    if (!isStatusOpen) return;
-
-    function handleClickOutside(event) {
-      if (
-        statusDropdownRef.current &&
-        !statusDropdownRef.current.contains(event.target)
-      ) {
-        setIsStatusOpen(false);
-      }
-    }
-
-    function handleEscapeKey(event) {
-      if (event.key === "Escape") setIsStatusOpen(false);
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscapeKey);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscapeKey);
-    };
-  }, [isStatusOpen]);
-
-  function handleStatusSelect(value) {
-    // Build a minimal synthetic event so onStatusChange (written to expect
-    // a native <select> onChange, i.e. e => e.target.value) keeps working
-    // unchanged — no need to touch the parent component at all.
-    onStatusChange({ target: { value } });
-    setIsStatusOpen(false);
-  }
+  // Value is the section NAME, not its id - StudentController.getStudents()
+  // filters by "sectionName" (a String param), so that's what this sends.
+  // Not filtered by the selected level here; EnrollmentPage can pass an
+  // already-level-filtered list in if that's the desired behavior.
+  const sectionOptions = [
+    SECTION_ALL,
+    ...sections.map((s) => ({ value: s.name, label: s.name, textClass: "text-gray-700" })),
+  ];
 
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-      <div className={wrapperClassName}>
-        <select
-          value={level}
-          onChange={onLevelChange}
-          className={selectClassName}
-        >
-          <option value="">Grade Level</option>
-          {gradeLevels.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+      <FilterDropdown
+        options={levelOptions}
+        value={level}
+        onChange={onLevelChange}
+        ariaLabel="Filter by grade level"
+      />
 
-        <ChevronDown size={16} className={iconClassName} />
-      </div>
+      <FilterDropdown
+        options={sectionOptions}
+        value={section}
+        onChange={onSectionChange}
+        ariaLabel="Filter by section"
+      />
 
-      <div className={wrapperClassName}>
-        <select
-          value={section}
-          onChange={onSectionChange}
-          className={selectClassName}
-        >
-          <option value="">Section</option>
-          {/* Value is the section NAME, not its id - StudentController.getStudents()
-              filters by "sectionName" (a String param), so that's what
-              this needs to send. Not filtered by the selected level here;
-              EnrollmentPage can pass an already-level-filtered list in
-              if that's the desired behavior. */}
-          {sections.map((s) => (
-            <option key={s.id} value={s.name}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-
-        <ChevronDown size={16} className={iconClassName} />
-      </div>
-
-      {/* Status — values here match StudentTable's mock student.status
-          strings exactly ("Enrolled" / "Dropped" / "Transferred").
-
-          This is a custom dropdown instead of a native <select> because
-          <option> elements can't reliably render custom text colors
-          across browsers (e.g. Enrolled/Dropped/Transferred each need
-          their own semantic color). Functionally it still behaves like
-          a select: same value/onChange contract via onStatusChange. */}
-      <div className={wrapperClassName} ref={statusDropdownRef}>
-        <button
-          type="button"
-          onClick={() => setIsStatusOpen((prev) => !prev)}
-          className={`${statusButtonClassName} ${selectedStatus.textClass}`}
-          aria-haspopup="listbox"
-          aria-expanded={isStatusOpen}
-          aria-label="Filter by status"
-        >
-          {selectedStatus.label}
-        </button>
-
-        <ChevronDown
-          size={16}
-          className={`${iconClassName} transition-transform ${isStatusOpen ? "rotate-180" : ""}`}
-        />
-
-        {/* Values now match StudentTable.jsx's getStudentStatusColorClass()/
-            getStudentStatusLabel() exactly. */}
-
-        {isStatusOpen && (
-          <ul
-            role="listbox"
-            className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray/50 bg-white py-1 shadow-lg"
-          >
-            {STATUS_OPTIONS.map((option) => {
-              const isSelected = option.value === selectedStatus.value;
-
-              return (
-                <li key={option.value || "all"} role="option" aria-selected={isSelected}>
-                  <button
-                    type="button"
-                    onClick={() => handleStatusSelect(option.value)}
-                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium transition ${option.textClass} ${option.hoverClass} ${isSelected ? `${option.selectedBgClass} font-semibold` : ""}`}
-                  >
-                    {option.label}
-                    {isSelected && <Check size={14} />}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      <FilterDropdown
+        options={STATUS_OPTIONS}
+        value={status}
+        onChange={onStatusChange}
+        ariaLabel="Filter by status"
+      />
     </div>
   );
 }

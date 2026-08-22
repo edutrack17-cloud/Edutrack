@@ -17,9 +17,10 @@ function getErrorMessage(error, fallback) {
 }
 
 
-export async function getSections({ search, gradeLevel, status, page = 0, size = 10, signal } = {}) {
+export async function getSections({ search, sectionSearch, gradeLevel, status, page = 0, size = 10, signal } = {}) {
   const params = {};
-  if (search) params.fullName = search; 
+  if (search) params.fullName = search;
+  if (sectionSearch) params.sectionName = sectionSearch;
   if (gradeLevel) params.gradeLevel = gradeLevel;
   if (status) params.sectionStatus = status;
   params.page = page;
@@ -91,15 +92,57 @@ export async function getTeachers() {
   }
 }
 
-export async function getSchoolYears() {
+// status now takes a param ("active" | "planning" | ...) instead of being
+// hardcoded, since the New School Year flow needs both: "active" for the
+// source dropdown, "planning" for the target dropdown (matches the
+// SchoolYearNotPlanning check on the backend). Existing callers that don't
+// pass anything keep getting "active", same as before.
+// NOTE: params/response shape here are assumed from how the section service
+// already calls this endpoint - adjust once the SchoolYear controller is
+// shared.
+export async function getSchoolYears(status = "active") {
   try {
     const { data } = await sectionApi.get("/school-year", {
-      params: { schoolYearStatus: "active", size: 100 },
+      params: { schoolYearStatus: status, size: 100 },
     });
 
     return (data.content || []).map((sy) => ({ id: sy.schoolYearId, label: sy.schoolYearName }));
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to load school years"));
+  }
+}
+
+// CONNECT: GET /api/section/dropdown
+// Returns active sections belonging to the currently-active school year
+// (unpaginated). Used as a live preview of which sections would be carried
+// over by Start New School Year - it doesn't take a schoolYearId, so the
+// preview reflects "the" active year rather than whatever's picked in the
+// Source School Year field. That's fine for the normal case (one active
+// year at a time, which is also what gets pre-selected as the source) but
+// worth knowing if that assumption ever changes.
+export async function getSectionDropdown(gradeLevel) {
+  try {
+    const params = {};
+    if (gradeLevel) params.gradeLevel = gradeLevel;
+
+    const { data } = await sectionApi.get("/section/dropdown", { params });
+    return data || [];
+  } catch (error) {
+    console.warn("getSectionDropdown(): failed to load section preview -", getErrorMessage(error, "unknown error"));
+    return [];
+  }
+}
+
+// CONNECT: POST /api/section/school-year/new-school-year
+// Closes the source school year, sets the target as active, and clones
+// the source's sections (optionally filtered by gradeLevel) into it.
+// Returns the newly created SectionResponse list.
+export async function startNewSchoolYear(data) {
+  try {
+    const response = await sectionApi.post("/section/school-year/new-school-year", data);
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to start new school year"));
   }
 }
 

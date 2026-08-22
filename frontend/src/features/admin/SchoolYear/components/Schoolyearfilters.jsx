@@ -9,6 +9,7 @@ const STATUS_OPTIONS = [
   { value: "", label: "Status", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
   { value: "planning", label: "Planning", textClass: "text-warning", hoverClass: "", selectedBgClass: "bg-warning/10" },
   { value: "active", label: "Active", textClass: "text-success", hoverClass: "", selectedBgClass: "bg-success/10" },
+  { value: "closed", label: "Closed", textClass: "text-gray-500", hoverClass: "", selectedBgClass: "bg-gray-100" },
   { value: "archived", label: "Archived", textClass: "text-secondary", hoverClass: "", selectedBgClass: "bg-secondary/10" },
 ];
 

@@ -25,3 +25,29 @@ export const emptySectionForm = {
   schoolYear: "",
   userId: "",
 };
+
+const sourceSchoolYearField = Yup.string().required("Source school year is required.");
+
+const targetSchoolYearField = Yup.string()
+  .required("Target school year is required.")
+  .test(
+    "not-same-as-source",
+    "Target school year must be different from the source.",
+    function (value) {
+      return !value || value !== this.parent.sourceSchoolYear;
+    }
+  );
+
+export function getNewSchoolYearFormSchema() {
+  return Yup.object({
+    sourceSchoolYear: sourceSchoolYearField,
+    targetSchoolYear: targetSchoolYearField,
+    gradeLevel: Yup.string(),
+  });
+}
+
+export const emptyNewSchoolYearForm = {
+  sourceSchoolYear: "",
+  targetSchoolYear: "",
+  gradeLevel: "",
+};

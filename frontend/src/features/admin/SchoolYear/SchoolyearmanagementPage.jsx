@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from "react";
-import SchoolYearTable, { getSchoolYearStatusColorClass, getSchoolYearStatusLabel } from "./components/Schoolyeartable";
+import React, { useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
+import SchoolYearTable, { getSchoolYearStatusLabel } from "./components/Schoolyeartable";
 import SchoolYearFilters from "./components/Schoolyearfilters";
 import SchoolYearSearchInput from "./components/Schoolyearsearchinput";
 import SchoolYearPagination from "./components/Schoolyearpagination";
 import SchoolYearFormModal from "./components/Schoolyearformmodal";
 import ConfirmSchoolYearStatusModal from "./components/Confirmschoolyearstatusmodal";
+import { ToastContainer, useToasts } from "../../../components/ui/Toast";
 import {
   getSchoolYears,
   createSchoolYear,
   updateSchoolYear,
   archiveSchoolYear,
+  restoreSchoolYear,
   markAsPlanning,
-  getOtherActiveSchoolYears,
-  activateSchoolYearExclusive,
 } from "./Schoolyearservice";
 
 const PAGE_SIZE = 10;
@@ -33,15 +34,23 @@ function SchoolYearManagementpage() {
   const [modalMode, setModalMode] = useState("add");
   const [selectedSchoolYear, setSelectedSchoolYear] = useState(null);
 
- 
+
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
-  // Row whose "Mark Active" click is currently fetching other active
-  // school years - lets the table show a spinner/disabled state
-  // instead of the click appearing to do nothing while it loads.
-  const [checkingStatusChangeId, setCheckingStatusChangeId] = useState(null);
+
+  const { toasts, showToast, dismissToast } = useToasts();
+
+  // Holds the AbortController for whichever /api/school-year request is
+  // currently in flight, so that if filters/search/page change again
+  // before it resolves, we cancel it instead of letting a slower, older
+  // response arrive after (and overwrite the table with) a newer one.
+  const abortControllerRef = useRef(null);
 
   // CONNECT: GET /api/school-year
   async function loadSchoolYears() {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setIsLoading(true);
       setErrorMessage("");
@@ -50,6 +59,7 @@ function SchoolYearManagementpage() {
         status,
         page: currentPage - 1,
         size: PAGE_SIZE,
+        signal: controller.signal,
       });
       const newTotalPages = response.totalPages || 1;
       setTotalPages(newTotalPages);
@@ -61,15 +71,20 @@ function SchoolYearManagementpage() {
 
       setSchoolYears(response.content);
     } catch (error) {
+      // A cancelled request isn't a real failure - a newer request
+      // already took over, so there's nothing to show the user.
+      if (error.code === "ERR_CANCELED") return;
       setErrorMessage(error.message);
     } finally {
-      setIsLoading(false);
+      if (abortControllerRef.current === controller) setIsLoading(false);
     }
   }
 
   useEffect(() => {
     const debounceId = setTimeout(() => {
-      setDebouncedSearch(search);
+      // Trim and collapse repeated spaces, matching Sectionlevelpage.jsx's
+      // search input so "2027   -" and "2027 -" are sent identically.
+      setDebouncedSearch(search.trim().replace(/\s+/g, " "));
       setCurrentPage(1);
     }, 400);
     return () => clearTimeout(debounceId);
@@ -104,30 +119,24 @@ function SchoolYearManagementpage() {
   async function handleSubmitSchoolYear(formData) {
     if (modalMode === "edit") {
       await updateSchoolYear(selectedSchoolYear.schoolYearId, formData);
+      showToast("School year updated successfully.");
     } else {
       await createSchoolYear(formData);
+      showToast("School year added successfully.");
     }
     await loadSchoolYears();
   }
   
-  async function handleRequestStatusChange(schoolYear, targetStatus) {
-    if (targetStatus !== "active") {
-      setStatusChangeRequest({ schoolYear, targetStatus, otherActiveSchoolYears: [] });
-      return;
-    }
-
-    try {
-      setCheckingStatusChangeId(schoolYear.schoolYearId);
-      const others = await getOtherActiveSchoolYears(schoolYear.schoolYearId);
-      setStatusChangeRequest({ schoolYear, targetStatus, otherActiveSchoolYears: others });
-    } catch (error) {
-      setErrorMessage(error.message);
-    } finally {
-      setCheckingStatusChangeId(null);
-    }
+  function handleRequestStatusChange(schoolYear, targetStatus) {
+    setStatusChangeRequest({ schoolYear, targetStatus });
   }
 
   // CONNECT: PATCH /api/school-year/{id}/school-year-status/{archive|active|planning}
+  // "Only one Active at a time" is NOT enforced here - that's a backend
+  // business rule, not something the frontend should simulate with
+  // multiple non-atomic requests. If the backend rejects this (or allows
+  // it and something downstream assumes single-active), the error/behavior
+  // should come from the server, not be papered over client-side.
   async function handleConfirmStatusChange() {
     if (!statusChangeRequest) return;
     const { schoolYear, targetStatus } = statusChangeRequest;
@@ -135,22 +144,18 @@ function SchoolYearManagementpage() {
     try {
       if (targetStatus === "archived") {
         await archiveSchoolYear(schoolYear.schoolYearId);
+        showToast(`${schoolYear.schoolYearName} was archived.`);
       } else if (targetStatus === "active") {
-        // Archives every other currently-Active school year first,
-        // then activates this one - keeps "only one Active at a time"
-        // true from this UI even though the backend doesn't guarantee
-        // it yet. Reuses the list the user already saw in the confirm
-        // modal so what gets archived matches what was shown to them.
-        await activateSchoolYearExclusive(
-          schoolYear.schoolYearId,
-          statusChangeRequest.otherActiveSchoolYears
-        );
+        await restoreSchoolYear(schoolYear.schoolYearId);
+        showToast(`${schoolYear.schoolYearName} was marked active.`);
       } else {
         await markAsPlanning(schoolYear.schoolYearId);
+        showToast(`${schoolYear.schoolYearName} was marked planning.`);
       }
       await loadSchoolYears();
     } catch (error) {
       setErrorMessage(error.message);
+      showToast(error.message, "error");
     } finally {
       setStatusChangeRequest(null);
     }
@@ -168,8 +173,9 @@ function SchoolYearManagementpage() {
             <button
               type="button"
               onClick={handleOpenAdd}
-              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-auto"
+              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-auto"
             >
+              <Plus size={15} strokeWidth={2.5} />
               Add School Year
             </button>
           </div>
@@ -185,7 +191,6 @@ function SchoolYearManagementpage() {
               schoolYears={schoolYears}
               onEdit={handleOpenEdit}
               onChangeStatus={handleRequestStatusChange}
-              checkingStatusChangeId={checkingStatusChangeId}
             />
             <SchoolYearPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
           </>
@@ -206,9 +211,9 @@ function SchoolYearManagementpage() {
         onConfirm={handleConfirmStatusChange}
         schoolYearName={statusChangeRequest?.schoolYear.schoolYearName}
         newStatus={statusChangeRequest ? getSchoolYearStatusLabel(statusChangeRequest.targetStatus) : ""}
-        statusColorClass={statusChangeRequest ? getSchoolYearStatusColorClass(statusChangeRequest.targetStatus) : ""}
-        otherActiveSchoolYears={statusChangeRequest?.otherActiveSchoolYears ?? []}
       />
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

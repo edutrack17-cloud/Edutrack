@@ -35,7 +35,7 @@ function useClickOutside(isOpen, ref, onClose) {
     document.addEventListener("keydown", handleEscapeKey);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscapeKey);
     };
   }, [isOpen, ref, onClose]);
 }

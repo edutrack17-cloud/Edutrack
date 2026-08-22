@@ -8,87 +8,93 @@ import Usermanagementpagination from "./components/Usermanagementpagination";
 import Createusermodal from "./components/Createusermodal";
 import Editusermodal from "./components/Editusermodal";
 import Viewusermodal from "./components/Viewusermodal";
-import Assignsectionmodal from "./components/Assignsectionmodal";
+// NOTE: adjust this path if Toast.jsx actually lives somewhere else in
+// your project (e.g. a shared/ folder) - it was sent alongside the
+// Usermanagement components but its real location wasn't specified.
+import { useToasts, ToastContainer } from "../../../components/ui/Toast";
 import {
   getUsers,
   createUser,
   updateUser,
   toggleUserStatus,
-  assignTeacherToSection,
 } from "./Usermanagementservice";
 
-// Fallback only - shown until getUsers() below is actually reachable
-// (see Usermanagementservice.js, ready for tomorrow's integration).
-const MOCK_USERS = [
-  { id: 1, username: "iori.yagami", firstName: "Iori", middleName: "", lastName: "Yagami", role: "Teacher", status: "Active", assignedGradeLevel: "Grade 6", assignedSectionName: "Jade" },
-  { id: 2, username: "kyo.kusanagi", firstName: "Kyo", middleName: "", lastName: "Kusanagi", role: "Teacher", status: "Active", assignedGradeLevel: null, assignedSectionName: null },
-  { id: 3, username: "yuri.sakazaki", firstName: "Yuri", middleName: "", lastName: "Sakazaki", role: "Teacher", status: "Disabled", assignedGradeLevel: "Grade 4", assignedSectionName: "Apple" },
-  { id: 4, username: "cecilio.saliba", firstName: "Cecilio", middleName: "M.", lastName: "Saliba", role: "Admin", status: "Active", assignedGradeLevel: null, assignedSectionName: null },
-];
-
 function Usermanagementpage() {
-  const [users, setUsers] = useState(MOCK_USERS);
+  // No more MOCK_USERS as a standing fallback - if the first real
+  // fetch fails, we now show an empty table + error instead of fake
+  // rows that look real (see loadUsers()'s catch block below).
+  const [users, setUsers] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const { toasts, showToast, dismissToast } = useToasts();
 
-  const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   const [viewingUser, setViewingUser] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
-  const [assigningUser, setAssigningUser] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // GET /api/teachers - the only list endpoint that actually exists
-  // today. See Usermanagementservice.js: getUsers() filters/paginates
-  // client-side as a stopgap since the backend doesn't support that yet,
-  // and only returns ACTIVE teachers (no disabled accounts, no admins).
-  // Falls back to the mock list above if the request fails outright.
+  // Debounce the search box so we're not re-fetching the entire
+  // /teachers list on every keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Jump back to page 1 whenever the filter/search actually changes -
+  // otherwise you can end up stuck on "Page 3 of 1".
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [status, debouncedSearch]);
+
+  // GET /api/teachers - the only list endpoint that exists. It only
+  // returns ACTIVE teacher accounts (no disabled accounts, no admins),
+  // so getUsers() still does the status/search filtering (and
+  // pagination) client-side (see Usermanagementservice.js). Role
+  // filtering was dropped from the UI entirely since this endpoint
+  // never returns anything but teachers.
   const loadUsers = useCallback(async () => {
     try {
       setErrorMessage("");
-      const data = await getUsers({ role, status, search, page: currentPage });
+      const data = await getUsers({ status, search: debouncedSearch, page: currentPage });
       setUsers(data.content ?? data);
       setTotalPages(data.totalPages ?? 1);
     } catch (error) {
-      console.warn("getUsers() not reachable yet, using mock data:", error.message);
+      console.error("getUsers failed:", error.message);
       setErrorMessage(error.message);
+      setUsers([]);
+      setTotalPages(1);
     }
-  }, [role, status, search, currentPage]);
+  }, [status, debouncedSearch, currentPage]);
 
+  // FIX: this previously ran with an empty dependency array, so it
+  // only ever fired once on mount. Changing the search box, the status
+  // filter, or the page number updated local state but never actually
+  // re-fetched/re-sliced anything - search and status only searched
+  // within whatever page 1 happened to load, and pagination did
+  // nothing at all. Depending on `loadUsers` (which itself depends on
+  // status/debouncedSearch/currentPage) fixes all three.
   useEffect(() => {
     loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Client-side filtering of whatever's currently in `users` - keeps
-  // the page responsive even before/without a live backend. Once
-  // getUsers() is doing real server-side filtering, this can be
-  // trimmed down to just the search box (or dropped entirely).
-  const filteredUsers = users.filter((u) => {
-    const fullName = `${u.firstName} ${u.lastName}`.toLowerCase();
-    const matchesSearch =
-      !search ||
-      fullName.includes(search.toLowerCase()) ||
-      u.username.toLowerCase().includes(search.toLowerCase());
-    const matchesRole = !role || u.role === role;
-    const matchesStatus = !status || u.status === status;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
+  }, [loadUsers]);
 
   async function handleCreateSubmit(formData) {
     try {
       setErrorMessage("");
       // POST /api/createTeacher - see createUser() in Usermanagementservice.js.
-      // Role is never sent - the backend always saves userRole = teacher
-      // regardless (see Createusermodal.jsx, Role is locked to "Teacher").
-      await createUser(formData);
+      // No role is sent - createTeacher() always creates a teacher account.
+      const created = await createUser(formData);
+      showToast(`"${created.fullName}" was added as a teacher.`, "success");
       await loadUsers(); // re-pull from GET /api/teachers so the new row is real, not guessed
+      return true;
     } catch (error) {
       console.error("createUser failed:", error.message);
       setErrorMessage(error.message);
+      showToast(error.message, "error");
+      return false;
     }
   }
 
@@ -97,12 +103,16 @@ function Usermanagementpage() {
       setErrorMessage("");
       // NOT AVAILABLE YET - updateUser() throws until the backend adds
       // an update endpoint (see Usermanagementservice.js). This will
-      // surface that as a visible error instead of failing silently.
+      // surface that as a visible error/toast instead of failing silently.
       await updateUser(userId, formData);
+      showToast("User updated successfully.", "success");
       await loadUsers();
+      return true;
     } catch (error) {
       console.error("updateUser failed:", error.message);
       setErrorMessage(error.message);
+      showToast(error.message, "error");
+      return false;
     }
   }
 
@@ -113,24 +123,12 @@ function Usermanagementpage() {
       // NOT AVAILABLE YET - toggleUserStatus() throws until the backend
       // adds a status endpoint (see Usermanagementservice.js).
       await toggleUserStatus(user.id, nextStatus.toLowerCase());
+      showToast(`${user.username} is now ${nextStatus}.`, "success");
       await loadUsers();
     } catch (error) {
       console.error("toggleUserStatus failed:", error.message);
       setErrorMessage(error.message);
-    }
-  }
-
-  async function handleAssignConfirm(userId, sectionId) {
-    try {
-      setErrorMessage("");
-      // PATCH /api/section/{sectionId} - see assignTeacherToSection() in
-      // Usermanagementservice.js. This one's live and working.
-      await assignTeacherToSection(userId, sectionId);
-      setAssigningUser(null);
-      loadUsers(); // re-pull so the row picks up its new grade level/section
-    } catch (error) {
-      console.error("assignTeacherToSection failed:", error.message);
-      setErrorMessage(error.message);
+      showToast(error.message, "error");
     }
   }
 
@@ -138,19 +136,17 @@ function Usermanagementpage() {
     <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <Usermanagementfilters
-          role={role}
           status={status}
-          onRoleChange={(event) => setRole(event.target.value)}
           onStatusChange={(event) => setStatus(event.target.value)}
         />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Usermanagementsearchinput value={search} onChange={(event) => setSearch(event.target.value)} />
 
           <button
             type="button"
             onClick={() => setIsCreateOpen(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
+            className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-32"
           >
             Add User
           </button>
@@ -160,10 +156,9 @@ function Usermanagementpage() {
       {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
 
       <Usermanagementtable
-        users={filteredUsers}
+        users={users}
         onView={setViewingUser}
         onEdit={setEditingUser}
-        onAssignSection={setAssigningUser}
         onToggleStatus={handleToggleStatus}
       />
 
@@ -184,12 +179,7 @@ function Usermanagementpage() {
 
       <Viewusermodal isOpen={viewingUser !== null} onClose={() => setViewingUser(null)} user={viewingUser} />
 
-      <Assignsectionmodal
-        isOpen={assigningUser !== null}
-        onClose={() => setAssigningUser(null)}
-        user={assigningUser}
-        onConfirm={handleAssignConfirm}
-      />
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

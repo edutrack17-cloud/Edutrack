@@ -5,7 +5,7 @@
 // student, a different title/button text, and PATCH instead of POST on
 // submit.
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { X } from "lucide-react";
 import RfidFormModal from "./RfidFormModal";
@@ -26,8 +26,16 @@ function splitFullName(fullName) {
   };
 }
 
-function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] }) {
+function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [], onRefreshSections }) {
   const [isRfidModalOpen, setIsRfidModalOpen] = useState(false);
+
+  // Same reasoning as EnrollStudentModal: refresh the section list on
+  // every open instead of trusting whatever "sections" happened to be
+  // sitting in EnrollmentPage's state, so an archived/restored section
+  // shows up here without needing a full page reload.
+  useEffect(() => {
+    if (isOpen) onRefreshSections?.();
+  }, [isOpen, onRefreshSections]);
 
   const formik = useFormik({
     // "enableReinitialize" makes formik pick up a NEW "student" prop
@@ -104,8 +112,8 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl">
+        <div className="flex shrink-0 items-center border-b border-gray-200 px-4 py-4 sm:px-6">
           <div className="w-6" />
           <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
             Edit Student
@@ -115,7 +123,7 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
           </button>
         </div>
 
-        <div className="px-4 py-6 sm:px-6">
+        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
           <StudentForm
             formik={formik}
             sections={sections}
@@ -126,7 +134,7 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [] })
           )}
         </div>
 
-        <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
+        <div className="flex shrink-0 gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
           <button
             type="button"
             onClick={formik.handleSubmit}

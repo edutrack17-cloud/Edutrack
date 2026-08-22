@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Archive, Hourglass, CircleCheck, Loader2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Archive, Hourglass, CircleCheck } from "lucide-react";
 
 // Same compact padding/text-scale as Sectiontable.jsx's thClass/tdClass
 // (was py-3/py-4 + no truncate before, which read noticeably bulkier
@@ -12,12 +12,14 @@ const tdClass =
 export function getSchoolYearStatusColorClass(status) {
   if (status === "archived") return "text-secondary";
   if (status === "planning") return "text-warning";
+  if (status === "closed") return "text-gray-500";
   return "text-success"; // active
 }
 
 export function getSchoolYearStatusLabel(status) {
   if (status === "archived") return "Archived";
   if (status === "planning") return "Planning";
+  if (status === "closed") return "Closed";
   return "Active";
 }
 
@@ -43,7 +45,7 @@ function otherStatuses(currentStatus) {
   return ["planning", "active", "archived"].filter((status) => status !== currentStatus);
 }
 
-function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, checkingStatusChangeId = null }) {
+function SchoolYearTable({ schoolYears, onEdit, onChangeStatus }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
@@ -124,15 +126,10 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, checkingStatusCh
                   type="button"
                   data-kebab-trigger
                   onClick={(event) => toggleMenu(schoolYear.schoolYearId, event)}
-                  disabled={checkingStatusChangeId === schoolYear.schoolYearId}
                   aria-label="Row actions"
-                  className="rounded-lg p-2 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg p-2 transition hover:bg-gray-100"
                 >
-                  {checkingStatusChangeId === schoolYear.schoolYearId ? (
-                    <Loader2 size={20} className="animate-spin" />
-                  ) : (
-                    <MoreHorizontal size={20} />
-                  )}
+                  <MoreHorizontal size={20} />
                 </button>
 
                 {openMenuId === schoolYear.schoolYearId && (

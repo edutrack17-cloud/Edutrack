@@ -156,21 +156,55 @@ function Sectionformmodal({
   onSubmit,
 }) {
   const [submitError, setSubmitError] = useState("");
+  // Mirrors Formik's isSubmitting outside the Formik render prop, so the
+  // header close button and Escape key (both outside Formik's scope) can
+  // be disabled while a submit is actually in flight - otherwise closing
+  // mid-request leaves the request running against an unmounted modal.
+  const [isBusy, setIsBusy] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) setSubmitError("");
+    if (!isOpen) {
+      setSubmitError("");
+      setIsBusy(false);
+    }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleEscapeKey(event) {
+      if (event.key === "Escape" && !isBusy) onClose();
+    }
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => document.removeEventListener("keydown", handleEscapeKey);
+  }, [isOpen, isBusy, onClose]);
+
   // Keep school years in a predictable (ascending) order instead of
-  // whatever order the API happens to return.
+  // whatever order the API happens to return. In edit mode we also drop
+  // the section's own current school year from the list: the "Keep
+  // current (...)" placeholder option already covers that case, so
+  // leaving the same year in as a second, separately-selectable option
+  // just duplicates it - picking that second one is a silent no-op
+  // (same schoolYear id gets sent either way), which reads as "the
+  // dropdown isn't doing anything" even though nothing is actually broken.
+  // NOTE: SectionResponse only exposes the school year as a display
+  // label (initialData.schoolYear), not its id, so this can only match
+  // by label. That's fine as long as school year labels stay unique;
+  // if the backend ever adds initialData.schoolYearId, prefer matching
+  // on that instead.
   const sortedSchoolYears = useMemo(
     () =>
-      [...schoolYears].sort((a, b) =>
-        a.label.localeCompare(b.label, undefined, {
-          numeric: true,
-        })
-      ),
-    [schoolYears]
+      [...schoolYears]
+        .filter((sy) =>
+          mode === "edit" && initialData?.schoolYear
+            ? sy.label !== initialData.schoolYear
+            : true
+        )
+        .sort((a, b) =>
+          a.label.localeCompare(b.label, undefined, {
+            numeric: true,
+          })
+        ),
+    [schoolYears, mode, initialData]
   );
 
   if (!isOpen) return null;
@@ -186,6 +220,7 @@ function Sectionformmodal({
 
   async function handleFormSubmit(values, { setSubmitting }) {
     setSubmitError("");
+    setIsBusy(true);
 
     try {
       // CONNECT: createSection() / updateSection() in Sectionlevelservice.js
@@ -206,6 +241,7 @@ function Sectionformmodal({
       setSubmitError(error.message);
     } finally {
       setSubmitting(false);
+      setIsBusy(false);
     }
   }
 
@@ -222,7 +258,8 @@ function Sectionformmodal({
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 transition-colors hover:text-gray-700"
+            disabled={isBusy}
+            className="text-gray-500 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <X size={22} />
           </button>
@@ -239,15 +276,12 @@ function Sectionformmodal({
             touched,
             isSubmitting,
             dirty,
-            isValid,
             values,
             setFieldValue,
             resetForm,
           }) => {
             const isSaveDisabled =
-              isSubmitting ||
-              !isValid ||
-              (mode === "edit" && !dirty);
+              isSubmitting || (mode === "edit" && !dirty);
 
             function handleClear() {
               resetForm();
@@ -349,9 +383,9 @@ function Sectionformmodal({
                           className="text-gray-500"
                         >
                           {mode === "edit"
-                            ? `Keep current (${
-                                initialData?.schoolYear || "—"
-                              })`
+                            ? initialData?.schoolYear
+                              ? `Keep current (${initialData.schoolYear})`
+                              : "Keep current school year"
                             : "Select school year"}
                         </option>
 
@@ -392,9 +426,9 @@ function Sectionformmodal({
                       }
                       placeholder={
                         mode === "edit"
-                          ? `Keep current (${
-                              initialData?.adviser || "—"
-                            })`
+                          ? initialData?.adviser
+                            ? `Keep current (${initialData.adviser})`
+                            : "Keep current adviser"
                           : "Select adviser"
                       }
                       hasError={
@@ -434,7 +468,7 @@ function Sectionformmodal({
                     onClick={handleClear}
                     className="flex-1 cursor-pointer rounded-lg bg-danger py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
                   >
-                    Clear
+                    {mode === "edit" ? "Undo Changes" : "Clear"}
                   </button>
                 </div>
               </Form>

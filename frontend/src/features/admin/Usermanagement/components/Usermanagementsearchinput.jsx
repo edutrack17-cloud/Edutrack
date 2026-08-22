@@ -1,4 +1,4 @@
-import Input from "../../../../components/ui/Input";
+import React from "react";
 import { Search } from "lucide-react";
 
 function Usermanagementsearchinput({
@@ -8,14 +8,20 @@ function Usermanagementsearchinput({
   className = "",
 }) {
   return (
-    <Input
-      icon={<Search size={18} />}
-      type="text"
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className={`h-10 w-full sm:w-64 md:w-72 ${className}`}
-    />
+    <div className={`relative ${className}`}>
+      <Search
+        size={14}
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+      />
+
+      <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="h-9 w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-xs font-normal text-gray-700 shadow-sm outline-none transition-colors focus:border-primary sm:w-52 sm:text-xs"
+      />
+    </div>
   );
 }
 

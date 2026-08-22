@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useFormik } from "formik";
-import { X, ChevronDown } from "lucide-react";
+import { X } from "lucide-react";
 import { editUserSchema } from "../UsermanagementSchema";
 
 function Editusermodal({ isOpen, onClose, onSubmit, user }) {
@@ -17,14 +17,22 @@ function Editusermodal({ isOpen, onClose, onSubmit, user }) {
       firstName: user?.firstName ?? "",
       middleName: user?.middleName ?? "",
       lastName: user?.lastName ?? "",
-      role: user?.role ?? "",
     },
     validationSchema: editUserSchema,
-    onSubmit: (values) => {
+    onSubmit: async (values, helpers) => {
       // TODO: BACKEND CONNECTION - see updateUser() in Usermanagementservice.js
       // PUT /api/users/{user.id}
-      onSubmit?.(user?.id, values);
-      onClose();
+      // `onSubmit` (from Usermanagementpage) resolves to true/false, so
+      // this only closes once the update actually succeeds - previously
+      // it closed immediately regardless, which currently always looks
+      // like a silent success even though updateUser() always throws
+      // (no backend endpoint yet).
+      const success = await onSubmit?.(user?.id, values);
+      if (success) {
+        onClose();
+      } else {
+        helpers.setSubmitting(false);
+      }
     },
   });
 
@@ -67,29 +75,6 @@ function Editusermodal({ isOpen, onClose, onSubmit, user }) {
             </div>
 
             <div>
-              <label className={labelClass}>Role</label>
-              <div className="relative">
-                <select
-                  name="role"
-                  value={formik.values.role}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={`${inputClass(formik.touched.role && formik.errors.role)} appearance-none pr-9`}
-                >
-                  <option value="Admin">Admin</option>
-                  <option value="Teacher">Teacher</option>
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                />
-              </div>
-              {formik.touched.role && formik.errors.role && (
-                <p className={errorClass}>{formik.errors.role}</p>
-              )}
-            </div>
-
-            <div className="sm:col-span-2">
               <label className={labelClass}>First Name</label>
               <input
                 name="firstName"
@@ -143,7 +128,8 @@ function Editusermodal({ isOpen, onClose, onSubmit, user }) {
           <button
             type="button"
             onClick={formik.handleSubmit}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            disabled={formik.isSubmitting}
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Save Changes
           </button>

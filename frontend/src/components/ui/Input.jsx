@@ -47,10 +47,7 @@ function Input({
           onChange={onChange}
           onBlur={onBlur}
           placeholder={placeholder}
-          className={`flex-1 bg-transparent outline-none text-sm text-gray-500 placeholder:text-gray-500 ${inputClassName}`}
-          // Forwards any other native <input> attribute the caller passes
-          // in - "max", "min", "maxLength", "autoComplete", etc. - without
-          // Input.jsx needing to know about each one by name in advance.
+          className={`flex-1 bg-transparent outline-none text-sm text-gray-700 placeholder:text-gray-500 ${inputClassName}`}
           {...rest}
         />
 

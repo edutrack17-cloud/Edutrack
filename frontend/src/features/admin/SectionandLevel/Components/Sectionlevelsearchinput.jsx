@@ -1,7 +1,7 @@
 import React from "react";
 import { Search } from "lucide-react";
 
-function Sectionlevelsearchinput({ value, onChange }) {
+function Sectionlevelsearchinput({ value, onChange, placeholder = "Search" }) {
   return (
     <div className="relative">
       <Search
@@ -13,7 +13,7 @@ function Sectionlevelsearchinput({ value, onChange }) {
         type="text"
         value={value}
         onChange={onChange}
-        placeholder="Search by adviser name"
+        placeholder={placeholder}
         className="h-9 w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-xs font-normal text-gray-700 shadow-sm outline-none transition-colors focus:border-primary sm:w-52 sm:text-xs"
       />
     </div>

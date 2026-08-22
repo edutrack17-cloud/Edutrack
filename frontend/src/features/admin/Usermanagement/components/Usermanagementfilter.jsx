@@ -1,40 +1,98 @@
-import React from "react";
-import { ChevronDown } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 
-const ROLES = ["Admin", "Teacher"];
-const STATUS_OPTIONS = ["Active", "Disabled"];
+// Same dropdown chrome as Sectionlevelfilters.jsx (Section & Level page):
+// colored status text, a check icon on the selected option, and an
+// animated chevron - so both admin list pages look and behave the same.
+// Status colors match Usermanagementtable's getStatusClass() (Active =
+// success, Disabled = danger) so the filter and the table agree visually.
+const STATUS_OPTIONS = [
+  { value: "", label: "Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
+  { value: "Active", label: "Active", textClass: "text-success", selectedBgClass: "bg-success/10" },
+  { value: "Disabled", label: "Disabled", textClass: "text-danger", selectedBgClass: "bg-danger/10" },
+];
 
-function Usermanagementfilters({ role, status, onRoleChange, onStatusChange }) {
-  const selectClass =
-    "w-full appearance-none rounded-md border border-gray/50 shadow-sm bg-white py-2 pl-3 pr-9 text-xs font-medium text-gray-700 outline-none cursor-pointer sm:pr-10 sm:text-sm";
-  const iconClass =
-    "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 sm:right-4";
-  const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+const triggerClass =
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+
+function useClickOutside(isOpen, ref, onClose) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) onClose();
+    }
+    function handleEscapeKey(event) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [isOpen, ref, onClose]);
+}
+
+function Usermanagementfilters({ status, onStatusChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
+
+  const selected = STATUS_OPTIONS.find((option) => option.value === status) || STATUS_OPTIONS[0];
+
+  // Keeps the same event-shaped callback contract the page already uses
+  // (`onStatusChange={(event) => setStatus(event.target.value)}`), so
+  // Usermanagementpage.jsx doesn't need to change.
+  function handleSelect(nextValue) {
+    onStatusChange({ target: { value: nextValue } });
+    setIsOpen(false);
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-      <div className={wrapperClass}>
-        <select value={role} onChange={onRoleChange} className={selectClass}>
-          <option value="">Role</option>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={16} className={iconClass} />
-      </div>
+      <div className={wrapperClass} ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className={`${triggerClass} ${selected.textClass}`}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-label="Filter by status"
+        >
+          <span className="truncate">{selected.label}</span>
+          <ChevronDown
+            size={16}
+            className={`shrink-0 transition-transform ${selected.textClass} ${isOpen ? "rotate-180" : ""}`}
+          />
+        </button>
 
-      <div className={wrapperClass}>
-        <select value={status} onChange={onStatusChange} className={selectClass}>
-          <option value="">Status</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={16} className={iconClass} />
+        {isOpen && (
+          <ul
+            role="listbox"
+            className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          >
+            {STATUS_OPTIONS.map((option) => {
+              const isSelected = option.value === selected.value;
+              return (
+                <li key={option.value || "all"} role="option" aria-selected={isSelected}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(option.value)}
+                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition hover:bg-gray-100 ${option.textClass} ${
+                      isSelected ? `${option.selectedBgClass} font-medium` : ""
+                    }`}
+                  >
+                    {option.label}
+                    {isSelected && <Check size={14} />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );
