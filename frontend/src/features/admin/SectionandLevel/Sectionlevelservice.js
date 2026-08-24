@@ -17,6 +17,7 @@ function getErrorMessage(error, fallback) {
 }
 
 
+// CONNECT: GET /api/section
 export async function getSections({ search, sectionSearch, gradeLevel, status, page = 0, size = 10, signal } = {}) {
   const params = {};
   if (search) params.fullName = search;
@@ -39,6 +40,7 @@ export async function getSections({ search, sectionSearch, gradeLevel, status, p
 }
 
 
+// CONNECT: POST /api/section
 export async function createSection(data) {
   try {
     const response = await sectionApi.post("/section", data);
@@ -49,6 +51,7 @@ export async function createSection(data) {
 }
 
 
+// CONNECT: PATCH /api/section/{sectionId}
 export async function updateSection(sectionId, data) {
   try {
     const response = await sectionApi.patch(`/section/${sectionId}`, data);
@@ -59,6 +62,7 @@ export async function updateSection(sectionId, data) {
 }
 
 
+// CONNECT: PATCH /api/section/{sectionId}/section-status/archive
 export async function archiveSection(sectionId) {
   try {
     const response = await sectionApi.patch(`/section/${sectionId}/section-status/archive`);
@@ -69,6 +73,7 @@ export async function archiveSection(sectionId) {
 }
 
 
+// CONNECT: PATCH /api/section/{sectionId}/section-status/active
 export async function restoreSection(sectionId) {
   try {
     const response = await sectionApi.patch(`/section/${sectionId}/section-status/active`);
@@ -79,6 +84,7 @@ export async function restoreSection(sectionId) {
 }
 
 
+// CONNECT: GET /api/teachers
 export async function getTeachers() {
   try {
     const { data } = await sectionApi.get("/teachers");
@@ -100,6 +106,7 @@ export async function getTeachers() {
 // NOTE: params/response shape here are assumed from how the section service
 // already calls this endpoint - adjust once the SchoolYear controller is
 // shared.
+// CONNECT: GET /api/school-year
 export async function getSchoolYears(status = "active") {
   try {
     const { data } = await sectionApi.get("/school-year", {

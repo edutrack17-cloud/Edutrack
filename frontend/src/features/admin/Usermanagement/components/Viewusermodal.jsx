@@ -1,15 +1,24 @@
-// features/admin/Usermanagement/components/Viewusermodal.jsx
-
 import React from "react";
 import { X } from "lucide-react";
 
+// Same InfoField treatment as ViewStudentModal.jsx (gray-700 label,
+// gray-500 value, em-dash fallback) so the two "view" modals read as
+// the same component family.
 function InfoField({ label, value }) {
   return (
     <div>
       <p className="mb-1 text-sm font-semibold text-gray-700">{label}</p>
-      <p className="text-sm text-gray">{value || "—"}</p>
+      <p className="text-sm text-gray-500">{value || "—"}</p>
     </div>
   );
+}
+
+// Backend's GradeLevel enum comes back as "Grade_4" / "Grade_5" / "Grade_6" -
+// display it as "Grade 4" instead of the raw enum name. Same helper as
+// formatGradeLevel() in StudentTable.jsx.
+function formatGradeLevel(gradeLevel) {
+  if (!gradeLevel) return "";
+  return gradeLevel.replace("_", " ");
 }
 
 function Viewusermodal({ isOpen, onClose, user }) {
@@ -19,9 +28,16 @@ function Viewusermodal({ isOpen, onClose, user }) {
     user.fullName ??
     `${user.firstName} ${user.middleName ? `${user.middleName} ` : ""}${user.lastName}`;
 
+  const isTeacher = user.role === "Teacher";
+
+  const assignedSection =
+    user.assignedGradeLevel && user.assignedSectionName
+      ? `${formatGradeLevel(user.assignedGradeLevel)} - ${user.assignedSectionName}`
+      : "Not yet assigned";
+
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
         <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
           <div className="w-6" />
           <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
@@ -32,24 +48,27 @@ function Viewusermodal({ isOpen, onClose, user }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-5 px-4 py-6 sm:px-6">
-          <div className="col-span-2">
-            <InfoField label="Full Name" value={fullName} />
+        <div className="flex flex-col gap-7 px-4 py-6 sm:px-6">
+          <div>
+            <h3 className="mb-4 text-sm font-bold tracking-wide text-primary uppercase">
+              Account Information
+            </h3>
+            {/* Assigned Section (Teacher only) lives in THIS same grid,
+                right after Status, instead of its own separate section -
+                that's what pairs it up into a clean 2-per-row layout
+                (Username|Role, then Status|Assigned Section) matching
+                ViewStudentModal's rhythm, instead of Status sitting
+                alone on its own row. */}
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+              <div className="sm:col-span-2">
+                <InfoField label="Full Name" value={fullName} />
+              </div>
+              <InfoField label="Username" value={user.username} />
+              <InfoField label="Role" value={user.role} />
+              <InfoField label="Status" value={user.status} />
+              {isTeacher && <InfoField label="Assigned Section" value={assignedSection} />}
+            </div>
           </div>
-          <InfoField label="Username" value={user.username} />
-          <InfoField label="Role" value={user.role} />
-          <InfoField label="Status" value={user.status} />
-
-          {user.role === "Teacher" && (
-            <InfoField
-              label="Assigned Section"
-              value={
-                user.assignedGradeLevel && user.assignedSectionName
-                  ? `${user.assignedGradeLevel} - ${user.assignedSectionName}`
-                  : "Not yet assigned"
-              }
-            />
-          )}
         </div>
 
         <div className="border-t border-gray-200 px-4 py-4 sm:px-6">

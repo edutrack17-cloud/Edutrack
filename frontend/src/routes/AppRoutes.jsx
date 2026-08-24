@@ -11,6 +11,7 @@ import PromoteStudentPage from "../features/teacher/Promote-Student/Promotestude
 import UserManagementPage from "../features/admin/Usermanagement/Usermanagementpage";
 import SectionlevelPage from "../features/admin/SectionandLevel/Sectionlevelpage";
 import SchoolyearmanagementPage from "../features/admin/SchoolYear/SchoolyearmanagementPage"
+import ActivityLogsPage from "../features/admin/ActivityLogs/Activitylogspage";
 
 function AppRoutes() {
   return (
@@ -30,6 +31,7 @@ function AppRoutes() {
         <Route path="/user-management" element={<UserManagementPage />} />
         <Route path="/section-level" element={<SectionlevelPage />} />
         <Route path="/school-year" element={<SchoolyearmanagementPage />} />
+        <Route path="/logs-reports" element={<ActivityLogsPage />} />
         <Route path="/change-password" element={<ChangePassword />} />
       </Route>
     </Routes>

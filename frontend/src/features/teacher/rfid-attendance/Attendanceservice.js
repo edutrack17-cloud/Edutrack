@@ -49,6 +49,69 @@ function mapAttendanceRecord(record) {
   };
 }
 
+// Attaches the HTTP status (and the backend's own error message, when it
+// sends a JSON body - see ApplicationException subclasses like
+// AlreadyHasARecord/AttendanceNotFound/AttendanceAlreadyConfirmed) to the
+// thrown Error, so callers can branch on specific failures (e.g. a 409
+// conflict) instead of only ever getting a generic "request failed".
+async function buildAttendanceError(response, label) {
+  let message = `${label} failed (${response.status})`;
+  try {
+    const body = await response.json();
+    if (body?.message) message = body.message;
+  } catch {
+    // no JSON body on the error response - keep the generic message above
+  }
+  const error = new Error(message);
+  error.status = response.status;
+  return error;
+}
+
+// CONFIRMED via AttendanceController.java / AttendanceService.java -
+// POST /api/attendance is the RFID "time in" tap. Body: { rfid }.
+// The backend looks up the student's active assignment by rfid and:
+//   - creates a new row (dateTimeIn = server "now", status = present,
+//     confirmed = false) if this assignment has no record yet today, or
+//   - throws 409 (AlreadyHasARecord) if one already exists.
+// NOTE: there is currently no concept of "second tap = time out" on the
+// backend - a second tap the same day just 409s. See the TODO in
+// RFIDAttendancePage.jsx's recordTap() for how that's handled for now.
+export async function timeInAttendance(rfid) {
+  const response = await fetch(`${BASE_URL}/attendance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rfid }),
+  });
+
+  if (!response.ok) {
+    throw await buildAttendanceError(response, "POST /api/attendance");
+  }
+
+  const data = await response.json();
+  return mapAttendanceRecord(data);
+}
+
+// CONFIRMED via AttendanceController.java / AttendanceService.java -
+// PATCH /api/attendance/confirm. Body: { rfid }. Finds TODAY's record for
+// that rfid and sets confirmed = true. Throws 400 (AttendanceAlreadyConfirmed)
+// if it's already confirmed, 404 (AttendanceNotFound) if there's no record
+// for today yet, and 404 (AssignmentNotFound) if the rfid itself doesn't
+// match an active assignment.
+export async function confirmAttendance(rfid) {
+  const response = await fetch(`${BASE_URL}/attendance/confirm`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rfid }),
+  });
+
+  if (!response.ok) {
+    throw await buildAttendanceError(response, "PATCH /api/attendance/confirm");
+  }
+
+  const data = await response.json();
+  return mapAttendanceRecord(data);
+}
+
 // STILL BLOCKED: AttendanceController.java only exposes POST /api/attendance
 // (RFID tap-in) and PATCH /api/attendance/confirm - there is no GET
 // endpoint to list/search/paginate attendance records at all yet. This
@@ -56,6 +119,7 @@ function mapAttendanceRecord(record) {
 // plausibly look like (same AttendanceResponse shape as create/confirm,
 // wrapped in a paginated envelope, filterable by gradeLevel/status/search),
 // but until that endpoint exists on the backend, every call here will fail.
+// CONNECT: GET /api/attendance
 export async function fetchAttendance({
   page = 1,
   level = "",

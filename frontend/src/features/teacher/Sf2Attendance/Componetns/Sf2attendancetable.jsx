@@ -24,6 +24,12 @@ export const STATUS_STYLES = {
 // that ONCE and passes down the already-filtered list, so the exact
 // same rows shown here are also what gets exported (no duplicated
 // filtering logic in two places that could drift out of sync).
+//
+// Padding/text-size brought in line with Sectiontable.jsx (px-3/py-2,
+// sm:px-4/py-2, text-xs/sm:text-sm) so this table reads as the same
+// component family as Section Level and Promote Student - the sticky
+// No/Name columns and colored day cells are this table's own thing and
+// were left as-is.
 function Sf2AttendanceTable({ records = [], dayNumbers = [] }) {
   const filteredRecords = records;
 
@@ -50,22 +56,22 @@ function Sf2AttendanceTable({ records = [], dayNumbers = [] }) {
           <thead className="bg-primary">
             <tr>
               <th
-                className={`sticky left-0 z-20 ${NO_COL_WIDTH} whitespace-nowrap bg-primary px-3 py-3 text-center text-xs font-semibold text-white sm:px-4 sm:text-sm`}
+                className={`sticky left-0 z-20 ${NO_COL_WIDTH} whitespace-nowrap bg-primary px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm`}
               >
                 No
               </th>
               <th
-                className={`sticky ${NAME_COL_LEFT} z-20 whitespace-nowrap bg-primary px-3 py-3 text-left text-xs font-semibold text-white shadow-[2px_0_4px_rgba(0,0,0,0.15)] sm:px-4 sm:text-sm`}
+                className={`sticky ${NAME_COL_LEFT} z-20 whitespace-nowrap bg-primary px-3 py-2 text-left text-xs font-semibold text-white shadow-[2px_0_4px_rgba(0,0,0,0.15)] sm:px-4 sm:py-2 sm:text-sm`}
               >
                 Name
               </th>
-              <th className="whitespace-nowrap px-3 py-3 text-left text-xs font-semibold text-white sm:px-4 sm:text-sm">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm">
                 LRN
               </th>
               {dayNumbers.map((day) => (
                 <th
                   key={day}
-                  className="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold text-white sm:text-sm"
+                  className="whitespace-nowrap px-2 py-2 text-center text-xs font-semibold text-white sm:py-2 sm:text-sm"
                 >
                   {day}
                 </th>

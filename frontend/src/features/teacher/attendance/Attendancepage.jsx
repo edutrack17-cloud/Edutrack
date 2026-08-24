@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import SearchInput from "../enrollment/components/SearchInput";
+import AttendanceSearchInput from "./components/AttendanceSearchinput";
 import AttendaceFilters from "./components/AttendaceFilters";
 import AttendanceTable from "./components/AttendanceTable";
 import Pagination from "./components/Pagination";
@@ -94,7 +94,7 @@ function AttendancePage() {
           onStatusChange={handleStatusChange}
         />
 
-        <SearchInput value={search} onChange={handleSearchChange} />
+        <AttendanceSearchInput value={search} onChange={handleSearchChange} />
       </div>
 
       {loadError && (

@@ -47,11 +47,11 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
       // Manual attendance logging (no RFID scan available).
       //
       // Time In:
-      // POST /api/attendance/time-in
+      // CONNECT: POST /api/attendance/time-in
       // Body: { assignmentId, timeIn }
       //
       // Time Out:
-      // PUT /api/attendance/{attendanceId}/time-out
+      // CONNECT: PUT /api/attendance/{attendanceId}/time-out
       // Body: { timeOut }
       //
       // Either way, this is a manual entry made by a teacher/admin,

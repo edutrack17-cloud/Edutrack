@@ -4,7 +4,7 @@ import { X, ChevronDown, Search, Loader2 } from "lucide-react";
 import Input from "../../../../components/ui/Input";
 
 // TODO: BACKEND CONNECTION
-// GET /api/sections?adviserId={currentUserId}
+// CONNECT: GET /api/sections?adviserId={currentUserId}
 // Returns only the sections THIS teacher (the current logged-in user)
 // advises (matches sections.adviser_id in the ERD). Mocked here with a
 // short delay so the loading state below has something real to show -
@@ -26,7 +26,7 @@ const ALL_MOCK_STUDENTS = [
 ];
 
 // TODO: BACKEND CONNECTION
-// GET /api/students?section={section}&enrolled=true
+// CONNECT: GET /api/students?section={section}&enrolled=true
 // The frontend just asks "students in this section" and gets back
 // only those - no filtering needed here once this is a real call.
 // Mocked with a delay + a manual filter to simulate that same
@@ -120,7 +120,7 @@ function AddAttendanceModal({ isOpen, onClose, onSubmit, existingStudentIds = []
     },
     onSubmit: (values, helpers) => {
       // TODO: BACKEND CONNECTION
-      // POST /api/attendance/time-in
+      // CONNECT: POST /api/attendance/time-in
       // Body: { assignmentId: selectedStudent.assignmentId, timeIn: values.timeIn }
       // datetime_in is stamped server-side with today's date, matching
       // the read-only "Date" field shown above — not sent from here.

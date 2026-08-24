@@ -1,30 +1,26 @@
-// features/teacher/Promote-Student/components/Pagination.jsx
-// Same visual style as Sectionlevelpagination.jsx - compact primary bar
-// with white bordered prev/next buttons - so pagination looks identical
-// across the Section Level and Promote Student pages. Props/behavior
-// (currentPage, totalPages, onPageChange) are unchanged, so nothing in
-// PromoteStudentPage.jsx needs to change.
-
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-function Pagination({ currentPage, totalPages, onPageChange }) {
+// Same presentation-only pagination bar as Sectionlevelpagination.jsx -
+// duplicated here (rather than shared) to match this codebase's existing
+// convention of each feature owning its own Components folder.
+function Activitylogpagination({ currentPage, totalPages, onPageChange }) {
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= totalPages;
 
-  function goToPrevious() {
+  function handlePrev() {
     if (!isFirstPage) onPageChange(currentPage - 1);
   }
 
-  function goToNext() {
+  function handleNext() {
     if (!isLastPage) onPageChange(currentPage + 1);
   }
 
   return (
-    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:w-auto sm:gap-6 sm:text-sm">
+    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:gap-6 sm:text-sm">
       <button
         type="button"
-        onClick={goToPrevious}
+        onClick={handlePrev}
         disabled={isFirstPage}
         aria-label="Previous page"
         className="flex items-center justify-center rounded-md border border-gray-200 bg-white p-1 text-primary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-100 disabled:bg-white disabled:text-primary disabled:hover:bg-white"
@@ -38,7 +34,7 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
 
       <button
         type="button"
-        onClick={goToNext}
+        onClick={handleNext}
         disabled={isLastPage}
         aria-label="Next page"
         className="flex items-center justify-center rounded-md border border-gray-200 bg-white p-1 text-primary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-primary disabled:hover:bg-white"
@@ -49,4 +45,4 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
   );
 }
 
-export default Pagination;
+export default Activitylogpagination;

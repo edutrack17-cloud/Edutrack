@@ -2,20 +2,22 @@ import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 
+// Colors stay as-is (success/danger/warning/primary) - only the hover
+// tint and font-weight below were changed to match Sectionlevelfilters.
 const STATUS_OPTIONS = [
-  { value: "", label: "Status", textClass: "text-gray-700", hoverClass: "hover:bg-gray-100", selectedBgClass: "bg-gray-100" },
-  { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "hover:bg-success/10", selectedBgClass: "bg-success/10" },
-  { value: "dropped", label: "Dropped", textClass: "text-danger", hoverClass: "hover:bg-danger/10", selectedBgClass: "bg-danger/10" },
-  { value: "transferred_out", label: "Transferred", textClass: "text-warning", hoverClass: "hover:bg-warning/10", selectedBgClass: "bg-warning/10" },
-  { value: "graduated", label: "Graduated", textClass: "text-primary", hoverClass: "hover:bg-primary/10", selectedBgClass: "bg-primary/10" },
+  { value: "", label: "Status", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
+  { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "", selectedBgClass: "bg-success/10" },
+  { value: "dropped", label: "Dropped", textClass: "text-danger", hoverClass: "", selectedBgClass: "bg-danger/10" },
+  { value: "transferred_out", label: "Transferred", textClass: "text-warning", hoverClass: "", selectedBgClass: "bg-warning/10" },
+  { value: "graduated", label: "Graduated", textClass: "text-primary", hoverClass: "", selectedBgClass: "bg-primary/10" },
 ];
 
 const LEVEL_ALL = { value: "", label: "Grade Level", textClass: "text-gray-700" };
 const SECTION_ALL = { value: "", label: "Section", textClass: "text-gray-700" };
 
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const wrapperClass = "relative min-w-[90px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -86,7 +88,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium transition ${option.textClass || "text-gray-700"} ${option.hoverClass || "hover:bg-gray-100"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-semibold` : ""}`}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   {option.label}
                   {isSelected && <Check size={14} />}

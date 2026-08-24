@@ -1,15 +1,16 @@
 import React from "react";
 import { X } from "lucide-react";
 
-// Matches students.admission_type ENUM(regular, transferred_in) from
-// the ERD - turns the raw stored value into readable display text.
 const ADMISSION_TYPE_LABELS = {
   regular: "Regular",
   transferred_in: "Transferred In",
 };
 
-// Small local component - one label + one value, reused for every
-// field below instead of repeating the same two <p> tags each time.
+function formatGradeLevel(gradeLevel) {
+  if (!gradeLevel) return "";
+  return gradeLevel.replace("_", " ");
+}
+
 function InfoField({ label, value }) {
   return (
     <div>
@@ -49,7 +50,7 @@ function ViewStudentModal({ isOpen, onClose, student }) {
               Enrollment Information
             </h3>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
-              <InfoField label="Level" value={student.section?.gradeLevel} />
+              <InfoField label="Level" value={formatGradeLevel(student.section?.gradeLevel)} />
               <InfoField label="Section" value={student.section?.sectionName} />
               <InfoField label="LRN" value={student.lrn} />
               <InfoField label="RFID UID" value={student.rfid} />

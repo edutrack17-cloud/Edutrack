@@ -132,6 +132,27 @@ function Usermanagementpage() {
     }
   }
 
+  // FIX: viewingUser was a plain snapshot of whatever the "users" array
+  // held at the moment "View" was clicked - if a section assignment (or
+  // any other user field) changed elsewhere after this page's last fetch,
+  // the modal kept showing that stale copy until a full page reload
+  // forced a fresh loadUsers(). Re-syncing viewingUser here means any
+  // loadUsers() refresh (see handleView below) also updates whatever's
+  // currently open in the modal, not just the background table.
+  useEffect(() => {
+    if (!viewingUser) return;
+    const refreshed = users.find((u) => u.id === viewingUser.id);
+    if (refreshed) setViewingUser(refreshed);
+  }, [users]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleView(user) {
+    // Show what we already have immediately (no loading flicker on the
+    // modal itself), then refresh in the background - see the useEffect
+    // above for how the modal picks up the fresher copy once it lands.
+    setViewingUser(user);
+    loadUsers();
+  }
+
   return (
     <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -157,7 +178,7 @@ function Usermanagementpage() {
 
       <Usermanagementtable
         users={users}
-        onView={setViewingUser}
+        onView={handleView}
         onEdit={setEditingUser}
         onToggleStatus={handleToggleStatus}
       />

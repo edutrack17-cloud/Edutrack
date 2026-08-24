@@ -1,6 +1,97 @@
 // features/teacher/Promote-Student/components/PromoteStudentFilters.jsx
-import React from "react";
-import { ChevronDown } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
+
+const LEVEL_ALL = { value: "", label: "Grade Level", textClass: "text-gray-700" };
+const SECTION_ALL = { value: "", label: "Section", textClass: "text-gray-700" };
+
+// Same trigger/wrapper classes as Sectionlevelfilters/StudentFilters so
+// radius, height, weight, and icon/rotation behavior stay identical
+// across all filter bars.
+const triggerClass =
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+
+function useClickOutside(isOpen, ref, onClose) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) onClose();
+    }
+    function handleEscapeKey(event) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [isOpen, ref, onClose]);
+}
+
+// Same generic dropdown used by Sectionlevelfilters/StudentFilters, in
+// place of the old native <select> so the UI (radius, checkmark, text
+// color) matches everywhere.
+function FilterDropdown({ options, value, onChange, ariaLabel }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
+
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  function handleSelect(nextValue) {
+    // Build a minimal synthetic event so onChange (written to expect a
+    // native <select> onChange, i.e. e => e.target.value) keeps working
+    // unchanged - no need to touch PromoteStudentPage.jsx at all.
+    onChange({ target: { value: nextValue } });
+    setIsOpen(false);
+  }
+
+  return (
+    <div className={wrapperClass} ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={`${triggerClass} ${selected.textClass || "text-gray-700"}`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={ariaLabel}
+      >
+        <span className="truncate">{selected.label}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen && (
+        <ul
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+        >
+          {options.map((option) => {
+            const isSelected = option.value === selected.value;
+            return (
+              <li key={option.value || "all"} role="option" aria-selected={isSelected}>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(option.value)}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                >
+                  {option.label}
+                  {isSelected && <Check size={14} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 // gradeLevels/sections are data-driven, fetched in PromoteStudentPage
 // (real GradeLevel enum + real /section/dropdown data) and passed in
@@ -16,39 +107,33 @@ function PromoteStudentFilters({
   gradeLevels = [],
   sections = [],
 }) {
-  const selectClass =
-    "w-full appearance-none rounded-md border border-gray/50 shadow-sm bg-white py-2 pl-3 pr-9 text-xs font-medium text-gray-500 outline-none cursor-pointer sm:pr-10 sm:text-sm";
-  const iconClass =
-    "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 sm:right-4";
-  const wrapperClass = "relative min-w-[110px] flex-1 sm:min-w-0 sm:flex-none sm:w-32 md:w-36";
+  const levelOptions = [
+    LEVEL_ALL,
+    ...gradeLevels.map((opt) => ({ value: opt.value, label: opt.label, textClass: "text-gray-700" })),
+  ];
+
+  // Value is the section NAME - StudentController.getStudents()
+  // filters by sectionName (a String param), same as Enrollment.
+  const sectionOptions = [
+    SECTION_ALL,
+    ...sections.map((s) => ({ value: s.name, label: s.name, textClass: "text-gray-700" })),
+  ];
 
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-      <div className={wrapperClass}>
-        <select value={gradeLevel} onChange={onGradeLevelChange} className={selectClass}>
-          <option value="">Grade Level</option>
-          {gradeLevels.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={16} className={iconClass} />
-      </div>
+      <FilterDropdown
+        options={levelOptions}
+        value={gradeLevel}
+        onChange={onGradeLevelChange}
+        ariaLabel="Filter by grade level"
+      />
 
-      <div className={wrapperClass}>
-        {/* Value is the section NAME - StudentController.getStudents()
-            filters by sectionName (a String param), same as Enrollment. */}
-        <select value={section} onChange={onSectionChange} className={selectClass}>
-          <option value="">Section</option>
-          {sections.map((s) => (
-            <option key={s.id} value={s.name}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={16} className={iconClass} />
-      </div>
+      <FilterDropdown
+        options={sectionOptions}
+        value={section}
+        onChange={onSectionChange}
+        ariaLabel="Filter by section"
+      />
 
       <button
         type="button"

@@ -1,15 +1,11 @@
 import React from "react";
 import AttendanceStatus from "./AttendanceStatus";
 
-// This table is READ-ONLY. Recording attendance (RFID taps, manual
-// Time In/Out, walk-in "Add Attendance") and confirming raw taps
-// (attendance.is_confirmed in the ERD) both happen on the dedicated
-// RFID Attendance page instead — this page is purely for
-// viewing/reporting on whatever ends up in the backend's attendance
-// table, so there's no Action column, kebab menu, edit modals, or
-// confirmation tab here anymore. Once GET /api/attendance is wired up
-// on both pages, records created/confirmed on the RFID page should
-// just show up here too.
+const thClass =
+  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
+const tdClass =
+  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
+
 function AttendanceTable({
   attendance,
   searchTerm = "",
@@ -36,15 +32,10 @@ function AttendanceTable({
     );
   });
 
-  const thClass =
-    "whitespace-nowrap px-3 py-3 text-center text-xs font-semibold text-white sm:px-6 sm:py-4 sm:text-sm";
-  const tdClass =
-    "whitespace-nowrap px-3 py-3 text-center text-xs text-gray-700 sm:px-6 sm:py-4 sm:text-sm";
-
   return (
     <>
       <div className="hidden w-full overflow-x-auto rounded-xl bg-white shadow-md sm:block">
-        <table className="min-w-full border-collapse">
+        <table className="w-full min-w-160 table-fixed border-collapse">
           <thead className="bg-primary">
             <tr>
               <th className={thClass}>Date</th>
@@ -73,7 +64,7 @@ function AttendanceTable({
               >
                 <td className={tdClass}>{record.date}</td>
                 <td className={tdClass}>{record.rfid}</td>
-                <td className={tdClass}>{record.name}</td>
+                <td className={tdClass} title={record.name}>{record.name}</td>
                 <td className={tdClass}>{record.gradeLevel}</td>
                 <td className={tdClass}>{record.section}</td>
                 <td className={tdClass}>{record.timeIn || "—"}</td>

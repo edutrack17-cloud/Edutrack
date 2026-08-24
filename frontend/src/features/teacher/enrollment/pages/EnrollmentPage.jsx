@@ -6,11 +6,20 @@ import Pagination from "../components/Pagination";
 import StudentTable from "../components/StudentTable";
 import EnrollStudentModal from "../components/EnrollStudentModal";
 import { getGradeLevels, getSections, getStudents, enrollStudent } from "../enrollmentService";
+// NOTE: adjust this path if Toast.jsx actually lives somewhere else in
+// your project - same shared component already used by Usermanagementpage.jsx
+// and Sectionlevelpage.jsx. Path depth here assumes EnrollmentPage.jsx sits
+// one folder deeper (pages/) than those two - double check against your
+// actual tree.
+import { useToasts, ToastContainer } from "../../../../components/ui/Toast";
 
 const PAGE_SIZE = 10;
 
 function EnrollmentPage() {
   const [search, setSearch] = useState("");
+
+  const { toasts, showToast, dismissToast } = useToasts();
+
 
   const [level, setLevel] = useState("");
   const [section, setSection] = useState("");
@@ -139,16 +148,25 @@ function EnrollmentPage() {
 
   // CONNECTED: POST /api/student via enrollStudent() in enrollmentService.js
   async function handleSubmitNewStudent(values) {
-    await enrollStudent(values);
-    // Jump back to page 1 so the newly-enrolled student is actually
-    // visible, instead of silently staying on whatever page the admin
-    // was on. If already on page 1, setCurrentPage(1) is a no-op state
-    // change and won't re-trigger the loadStudents() effect below, so
-    // call it directly in that case to still refresh the list.
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    } else {
-      await loadStudents();
+    try {
+      await enrollStudent(values);
+      showToast("Student enrolled successfully.", "success");
+      // Jump back to page 1 so the newly-enrolled student is actually
+      // visible, instead of silently staying on whatever page the admin
+      // was on. If already on page 1, setCurrentPage(1) is a no-op state
+      // change and won't re-trigger the loadStudents() effect below, so
+      // call it directly in that case to still refresh the list.
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      } else {
+        await loadStudents();
+      }
+    } catch (error) {
+      showToast(error.message, "error");
+      // Re-throw so EnrollStudentModal's own try/catch still catches it -
+      // that's what shows the inline form error and keeps the modal open
+      // (instead of resetting/closing as if it had succeeded).
+      throw error;
     }
   }
 
@@ -198,6 +216,7 @@ function EnrollmentPage() {
               sections={sections}
               onChanged={loadStudents}
               onRefreshSections={loadSections}
+              showToast={showToast}
             />
             <Pagination
               currentPage={currentPage}
@@ -215,6 +234,8 @@ function EnrollmentPage() {
         sections={sections}
         onRefreshSections={loadSections}
       />
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

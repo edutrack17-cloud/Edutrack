@@ -18,6 +18,7 @@ import {
   getSchoolYears,
   startNewSchoolYear,
 } from "./Sectionlevelservice";
+import { logActivity } from "../ActivityLogs/Activitylogservice";
 
 const PAGE_SIZE = 10;
 
@@ -256,9 +257,11 @@ function Sectionlevelpage() {
     if (modalMode === "edit") {
       await updateSection(selectedSection.sectionId, formData);
       showToast("Section updated successfully.");
+      logActivity("Section Updated", `${formData.sectionName || selectedSection.sectionName} was updated.`);
     } else {
       await createSection(formData);
       showToast("Section added successfully.");
+      logActivity("Section Created", `${formData.sectionName} was added.`);
     }
     await loadSections();
   }
@@ -277,9 +280,11 @@ function Sectionlevelpage() {
       if (nextStatus === "archived") {
         await archiveSection(section.sectionId);
         showToast(`${section.sectionName} was archived.`);
+        logActivity("Section Archived", `${section.sectionName} was archived.`);
       } else {
         await restoreSection(section.sectionId);
         showToast(`${section.sectionName} was activated.`);
+        logActivity("Section Activated", `${section.sectionName} was activated.`);
       }
       await loadSections();
     } catch (error) {
@@ -295,6 +300,10 @@ function Sectionlevelpage() {
     try {
       const clonedSections = await startNewSchoolYear(payload);
       showToast(`${clonedSections.length} section(s) carried over to the new school year.`);
+      logActivity(
+        "New School Year Started",
+        `${clonedSections.length} section(s) carried over from the current school year.`
+      );
       try {
         await loadSections();
         await loadSchoolYearOptions();

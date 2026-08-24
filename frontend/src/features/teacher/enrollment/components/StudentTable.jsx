@@ -106,7 +106,7 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkD
 // GET /api/student - this component no longer owns mock data or does
 // client-side search/level/section/status filtering, since those
 // filters are applied server-side via enrollmentService.getStudents().
-function StudentTable({ students = [], sections = [], onChanged, onRefreshSections }) {
+function StudentTable({ students = [], sections = [], onChanged, onRefreshSections, showToast }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
@@ -199,18 +199,29 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
       } else if (newStatus === "graduated") {
         await graduateStudent(student.studentId);
       }
+      showToast?.(`${student.fullName} marked as ${getStudentStatusLabel(newStatus)}.`, "success");
       await onChanged?.(); // re-fetch the list from the parent
     } catch (error) {
       setErrorMessage(error.message);
+      showToast?.(error.message, "error");
     } finally {
       setStatusChangeRequest(null);
     }
   }
 
   async function handleEditSubmit(studentId, values) {
-    await updateStudent(studentId, values);
-    setEditingStudent(null);
-    await onChanged?.(); 
+    try {
+      await updateStudent(studentId, values);
+      setEditingStudent(null);
+      showToast?.("Student updated successfully.", "success");
+      await onChanged?.();
+    } catch (error) {
+      showToast?.(error.message, "error");
+      // Re-throw so EditStudentModal's own try/catch still catches it -
+      // that's what shows the inline form error and keeps the modal open
+      // instead of closing as if it had succeeded.
+      throw error;
+    }
   }
 
   return (

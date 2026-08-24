@@ -26,8 +26,7 @@ function EditAttendanceModal({
       // The backend team will provide the API endpoint
       // and request format.
       //
-      // Example:
-      // PUT /api/attendance/{attendanceId}
+      // CONNECT: PUT /api/attendance/{attendanceId}
       //
       // Body:
       // {
