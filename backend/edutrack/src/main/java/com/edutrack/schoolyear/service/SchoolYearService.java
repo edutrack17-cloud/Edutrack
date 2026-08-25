@@ -35,6 +35,10 @@ public class SchoolYearService {
             throw new SchoolYearAlreadyExists(schoolYearRequest.schoolYearName());
         }
 
+        if(schoolYearRepository.existsBySchoolYearStatusEquals(SchoolYearStatus.active) && schoolYearRequest.schoolYearStatus() == SchoolYearStatus.active){
+            throw new ActiveSchoolYearAlreadyExists();
+        }
+
         SchoolYear schoolYearToEntity = schoolYearMapper.toEntity(schoolYearRequest);
         SchoolYear savedSchoolYear = schoolYearRepository.save(schoolYearToEntity);
 
@@ -101,7 +105,7 @@ public class SchoolYearService {
         return schoolYearMapper.toResponseDTO(schoolYearToUpdate);
     }
 
-    //RESTORE
+    //MARK AS ACTIVE
     @Transactional
     public SchoolYearResponse restoreSchoolYear(Long schoolYearId){
         SchoolYear schoolYearToUpdate = schoolYearRepository.findById(schoolYearId).orElseThrow(SchoolYearNotFound::new);
@@ -110,8 +114,25 @@ public class SchoolYearService {
             throw new SchoolYearAlreadyActive();
         }
 
+        if (schoolYearRepository.existsBySchoolYearStatusEquals(SchoolYearStatus.active)){
+            throw new ActiveSchoolYearAlreadyExists();
+        }
+
         schoolYearToUpdate.setSchoolYearStatus(SchoolYearStatus.active);
         return schoolYearMapper.toResponseDTO(schoolYearToUpdate);
+    }
+
+    //MARK AS CLOSED
+    @Transactional
+    public SchoolYearResponse closeSchoolYear(Long schoolYearId){
+        SchoolYear schoolYearToClose = schoolYearRepository.findById(schoolYearId).orElseThrow(SchoolYearNotFound::new);
+
+        if (schoolYearToClose.getSchoolYearStatus() == SchoolYearStatus.closed){
+            throw new SchoolYearAlreadyClosed();
+        }
+
+        schoolYearToClose.setSchoolYearStatus(SchoolYearStatus.closed);
+        return schoolYearMapper.toResponseDTO(schoolYearToClose);
     }
 
     //MARK AS PLANNING

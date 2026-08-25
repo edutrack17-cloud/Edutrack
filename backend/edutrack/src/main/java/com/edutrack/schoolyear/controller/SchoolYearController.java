@@ -56,13 +56,20 @@ public class SchoolYearController {
                 .body(archivedSchoolYear);
     }
 
-    //RESTORE
+    //MARK AS ACTIVE
     @PatchMapping("{schoolYearId}/school-year-status/active")
     public ResponseEntity<SchoolYearResponse> restoreSchoolYear(@PathVariable Long schoolYearId){
         SchoolYearResponse restoredSchoolYear = schoolYearService.restoreSchoolYear(schoolYearId);
         return ResponseEntity
                 .status(HttpStatus.ACCEPTED)
                 .body(restoredSchoolYear);
+    }
+
+    //MARK AS CLOSED
+    @PatchMapping("{schoolYearId}/school-year-status/close")
+    public ResponseEntity<SchoolYearResponse> closeSchoolYear(@PathVariable Long schoolYearId){
+        SchoolYearResponse closedSchoolYear = schoolYearService.closeSchoolYear(schoolYearId);
+        return ResponseEntity.ok(closedSchoolYear);
     }
 
     //MARK AS PLANNING
