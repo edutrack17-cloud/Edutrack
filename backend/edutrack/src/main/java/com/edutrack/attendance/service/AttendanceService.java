@@ -1,19 +1,14 @@
 package com.edutrack.attendance.service;
 
-import com.edutrack.attendance.dto.request.TimeInAttendanceRequest;
+import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
 import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.enums.AttendanceStatus;
-import com.edutrack.attendance.exception.AlreadyHasARecord;
-import com.edutrack.attendance.exception.AssignmentNotFound;
-import com.edutrack.attendance.exception.AttendanceAlreadyConfirmed;
-import com.edutrack.attendance.exception.AttendanceNotFound;
+import com.edutrack.attendance.exception.*;
 import com.edutrack.attendance.mapper.AttendanceMapper;
 import com.edutrack.attendance.repository.AttendanceRepository;
 import com.edutrack.attendance.specification.AttendanceSpecification;
-import com.edutrack.student.entity.Student;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
-import com.edutrack.studentsectionassignment.exception.SectionAssignmentNotFound;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -44,13 +39,13 @@ public class AttendanceService {
     LocalDateTime startOfNextDay = today.plusDays(1).atStartOfDay();
 
 
-    //CREATE
+    //TIME-IN
     @Transactional
-    public AttendanceResponse createAttendance(TimeInAttendanceRequest timeInAttendanceRequest){
+    public AttendanceResponse createAttendance(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
 
 
         StudentSectionAssignment studentToTimeIn = studentSectionAssignmentRepository.
-                findByStudent_RfidAndLeftAtIsNull(timeInAttendanceRequest.rfid())
+                findByStudent_RfidAndLeftAtIsNull(timeInAndOutAttendanceRequest.rfid())
                 .orElseThrow(AssignmentNotFound::new);
 
         Specification<Attendance> filters = Specification
@@ -77,9 +72,9 @@ public class AttendanceService {
 
     //CONFIRM ATTENDANCE
     @Transactional
-    public AttendanceResponse confirmAttendance(TimeInAttendanceRequest timeInAttendanceRequest){
+    public AttendanceResponse confirmAttendance(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
         StudentSectionAssignment studentToConfirm = studentSectionAssignmentRepository
-                .findByStudent_RfidAndLeftAtIsNull(timeInAttendanceRequest.rfid())
+                .findByStudent_RfidAndLeftAtIsNull(timeInAndOutAttendanceRequest.rfid())
                 .orElseThrow(AssignmentNotFound::new);
 
         Specification<Attendance> filters = Specification
@@ -97,6 +92,34 @@ public class AttendanceService {
         attendanceToConfirm.setConfirmed(true);
         Attendance confirmedAttendance = attendanceRepository.save(attendanceToConfirm);
         return attendanceMapper.toAttendanceResponseDTO(confirmedAttendance);
+    }
+
+    //TIME-OUT
+    @Transactional
+    public AttendanceResponse timeOut(TimeInAndOutAttendanceRequest request){
+        StudentSectionAssignment studentToTimeOut = studentSectionAssignmentRepository
+                .findByStudent_RfidAndLeftAtIsNull(request.rfid())
+                .orElseThrow(AssignmentNotFound::new);
+
+        Specification<Attendance> filters = Specification
+                .where(AttendanceSpecification.hasAssignment(studentToTimeOut.getAssignmentId()))
+                .and(AttendanceSpecification.timeInBetween(startOfDay, startOfNextDay));
+
+        Attendance attendanceToTimeOut = attendanceRepository
+                .findOne(filters)
+                .orElseThrow(AttendanceNotFound::new);
+
+        if (!attendanceToTimeOut.isConfirmed()){
+            throw new AttendanceNotConfirmed();
+        }
+
+        if (attendanceToTimeOut.getDateTimeOut() != null){
+            throw new AlreadyTimedOut();
+        }
+
+        attendanceToTimeOut.setDateTimeOut(LocalDateTime.now());
+        Attendance timedOutAttendance = attendanceRepository.save(attendanceToTimeOut);
+        return attendanceMapper.toAttendanceResponseDTO(timedOutAttendance);
     }
 
 

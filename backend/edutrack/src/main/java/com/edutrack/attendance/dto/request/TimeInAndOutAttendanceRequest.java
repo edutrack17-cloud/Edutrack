@@ -2,7 +2,7 @@ package com.edutrack.attendance.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record TimeInAttendanceRequest(
+public record TimeInAndOutAttendanceRequest(
    @NotBlank
    String rfid
 ) {}
