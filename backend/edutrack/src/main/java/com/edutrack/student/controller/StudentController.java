@@ -36,9 +36,10 @@ public class StudentController {
     public ResponseEntity<Page<StudentResponse>> getStudents(@RequestParam(required = false) GradeLevel gradeLevel,
                                                              @RequestParam(required = false) String sectionName,
                                                              @RequestParam(required = false) StudentStatus studentStatus,
+                                                             @RequestParam(required = false) String studentName,
                                                              Pageable pageable){
         return ResponseEntity
-                .ok(studentService.getStudents(gradeLevel, sectionName, studentStatus, pageable));
+                .ok(studentService.getStudents(gradeLevel, sectionName, studentStatus, studentName, pageable));
     }
 
     //UPDATE

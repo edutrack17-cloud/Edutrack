@@ -125,13 +125,15 @@ public class StudentService {
     public Page<StudentResponse> getStudents(GradeLevel gradeLevel,
                                              String sectionName,
                                              StudentStatus studentStatus,
+                                             String studentName,
                                              Pageable pageable){
 
         Specification<StudentSectionAssignment> filters = Specification
                 .where(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
                 .and(StudentSectionAssignmentSpecification.hasSection(sectionName))
                 .and(StudentSectionAssignmentSpecification.hasStudentStatus(studentStatus))
-                .and(StudentSectionAssignmentSpecification.isCurrent());
+                .and(StudentSectionAssignmentSpecification.isCurrent())
+                .and(StudentSectionAssignmentSpecification.hasStudentName(studentName));
 
         return studentSectionAssignmentRepository
                 .findAll(filters, pageable)
