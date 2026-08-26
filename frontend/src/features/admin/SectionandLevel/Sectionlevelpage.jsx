@@ -22,6 +22,16 @@ import { logActivity } from "../ActivityLogs/Activitylogservice";
 
 const PAGE_SIZE = 10;
 
+// How many rows to pull per field when a search term is active. The
+// backend can only filter by section name OR adviser name in a single
+// request (it ANDs the two params together, it can't OR them), so a
+// search fetches both matches separately and merges them client-side -
+// see loadSections() below. This cap keeps both requests bounded; if a
+// single school somehow has more than this many matches for one search
+// term, results past the cap won't be included (acceptable trade-off
+// without a combined search endpoint on the backend).
+const SEARCH_FETCH_SIZE = 200;
+
 function Sectionlevelpage() {
   const [sections, setSections] = useState([]);
   const [advisers, setAdvisers] = useState([]);
@@ -38,14 +48,6 @@ function Sectionlevelpage() {
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Remembers which field actually matched on page 1 of the current
-  // search ("section" or "adviser"), so page 2+ requests reuse that
-  // mode instead of re-running the section-name-then-adviser-name
-  // fallback dance every time - otherwise navigating to page 2 of an
-  // adviser-name match would silently re-query by section name, get
-  // zero results, and bounce the person back to page 1.
-  const [searchMode, setSearchMode] = useState("section");
-
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -59,9 +61,9 @@ function Sectionlevelpage() {
 
   const { toasts, showToast, dismissToast } = useToasts();
 
-  // Holds the AbortController for whichever /api/section request is
+  // Holds the AbortController for whichever /api/section request(s) are
   // currently in flight, so that if filters/search/page change again
-  // before it resolves, we cancel it instead of letting a slower, older
+  // before they resolve, we cancel them instead of letting a slower, older
   // response arrive after (and overwrite the table with) a newer one.
   const abortControllerRef = useRef(null);
 
@@ -75,62 +77,53 @@ function Sectionlevelpage() {
       setIsLoading(true);
       setErrorMessage("");
 
-      let newTotalPages;
       let pageContent;
+      let newTotalPages;
 
       if (debouncedSearch) {
-        let activeMode = searchMode;
-
-        if (currentPage === 1) {
-          let response = await getSections({
+        // Fetch section-name matches and adviser-name matches in parallel
+        // and merge them, instead of only falling back to adviser-name
+        // matches when section-name matches are completely empty. The old
+        // "if zero section-name hits, try adviser" approach silently hid
+        // real adviser matches any time the term also happened to match
+        // any section name at all.
+        const [bySectionName, byAdviserName] = await Promise.all([
+          getSections({
             sectionSearch: debouncedSearch,
             gradeLevel,
             status,
             page: 0,
-            size: PAGE_SIZE,
+            size: SEARCH_FETCH_SIZE,
             signal: controller.signal,
-          });
-
-          if (response.content.length === 0) {
-            response = await getSections({
-              search: debouncedSearch,
-              gradeLevel,
-              status,
-              page: 0,
-              size: PAGE_SIZE,
-              signal: controller.signal,
-            });
-            activeMode = "adviser";
-          } else {
-            activeMode = "section";
-          }
-
-          setSearchMode(activeMode);
-          newTotalPages = response.totalPages || 1;
-          setTotalPages(newTotalPages);
-          pageContent = response.content;
-        } else {
-          const response = await getSections({
-            ...(activeMode === "adviser"
-              ? { search: debouncedSearch }
-              : { sectionSearch: debouncedSearch }),
+          }),
+          getSections({
+            search: debouncedSearch,
             gradeLevel,
             status,
-            page: currentPage - 1,
-            size: PAGE_SIZE,
+            page: 0,
+            size: SEARCH_FETCH_SIZE,
             signal: controller.signal,
-          });
+          }),
+        ]);
 
-          newTotalPages = response.totalPages || 1;
-          setTotalPages(newTotalPages);
+        const mergedById = new Map();
+        [...bySectionName.content, ...byAdviserName.content].forEach((section) => {
+          mergedById.set(section.sectionId, section);
+        });
 
-          if (currentPage > newTotalPages) {
-            setCurrentPage(newTotalPages);
-            return;
-          }
+        const combined = Array.from(mergedById.values()).sort((a, b) =>
+          a.sectionName.localeCompare(b.sectionName, undefined, { numeric: true })
+        );
 
-          pageContent = response.content;
+        newTotalPages = Math.max(1, Math.ceil(combined.length / PAGE_SIZE));
+        setTotalPages(newTotalPages);
+
+        if (currentPage > newTotalPages) {
+          setCurrentPage(newTotalPages);
+          return;
         }
+
+        pageContent = combined.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
       } else {
         const response = await getSections({
           gradeLevel,
@@ -319,6 +312,16 @@ function Sectionlevelpage() {
     }
   }
 
+  // Sections can be created directly under a "planning" year (e.g.
+  // building out rosters ahead of the year officially starting), not just
+  // the current active one, so the Add/Edit modal's School Year dropdown
+  // needs both lists. Planning entries are labeled so it's clear which
+  // status each option actually has.
+  const sectionFormSchoolYears = [
+    ...schoolYears,
+    ...planningSchoolYears.map((sy) => ({ ...sy, label: `${sy.label} (Planning)` })),
+  ];
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
@@ -376,7 +379,7 @@ function Sectionlevelpage() {
         mode={modalMode}
         initialData={selectedSection}
         advisers={advisers}
-        schoolYears={schoolYears}
+        schoolYears={sectionFormSchoolYears}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmitSection}
       />

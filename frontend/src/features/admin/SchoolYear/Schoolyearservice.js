@@ -6,11 +6,17 @@ const schoolYearApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Matches SchoolYearStatus.java (planning, active, archived)
+// Options for the "Initial Status" field on the Add School Year form
+// (Schoolyearformmodal.jsx) - intentionally NOT the full SchoolYearStatus
+// enum. A school year that's just being created shouldn't be creatable as
+// already "Closed" or "Archived" - those are states a school year moves
+// into later via the table's status actions, not a valid starting point.
+// (The status FILTER dropdown in Schoolyearfilters.jsx is a separate,
+// independent list and still offers all 4 - filtering by/finding closed
+// or archived years is still valid.)
 export const SCHOOL_YEAR_STATUS_OPTIONS = [
   { value: "planning", label: "Planning" },
   { value: "active", label: "Active" },
-  { value: "archived", label: "Archived" },
 ];
 
 function getErrorMessage(error, fallback) {
@@ -29,7 +35,7 @@ export async function getSchoolYears({ search, status, page = 0, size = 10, sign
     const { data } = await schoolYearApi.get("/school-year", { params, signal });
     return {
       content: data.content || [],
-      totalPages: data.totalPages || 1,
+      totalPages: data.totalPages ?? 1,
     };
   } catch (error) {
     if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
@@ -80,6 +86,16 @@ export async function restoreSchoolYear(schoolYearId) {
     return response.data;
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to activate school year"));
+  }
+}
+
+// CONNECT: PATCH /api/school-year/{id}/school-year-status/close
+export async function closeSchoolYear(schoolYearId) {
+  try {
+    const response = await schoolYearApi.patch(`/school-year/${schoolYearId}/school-year-status/close`);
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to close school year"));
   }
 }
 

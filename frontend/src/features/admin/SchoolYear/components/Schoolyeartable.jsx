@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Archive, Hourglass, CircleCheck } from "lucide-react";
+import { MoreHorizontal, Pencil, Archive, Hourglass, CircleCheck, Lock } from "lucide-react";
 
 // Same compact padding/text-scale as Sectiontable.jsx's thClass/tdClass
 // (was py-3/py-4 + no truncate before, which read noticeably bulkier
@@ -25,9 +25,21 @@ export function getSchoolYearStatusLabel(status) {
 
 // startDate/endDate come back as ISO "YYYY-MM-DD" (LocalDate) - display
 // as a readable, locale-formatted date instead of the raw string.
+//
+// `new Date("YYYY-MM-DD")` parses date-only strings as UTC midnight (per
+// the ECMAScript spec), but toLocaleDateString then renders in the
+// viewer's LOCAL timezone - for anyone west of UTC that's still the
+// previous evening, so the displayed date silently rolls back a day.
+// ("en-PH" only controls formatting conventions, not the timezone used.)
+// Parsing the pieces into a local-time Date instead avoids the UTC
+// round-trip entirely, so the calendar date shown always matches what's
+// actually stored, regardless of the viewer's timezone.
 function formatDate(dateString) {
   if (!dateString) return "—";
-  const date = new Date(dateString);
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString);
+  if (!match) return dateString;
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
   if (Number.isNaN(date.getTime())) return dateString;
   return date.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
 }
@@ -38,11 +50,27 @@ function formatDate(dateString) {
 const STATUS_ACTIONS = {
   planning: { label: "Mark Planning", icon: Hourglass, colorClass: "text-warning hover:bg-warning/10" },
   active: { label: "Mark Active", icon: CircleCheck, colorClass: "text-success hover:bg-success/10" },
+  closed: { label: "Mark Closed", icon: Lock, colorClass: "text-gray-600 hover:bg-gray-100" },
   archived: { label: "Archive", icon: Archive, colorClass: "text-secondary hover:bg-secondary/10" },
 };
 
+// A school year's status is a one-way lifecycle, not a free-for-all
+// dropdown - "show every status except the current one" was letting a
+// Closed year get bounced back to Planning/Active, which doesn't make
+// sense for a year that has already run its course.
+//   Planning -> Active or Archive
+//   Active   -> Closed or Archive
+//   Closed   -> Archive only
+//   Archived -> nothing here (would need a dedicated restore action)
+const ALLOWED_TRANSITIONS = {
+  planning: ["active", "archived"],
+  active: ["closed", "archived"],
+  closed: ["archived"],
+  archived: [],
+};
+
 function otherStatuses(currentStatus) {
-  return ["planning", "active", "archived"].filter((status) => status !== currentStatus);
+  return ALLOWED_TRANSITIONS[currentStatus] ?? [];
 }
 
 function SchoolYearTable({ schoolYears, onEdit, onChangeStatus }) {
@@ -168,6 +196,10 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus }) {
                         </button>
                       );
                     })}
+
+                    {schoolYear.schoolYearStatus === "archived" && (
+                      <p className="px-4 py-2 text-sm text-gray-400">No actions available</p>
+                    )}
                   </div>
                 )}
               </td>

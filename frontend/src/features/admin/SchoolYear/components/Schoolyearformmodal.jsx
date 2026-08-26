@@ -12,7 +12,19 @@ const inputClass = (hasError) =>
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
 const errorClass = "mt-1 text-xs text-danger";
 
-function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSubmit }) {
+// YYYY-MM-DD in the viewer's LOCAL date, for the Start Date input's min=
+// attribute - using toISOString() here would shift to UTC and could show
+// yesterday's date as the cutoff for anyone west of UTC (same trap as
+// elsewhere in this feature - see formatDate() in Schoolyeartable.jsx).
+function getTodayDateString() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function SchoolYearFormModal({ isOpen, mode = "add", initialData, hasActiveSchoolYear = false, onClose, onSubmit }) {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -23,7 +35,26 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
     }
   }, [isOpen]);
 
+  // Matches Sectionformmodal.jsx / Newschoolyearmodal.jsx - Escape closes
+  // the modal unless a submit is in flight, so closing mid-request can't
+  // leave that request running against an unmounted modal.
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleEscapeKey(event) {
+      if (event.key === "Escape" && !isSubmitting) onClose();
+    }
+    document.addEventListener("keydown", handleEscapeKey);
+    return () => document.removeEventListener("keydown", handleEscapeKey);
+  }, [isOpen, isSubmitting, onClose]);
+
   if (!isOpen) return null;
+
+  // Drop "Active" from the choices when one already exists elsewhere -
+  // see hasActiveSchoolYear's origin (checkActiveSchoolYearExists) in
+  // SchoolyearmanagementPage.jsx for why this can't be checked from here.
+  const statusOptions = hasActiveSchoolYear
+    ? SCHOOL_YEAR_STATUS_OPTIONS.filter((opt) => opt.value !== "active")
+    : SCHOOL_YEAR_STATUS_OPTIONS;
 
   const initialValues =
     mode === "edit" && initialData
@@ -43,15 +74,17 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
       // schoolYearStatus is only sent on create - UpdateSchoolYearRequest
       // doesn't have a status field, status changes go through the
       // dedicated archive/active/planning actions in the table instead.
+      const trimmedName = values.schoolYearName?.trim();
+
       const payload =
         mode === "edit"
           ? {
-              schoolYearName: values.schoolYearName || undefined,
+              schoolYearName: trimmedName || undefined,
               startDate: values.startDate || undefined,
               endDate: values.endDate || undefined,
             }
           : {
-              schoolYearName: values.schoolYearName,
+              schoolYearName: trimmedName,
               startDate: values.startDate,
               endDate: values.endDate,
               schoolYearStatus: values.schoolYearStatus,
@@ -92,12 +125,29 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
           onSubmit={handleFormSubmit}
           enableReinitialize
         >
-          {({ errors, touched, isSubmitting, dirty }) => {
+          {({ errors, touched, isSubmitting, dirty, values, setFieldValue, setFieldError, setFieldTouched }) => {
             // Mirrors Sectionformmodal.jsx: in edit mode, Save stays disabled
             // until something actually changed, so a no-op "Save Changes"
             // click can't reach the backend just to bounce off its own
             // "No changes detected" error.
             const isSaveDisabled = isSubmitting || (mode === "edit" && !dirty);
+
+            // The browser's min= attribute only stops the native picker -
+            // someone can still type/paste a past date straight into the
+            // segments and the browser will happily fire onChange with it.
+            // Reject that here instead of letting it land in Formik state:
+            // don't call setFieldValue, so the controlled input snaps back
+            // to whatever the last accepted value was, and surface the
+            // error immediately instead of waiting for blur/submit.
+            function handleStartDateChange(event) {
+              const newValue = event.target.value;
+              setFieldTouched("startDate", true, false);
+              if (newValue && newValue < getTodayDateString()) {
+                setFieldError("startDate", "Start date cannot be in the past.");
+                return;
+              }
+              setFieldValue("startDate", newValue);
+            }
 
             return (
             <Form>
@@ -119,9 +169,12 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
 
                 <div>
                   <label className={labelClass}>Start Date</label>
-                  <Field
+                  <input
                     type="date"
                     name="startDate"
+                    min={getTodayDateString()}
+                    value={values.startDate}
+                    onChange={handleStartDateChange}
                     className={inputClass(errors.startDate && touched.startDate)}
                   />
                   <ErrorMessage name="startDate" component="p" className={errorClass} />
@@ -147,7 +200,7 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
                         className={`${inputClass(errors.schoolYearStatus && touched.schoolYearStatus)} appearance-none pr-9`}
                       >
                         <option value="">Select initial status</option>
-                        {SCHOOL_YEAR_STATUS_OPTIONS.map((opt) => (
+                        {statusOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
                           </option>
@@ -157,7 +210,9 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
                     </div>
                     <ErrorMessage name="schoolYearStatus" component="p" className={errorClass} />
                     <p className="mt-1 text-xs text-gray-500">
-                      Ideally only one school year should be Active at a time.
+                      {hasActiveSchoolYear
+                        ? "An Active school year already exists, so this one can only start as Planning."
+                        : "Ideally only one school year should be Active at a time."}
                     </p>
                   </div>
                 )}

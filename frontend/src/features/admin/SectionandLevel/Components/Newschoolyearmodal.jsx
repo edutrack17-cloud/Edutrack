@@ -131,6 +131,7 @@ function Newschoolyearmodal({
   const isSourceLocked = sortedSourceYears.length <= 1;
   const hasMultipleActiveYears = sortedSourceYears.length > 1;
   const hasNoActiveYear = sortedSourceYears.length === 0;
+  const hasNoPlanningYear = sortedTargetYears.length === 0;
 
   const initialValues = {
     ...emptyNewSchoolYearForm,
@@ -187,6 +188,13 @@ function Newschoolyearmodal({
           enableReinitialize
         >
           {({ errors, touched, isSubmitting, values, resetForm }) => {
+            // Nothing valid to submit yet - keep the button disabled
+            // instead of letting the person click into validation errors
+            // for a form that has no legal combination of source/target
+            // to begin with (no active year to close, or nothing marked
+            // "Planning" to receive the carried-over sections).
+            const isStartDisabled = isSubmitting || hasNoActiveYear || hasNoPlanningYear;
+
             function handleClear() {
               resetForm();
               setSubmitError("");
@@ -296,7 +304,7 @@ function Newschoolyearmodal({
 
                       <ErrorMessage name="targetSchoolYear" component="p" className={errorClass} />
 
-                      {sortedTargetYears.length === 0 && (
+                      {hasNoPlanningYear && (
                         <p className="mt-1 text-xs text-gray-500">
                           None marked "Planning" yet.
                         </p>
@@ -344,7 +352,7 @@ function Newschoolyearmodal({
                 <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isStartDisabled}
                     className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSubmitting ? "Starting..." : "Start New School Year"}

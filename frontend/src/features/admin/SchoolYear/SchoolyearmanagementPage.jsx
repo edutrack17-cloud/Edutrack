@@ -13,6 +13,7 @@ import {
   updateSchoolYear,
   archiveSchoolYear,
   restoreSchoolYear,
+  closeSchoolYear,
   markAsPlanning,
 } from "./Schoolyearservice";
 
@@ -33,6 +34,7 @@ function SchoolYearManagementpage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add");
   const [selectedSchoolYear, setSelectedSchoolYear] = useState(null);
+  const [hasActiveSchoolYear, setHasActiveSchoolYear] = useState(false);
 
 
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
@@ -61,7 +63,10 @@ function SchoolYearManagementpage() {
         size: PAGE_SIZE,
         signal: controller.signal,
       });
-      const newTotalPages = response.totalPages || 1;
+      // Math.max guards against a real empty-result totalPages of 0 (which
+      // would otherwise send currentPage to 0, then page: -1 to Spring's
+      // Pageable on the next fetch) while still respecting a genuine 0.
+      const newTotalPages = Math.max(response.totalPages ?? 1, 1);
       setTotalPages(newTotalPages);
 
       if (currentPage > newTotalPages) {
@@ -95,10 +100,30 @@ function SchoolYearManagementpage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, status, currentPage]);
 
+  // Lets the Add form know up front whether an Active school year already
+  // exists, so its Initial Status field can leave "Active" out of the
+  // options entirely instead of letting the person pick it and only find
+  // out from the backend's ActiveSchoolYearAlreadyExists error after
+  // submitting. `schoolYears` in this component's own state can't be used
+  // for this check - it reflects whatever status filter/page is currently
+  // being viewed on the table, not the full dataset. size: 1 is enough
+  // since only existence matters, not the actual record. Best-effort only:
+  // if another admin activates a year in the moment between this check and
+  // actually submitting, the backend's own check still catches it.
+  async function checkActiveSchoolYearExists() {
+    try {
+      const response = await getSchoolYears({ status: "active", size: 1 });
+      setHasActiveSchoolYear(response.content.length > 0);
+    } catch (error) {
+      setHasActiveSchoolYear(false);
+    }
+  }
+
   function handleOpenAdd() {
     setModalMode("add");
     setSelectedSchoolYear(null);
     setIsModalOpen(true);
+    checkActiveSchoolYearExists();
   }
 
   function handleOpenEdit(schoolYear) {
@@ -148,6 +173,9 @@ function SchoolYearManagementpage() {
       } else if (targetStatus === "active") {
         await restoreSchoolYear(schoolYear.schoolYearId);
         showToast(`${schoolYear.schoolYearName} was marked active.`);
+      } else if (targetStatus === "closed") {
+        await closeSchoolYear(schoolYear.schoolYearId);
+        showToast(`${schoolYear.schoolYearName} was marked closed.`);
       } else {
         await markAsPlanning(schoolYear.schoolYearId);
         showToast(`${schoolYear.schoolYearName} was marked planning.`);
@@ -201,6 +229,7 @@ function SchoolYearManagementpage() {
         isOpen={isModalOpen}
         mode={modalMode}
         initialData={selectedSchoolYear}
+        hasActiveSchoolYear={hasActiveSchoolYear}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmitSchoolYear}
       />
@@ -211,6 +240,10 @@ function SchoolYearManagementpage() {
         onConfirm={handleConfirmStatusChange}
         schoolYearName={statusChangeRequest?.schoolYear.schoolYearName}
         newStatus={statusChangeRequest ? getSchoolYearStatusLabel(statusChangeRequest.targetStatus) : ""}
+        isVacatingOnlyActive={
+          statusChangeRequest?.schoolYear.schoolYearStatus === "active" &&
+          statusChangeRequest?.targetStatus !== "active"
+        }
       />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />

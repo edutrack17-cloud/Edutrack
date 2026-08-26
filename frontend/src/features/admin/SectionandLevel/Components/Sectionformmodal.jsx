@@ -64,8 +64,18 @@ function AdviserSearchField({ advisers, value, onChange, placeholder, hasError }
     setIsOpen(false);
   }
 
+  // Escape should collapse just this combobox, not bubble up to the
+  // modal's own Escape listener (on document) and close the whole form -
+  // stopPropagation here keeps the two Escape behaviors independent.
+  function handleKeyDown(event) {
+    if (event.key === "Escape" && isOpen) {
+      event.stopPropagation();
+      setIsOpen(false);
+    }
+  }
+
   return (
-    <div className="relative" ref={wrapperRef}>
+    <div className="relative" ref={wrapperRef} onKeyDown={handleKeyDown}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -191,12 +201,17 @@ function Sectionformmodal({
   // by label. That's fine as long as school year labels stay unique;
   // if the backend ever adds initialData.schoolYearId, prefer matching
   // on that instead.
+  // Sectionlevelpage appends " (Planning)" to planning-year labels before
+  // passing this list down, so a section currently sitting in a Planning
+  // year won't match initialData.schoolYear (the raw, unsuffixed name)
+  // on a plain equality check - strip the suffix before comparing so the
+  // current year is excluded regardless of its status.
   const sortedSchoolYears = useMemo(
     () =>
       [...schoolYears]
         .filter((sy) =>
           mode === "edit" && initialData?.schoolYear
-            ? sy.label !== initialData.schoolYear
+            ? sy.label.replace(/ \(Planning\)$/, "") !== initialData.schoolYear
             : true
         )
         .sort((a, b) =>

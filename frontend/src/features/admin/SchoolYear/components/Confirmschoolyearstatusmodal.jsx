@@ -3,7 +3,7 @@
 // menu in Schoolyeartable.jsx.
 
 import React, { useEffect, useState } from "react";
-import { X, Archive, Hourglass, CircleCheck, Loader2 } from "lucide-react";
+import { X, Archive, Hourglass, CircleCheck, Lock, Loader2 } from "lucide-react";
 
 // Mirrors STATUS_ACTIONS in Schoolyeartable.jsx so the icon/color the
 // person sees in the kebab menu is the same one they see here.
@@ -32,6 +32,14 @@ const STATUS_META = {
     confirmButtonClass: "bg-success hover:bg-emerald-700",
     bodyText: "It will become the current Active school year.",
   },
+  closed: {
+    verb: "Mark Closed",
+    verbIng: "Marking Closed",
+    Icon: Lock,
+    badgeClass: "bg-gray-500/10 text-gray-600",
+    confirmButtonClass: "bg-gray-600 hover:bg-gray-700",
+    bodyText: "It will be marked closed and no longer counted as an active school year.",
+  },
 };
 
 function ConfirmSchoolYearStatusModal({
@@ -40,6 +48,7 @@ function ConfirmSchoolYearStatusModal({
   onConfirm,
   schoolYearName,
   newStatus,
+  isVacatingOnlyActive = false,
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -112,6 +121,11 @@ function ConfirmSchoolYearStatusModal({
               {verb} "{schoolYearName}"?
             </h2>
             <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
+            {isVacatingOnlyActive && (
+              <p className="mt-2 rounded-md bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+                This is the current Active school year. After this change, no school year will be marked Active until you activate another one.
+              </p>
+            )}
           </div>
         </div>
 

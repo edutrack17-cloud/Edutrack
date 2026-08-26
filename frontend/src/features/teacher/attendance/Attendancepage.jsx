@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import AttendanceSearchInput from "./components/AttendanceSearchinput";
+import AttendanceSearchInput from "./components/AttendanceSearchInput";
 import AttendaceFilters from "./components/AttendaceFilters";
 import AttendanceTable from "./components/AttendanceTable";
 import Pagination from "./components/Pagination";
