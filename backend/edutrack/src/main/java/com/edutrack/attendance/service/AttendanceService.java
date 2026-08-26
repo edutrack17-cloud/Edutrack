@@ -94,7 +94,7 @@ public class AttendanceService {
         return attendanceMapper.toAttendanceResponseDTO(confirmedAttendance);
     }
 
-    //TIME-OUT
+    //TIME-OUT L
     @Transactional
     public AttendanceResponse timeOut(TimeInAndOutAttendanceRequest request){
         StudentSectionAssignment studentToTimeOut = studentSectionAssignmentRepository
