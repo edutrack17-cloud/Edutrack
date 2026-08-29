@@ -36,8 +36,8 @@ const STATUS_META = {
     verb: "Mark Closed",
     verbIng: "Marking Closed",
     Icon: Lock,
-    badgeClass: "bg-gray-500/10 text-gray-600",
-    confirmButtonClass: "bg-gray-600 hover:bg-gray-700",
+    badgeClass: "bg-danger/10 text-danger",
+    confirmButtonClass: "bg-danger hover:bg-red-700",
     bodyText: "It will be marked closed and no longer counted as an active school year.",
   },
 };

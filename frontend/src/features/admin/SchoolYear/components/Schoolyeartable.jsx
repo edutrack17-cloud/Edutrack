@@ -12,7 +12,7 @@ const tdClass =
 export function getSchoolYearStatusColorClass(status) {
   if (status === "archived") return "text-secondary";
   if (status === "planning") return "text-warning";
-  if (status === "closed") return "text-gray-500";
+  if (status === "closed") return "text-danger";
   return "text-success"; // active
 }
 
@@ -50,7 +50,7 @@ function formatDate(dateString) {
 const STATUS_ACTIONS = {
   planning: { label: "Mark Planning", icon: Hourglass, colorClass: "text-warning hover:bg-warning/10" },
   active: { label: "Mark Active", icon: CircleCheck, colorClass: "text-success hover:bg-success/10" },
-  closed: { label: "Mark Closed", icon: Lock, colorClass: "text-gray-600 hover:bg-gray-100" },
+  closed: { label: "Mark Closed", icon: Lock, colorClass: "text-danger hover:bg-danger/10" },
   archived: { label: "Archive", icon: Archive, colorClass: "text-secondary hover:bg-secondary/10" },
 };
 
