@@ -15,7 +15,7 @@ public class Attendance {
     private long attendanceId;
 
     @ManyToOne
-    @JoinColumn(name = "assignment_id")
+    @JoinColumn(name = "assignment_id", nullable = false)
     private StudentSectionAssignment studentSectionAssignment;
 
     private LocalDateTime dateTimeIn;
@@ -23,10 +23,8 @@ public class Attendance {
     private LocalDateTime dateTimeOut;
 
     @Enumerated(EnumType.STRING)
-    private AttendanceStatus attendanceStatus;
-
     @Column(nullable = false)
-    private boolean isConfirmed;
+    private AttendanceStatus attendanceStatus;
 
     public long getAttendanceId() {
         return attendanceId;
@@ -68,11 +66,4 @@ public class Attendance {
         this.attendanceStatus = attendanceStatus;
     }
 
-    public boolean isConfirmed() {
-        return isConfirmed;
-    }
-
-    public void setConfirmed(boolean confirmed) {
-        isConfirmed = confirmed;
-    }
 }

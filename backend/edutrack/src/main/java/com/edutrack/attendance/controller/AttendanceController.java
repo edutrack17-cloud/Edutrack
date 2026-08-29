@@ -24,9 +24,9 @@ public class AttendanceController {
     }
 
     //CONFIRM ATTENDANCE
-    @PatchMapping("confirm")
-    public ResponseEntity<AttendanceResponse> confirmAttendance(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
-        AttendanceResponse confirmedAttendance = attendanceService.confirmAttendance(request);
+    @PatchMapping("present")
+    public ResponseEntity<AttendanceResponse> markAsPresent(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
+        AttendanceResponse confirmedAttendance = attendanceService.markAsPresent(request);
         return ResponseEntity.ok(confirmedAttendance);
     }
 

@@ -63,35 +63,40 @@ public class AttendanceService {
 
         newAttendance.setStudentSectionAssignment(studentToTimeIn);
         newAttendance.setDateTimeIn(LocalDateTime.now());
-        newAttendance.setAttendanceStatus(AttendanceStatus.present);
-        newAttendance.setConfirmed(false);
+        newAttendance.setAttendanceStatus(AttendanceStatus.on_school);
 
         Attendance savedAttendance = attendanceRepository.save(newAttendance);
         return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
     }
 
-    //CONFIRM ATTENDANCE
+//    //MANUAL ATTENDANCE
+//    @Transactional
+//    public AttendanceResponse manualAttendance(Long studentId, ){
+//
+//    }
+
+    //MARK AS PRESENT
     @Transactional
-    public AttendanceResponse confirmAttendance(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
-        StudentSectionAssignment studentToConfirm = studentSectionAssignmentRepository
+    public AttendanceResponse markAsPresent(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
+        StudentSectionAssignment studentToMarkPresent = studentSectionAssignmentRepository
                 .findByStudent_RfidAndLeftAtIsNull(timeInAndOutAttendanceRequest.rfid())
                 .orElseThrow(AssignmentNotFound::new);
 
         Specification<Attendance> filters = Specification
-                .where(AttendanceSpecification.hasAssignment(studentToConfirm.getAssignmentId()))
+                .where(AttendanceSpecification.hasAssignment(studentToMarkPresent.getAssignmentId()))
                 .and(AttendanceSpecification.timeInBetween(startOfDay, startOfNextDay));
 
-        Attendance attendanceToConfirm = attendanceRepository
+        Attendance attendanceToMarkPresent = attendanceRepository
                 .findOne(filters)
                 .orElseThrow(AttendanceNotFound::new);
 
-        if (attendanceToConfirm.isConfirmed()){
-            throw new AttendanceAlreadyConfirmed();
+        if (attendanceToMarkPresent.getAttendanceStatus() == AttendanceStatus.present){
+            throw new AlreadyMarkedPresent();
         }
 
-        attendanceToConfirm.setConfirmed(true);
-        Attendance confirmedAttendance = attendanceRepository.save(attendanceToConfirm);
-        return attendanceMapper.toAttendanceResponseDTO(confirmedAttendance);
+        attendanceToMarkPresent.setAttendanceStatus(AttendanceStatus.present);
+        Attendance markedPresentAttendance = attendanceRepository.save(attendanceToMarkPresent);
+        return attendanceMapper.toAttendanceResponseDTO(markedPresentAttendance);
     }
 
     //TIME-OUT
@@ -109,8 +114,8 @@ public class AttendanceService {
                 .findOne(filters)
                 .orElseThrow(AttendanceNotFound::new);
 
-        if (!attendanceToTimeOut.isConfirmed()){
-            throw new AttendanceNotConfirmed();
+        if (attendanceToTimeOut.getAttendanceStatus() == AttendanceStatus.on_school){
+            throw new NoClassromTap();
         }
 
         if (attendanceToTimeOut.getDateTimeOut() != null){
