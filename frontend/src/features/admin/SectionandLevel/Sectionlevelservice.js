@@ -18,12 +18,13 @@ function getErrorMessage(error, fallback) {
 
 
 // CONNECT: GET /api/section
-export async function getSections({ search, sectionSearch, gradeLevel, status, page = 0, size = 10, signal } = {}) {
+export async function getSections({ search, sectionSearch, gradeLevel, status, schoolYearId, page = 0, size = 10, signal } = {}) {
   const params = {};
   if (search) params.fullName = search;
   if (sectionSearch) params.sectionName = sectionSearch;
   if (gradeLevel) params.gradeLevel = gradeLevel;
   if (status) params.sectionStatus = status;
+  if (schoolYearId) params.schoolYearId = schoolYearId;
   params.page = page;
   params.size = size;
 
@@ -144,6 +145,13 @@ export async function getSectionDropdown(gradeLevel) {
 // Closes the source school year, sets the target as active, and clones
 // the source's sections (optionally filtered by gradeLevel) into it.
 // Returns the newly created SectionResponse list.
+//
+// Only ever call this when the chosen source IS the currently-active
+// school year - the backend looks up "the" active year to close via its
+// own status query, independent of whatever sourceSchoolYearId is sent,
+// so calling this with a Closed year as the source would still end up
+// closing whatever unrelated year happens to be active right now. For a
+// Closed source, use cloneSectionsAcrossSchoolYears() below instead.
 export async function startNewSchoolYear(data) {
   try {
     const response = await sectionApi.post("/section/school-year/new-school-year", data);
@@ -151,6 +159,113 @@ export async function startNewSchoolYear(data) {
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to start new school year"));
   }
+}
+
+// How many section rows to pull per lookup below. GET /api/section has no
+// schoolYearId query param (see the matching comment in
+// Sectionlevelpage.jsx), so both the "does the target already have
+// sections" check and the "which sections belong to the source year"
+// lookup have to fetch a batch and match on the section's `schoolYear`
+// display label client-side. Same trade-off as SCHOOL_YEAR_FETCH_SIZE
+// there: a single school year with more sections than this cap would be
+// undercounted.
+const CLONE_FETCH_SIZE = 300;
+
+// Client-side stand-in for the backend's newSchoolYear() clone step, used
+// specifically when the source is a Closed (past) school year rather than
+// the currently-active one. startNewSchoolYear() can't be reused for this
+// case (see the note on it above) since it always closes "the" active
+// year and activates the target, and neither of those should happen when
+// someone is just pulling sections forward from an old year as a
+// template. This composes the already-public section endpoints instead
+// (GET /section, POST /section) so no school year's status is touched -
+// only the sections themselves get copied, with their schoolYear
+// reference pointed at the target.
+//
+// LIMITATION: SectionResponse only exposes each section's adviser as a
+// display name string, not a userId, so re-creating a section under the
+// target year requires matching that name back to an id in the `advisers`
+// list (from getTeachers()) passed in by the caller. A source section
+// whose adviser name doesn't exactly match anyone currently in that list
+// (renamed, removed, etc.) can't be safely auto-assigned and is reported
+// back as a failure instead of being skipped silently or given to the
+// wrong person.
+//
+// Returns { created, failed } - `created` is the list of successfully
+// cloned SectionResponses (mirrors startNewSchoolYear()'s return shape),
+// `failed` is `{ sectionName, reason }` entries for anything that
+// couldn't be copied.
+export async function cloneSectionsAcrossSchoolYears({
+  sourceLabel,
+  targetLabel,
+  targetSchoolYearId,
+  gradeLevel,
+  advisers = [],
+}) {
+  // Used to mirror the backend's SchoolYearAlreadyHasSections guard and
+  // block the WHOLE clone the moment the target had any section at all.
+  // That made sense when the target could only ever be a freshly-created
+  // "Planning" year with nothing in it yet. Now that the target can also
+  // be the current ACTIVE school year (which normally already has its
+  // own sections), a blanket "already has sections" block would make
+  // that case impossible. Instead, only skip the individual sections
+  // that would collide BY NAME with something already under the target -
+  // everything else still gets cloned in alongside what's already there.
+  const targetBatch = await getSections({ page: 0, size: CLONE_FETCH_SIZE });
+  const existingTargetNames = new Set(
+    targetBatch.content
+      .filter((section) => section.schoolYear === targetLabel)
+      .map((section) => section.sectionName.trim().toLowerCase())
+  );
+
+  // No sectionStatus filter here on purpose - the backend's own clone
+  // queries (findAllBySchoolYear_SchoolYearId[AndGradeLevel]) don't filter
+  // by section status either, so both active AND archived sections under
+  // the source year get copied, matching that behavior exactly.
+  const sourceBatch = await getSections({ gradeLevel, page: 0, size: CLONE_FETCH_SIZE });
+  const sectionsToClone = sourceBatch.content.filter(
+    (section) => section.schoolYear === sourceLabel
+  );
+
+  if (sectionsToClone.length === 0) {
+    throw new Error("This school year doesn't have sections yet");
+  }
+
+  const created = [];
+  const failed = [];
+
+  for (const section of sectionsToClone) {
+    if (existingTargetNames.has(section.sectionName.trim().toLowerCase())) {
+      failed.push({
+        sectionName: section.sectionName,
+        reason: `"${targetLabel}" already has a section with this name.`,
+      });
+      continue;
+    }
+
+    const adviser = advisers.find((candidate) => candidate.name === section.adviser);
+    if (!adviser) {
+      failed.push({
+        sectionName: section.sectionName,
+        reason: `Adviser "${section.adviser}" couldn't be matched to a current teacher.`,
+      });
+      continue;
+    }
+
+    try {
+      const clonedSection = await createSection({
+        sectionName: section.sectionName,
+        schoolYear: targetSchoolYearId,
+        gradeLevel: section.gradeLevel,
+        userId: adviser.id,
+      });
+      created.push(clonedSection);
+    } catch (error) {
+      failed.push({ sectionName: section.sectionName, reason: error.message });
+    }
+  }
+
+  return { created, failed };
 }
 
 export default sectionApi;

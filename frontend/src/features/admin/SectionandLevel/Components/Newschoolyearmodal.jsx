@@ -1,41 +1,49 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { X, ChevronDown, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
-import { GRADE_LEVEL_OPTIONS, getSectionDropdown } from "../Sectionlevelservice";
+import { GRADE_LEVEL_OPTIONS, getSections } from "../Sectionlevelservice";
 import {
   getNewSchoolYearFormSchema,
   emptyNewSchoolYearForm,
 } from "../SectionlevelSchema";
 
-// Shows a live preview of which sections will be carried over, so an admin
-// isn't confirming a bulk action blind. Refetches whenever the grade level
-// filter changes.
-//
-// NOTE: this always reflects "the" active school year - it does NOT filter
-// by whichever school year is picked in the "Current School Year" field,
-// because GET /section/dropdown has no schoolYearId parameter (it's
-// hardcoded server-side to the active year). That's fine as long as the
-// Current School Year field is locked to that same single active year (see
-// isSourceLocked below) - if it's ever unlocked, this preview would go out
-// of sync with what's actually selected.
-function SectionCarryOverPreview({ gradeLevel }) {
+
+const PREVIEW_FETCH_SIZE = 300;
+
+function SectionCarryOverPreview({ sourceLabel, gradeLevel }) {
   const [previewSections, setPreviewSections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (!sourceLabel) {
+      setPreviewSections([]);
+      setIsLoading(false);
+      return;
+    }
+
     let isCancelled = false;
     setIsLoading(true);
 
-    getSectionDropdown(gradeLevel).then((sections) => {
-      if (isCancelled) return;
-      setPreviewSections(sections);
-      setIsLoading(false);
-    });
+    getSections({ gradeLevel, page: 0, size: PREVIEW_FETCH_SIZE })
+      .then((response) => {
+        if (isCancelled) return;
+        setPreviewSections(response.content.filter((section) => section.schoolYear === sourceLabel));
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setPreviewSections([]);
+        setIsLoading(false);
+      });
 
     return () => {
       isCancelled = true;
     };
-  }, [gradeLevel]);
+  }, [sourceLabel, gradeLevel]);
+
+  if (!sourceLabel) {
+    return <p className="text-xs text-gray-500">Pick a source school year to preview its sections.</p>;
+  }
 
   if (isLoading) {
     return <p className="text-xs text-gray-500">Checking sections to copy...</p>;
@@ -44,7 +52,7 @@ function SectionCarryOverPreview({ gradeLevel }) {
   if (previewSections.length === 0) {
     return (
       <p className="text-xs text-gray-500">
-        No active sections found{gradeLevel ? " for this grade level" : ""}.
+        No sections found in "{sourceLabel}"{gradeLevel ? " for this grade level" : ""}.
       </p>
     );
   }
@@ -81,6 +89,7 @@ function Newschoolyearmodal({
   isOpen,
   sourceSchoolYears = [],
   targetSchoolYears = [],
+  activeSchoolYears = [],
   onClose,
   onSubmit,
 }) {
@@ -119,24 +128,26 @@ function Newschoolyearmodal({
     [targetSchoolYears]
   );
 
+  const sortedActiveYears = useMemo(
+    () =>
+      [...activeSchoolYears].sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { numeric: true })
+      ),
+    [activeSchoolYears]
+  );
+
   if (!isOpen) return null;
 
-  // There should only ever be ONE active school year system-wide, so this
-  // field is a plain read-only line in the common case (not a real choice)
-  // - this also keeps it truthfully in sync with SectionCarryOverPreview
-  // below, which can only ever preview "the" active year's sections (see
-  // its own note above). Only when more than one school year is somehow
-  // marked active at once do we fall back to a real dropdown + warning,
-  // surfacing the anomaly instead of silently hiding it.
-  const isSourceLocked = sortedSourceYears.length <= 1;
-  const hasMultipleActiveYears = sortedSourceYears.length > 1;
-  const hasNoActiveYear = sortedSourceYears.length === 0;
-  const hasNoPlanningYear = sortedTargetYears.length === 0;
+  const hasNoSourceYear = sortedSourceYears.length === 0;
+
+  const isSourceLocked = sortedSourceYears.length === 1;
+
+  const activeSourceYears = sortedSourceYears.filter((sy) => sy.status === "active");
+  const hasMultipleActiveYears = activeSourceYears.length > 1;
 
   const initialValues = {
     ...emptyNewSchoolYearForm,
-    sourceSchoolYear:
-      sortedSourceYears.length === 1 ? String(sortedSourceYears[0].id) : "",
+    sourceSchoolYear: isSourceLocked ? String(sortedSourceYears[0].id) : "",
   };
 
   async function handleFormSubmit(values, { setSubmitting }) {
@@ -144,8 +155,6 @@ function Newschoolyearmodal({
     setIsBusy(true);
 
     try {
-      // CONNECT: startNewSchoolYear() in Sectionlevelservice.js
-      // -> POST /api/section/school-year/new-school-year
       await onSubmit({
         sourceSchoolYearId: Number(values.sourceSchoolYear),
         targetSchoolYearId: Number(values.targetSchoolYear),
@@ -188,12 +197,29 @@ function Newschoolyearmodal({
           enableReinitialize
         >
           {({ errors, touched, isSubmitting, values, resetForm }) => {
-            // Nothing valid to submit yet - keep the button disabled
-            // instead of letting the person click into validation errors
-            // for a form that has no legal combination of source/target
-            // to begin with (no active year to close, or nothing marked
-            // "Planning" to receive the carried-over sections).
-            const isStartDisabled = isSubmitting || hasNoActiveYear || hasNoPlanningYear;
+            const selectedSource = sortedSourceYears.find(
+              (sy) => String(sy.id) === values.sourceSchoolYear
+            );
+            const isSelectedSourceActive = selectedSource?.status === "active";
+            const isSelectedSourceClosed = selectedSource?.status === "closed";
+
+            const targetOptions = isSelectedSourceClosed
+              ? [
+                  ...sortedTargetYears.map((sy) => ({ ...sy, status: "planning" })),
+                  ...sortedActiveYears.map((sy) => ({ ...sy, status: "active" })),
+                ]
+              : sortedTargetYears.map((sy) => ({ ...sy, status: "planning" }));
+
+            const selectedTarget = targetOptions.find(
+              (sy) => String(sy.id) === values.targetSchoolYear
+            );
+            const hasNoTargetOptions = targetOptions.length === 0;
+
+            const isStartDisabled =
+              isSubmitting ||
+              hasNoSourceYear ||
+              hasNoTargetOptions ||
+              (isSelectedSourceActive && hasMultipleActiveYears);
 
             function handleClear() {
               resetForm();
@@ -207,15 +233,28 @@ function Newschoolyearmodal({
                       background info, not a warning, so it shouldn't
                       compete visually with the actual form fields below. */}
                   <p className="text-xs leading-snug text-gray-500">
-                    Copies sections from your current school year into an
-                    already-created "Planning" year, then closes the current one.
+                    {isSelectedSourceClosed ? (
+                      <>
+                        Copies sections from a past year into a Planning year
+                        or the current Active year. Only each section's
+                        school year changes - name, grade level, and adviser
+                        stay the same. Duplicate names in the target are
+                        skipped, not overwritten.
+                      </>
+                    ) : (
+                      <>
+                        Copies sections from the current school year into a
+                        Planning year, then closes the current one and makes
+                        the new year <span className="font-semibold text-success">Active</span>.
+                      </>
+                    )}
                   </p>
 
                   <div className="flex flex-col">
-                    <label className={labelClass}>Current School Year</label>
+                    <label className={labelClass}>Source School Year</label>
 
-                    {isSourceLocked && !hasNoActiveYear && (
-                      // Common case: exactly one active year - nothing to
+                    {isSourceLocked && !hasNoSourceYear && (
+                      // Common case: exactly one candidate - nothing to
                       // choose, so show it as a plain fact instead of a
                       // disabled dropdown pretending to be a real control.
                       <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-700">
@@ -224,14 +263,13 @@ function Newschoolyearmodal({
                       </div>
                     )}
 
-                    {hasNoActiveYear && (
+                    {hasNoSourceYear && (
                       <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
-                        No active school year found - set one to "active" first,
-                        on the School Year page.
+                        No school years available to copy from yet.
                       </p>
                     )}
 
-                    {hasMultipleActiveYears && (
+                    {!isSourceLocked && !hasNoSourceYear && (
                       <>
                         <div className="relative">
                           <Field
@@ -243,12 +281,12 @@ function Newschoolyearmodal({
                             )} appearance-none pr-9`}
                           >
                             <option value="" className="text-gray-500">
-                              Select school year
+                              Select year
                             </option>
 
                             {sortedSourceYears.map((sy) => (
                               <option key={sy.id} value={sy.id} className="text-gray-700">
-                                {sy.label}
+                                {sy.label} ({sy.status === "closed" ? "Closed" : "Active"})
                               </option>
                             ))}
                           </Field>
@@ -261,20 +299,41 @@ function Newschoolyearmodal({
 
                         <ErrorMessage name="sourceSchoolYear" component="p" className={errorClass} />
 
-                        <div className="mt-1 flex items-start gap-1.5 text-xs text-warning">
-                          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                          <p>
-                            More than one school year is marked "Active" - this normally
-                            shouldn't happen. Double-check you're picking the right one.
+                        {isSelectedSourceClosed && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Past year - it stays Closed after cloning.
                           </p>
-                        </div>
+                        )}
+
+                        {isSelectedSourceActive && (
+                          <p className="mt-1 text-xs text-warning">
+                            Current Active year - it will be Closed once the new
+                            year starts.
+                          </p>
+                        )}
                       </>
+                    )}
+
+                    {hasMultipleActiveYears && (
+                      <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                        <p>
+                          {activeSourceYears.length} school years are marked "Active" at
+                          once - this shouldn't happen. Picking one of them as the
+                          source isn't safe until it's fixed: go to School Year
+                          Management and set all but one back to a different status
+                          first. A Closed year can still be picked as the source in
+                          the meantime.
+                        </p>
+                      </div>
                     )}
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="flex flex-col">
-                      <label className={labelClass}>New School Year</label>
+                      <label className={labelClass}>
+                        {isSelectedSourceClosed ? "Copy Sections Into" : "New School Year"}
+                      </label>
 
                       <div className="relative">
                         <Field
@@ -289,9 +348,10 @@ function Newschoolyearmodal({
                             Select year
                           </option>
 
-                          {sortedTargetYears.map((sy) => (
+                          {targetOptions.map((sy) => (
                             <option key={sy.id} value={sy.id} className="text-gray-700">
                               {sy.label}
+                              {isSelectedSourceClosed ? (sy.status === "active" ? " (Active)" : " (Planning)") : ""}
                             </option>
                           ))}
                         </Field>
@@ -304,9 +364,21 @@ function Newschoolyearmodal({
 
                       <ErrorMessage name="targetSchoolYear" component="p" className={errorClass} />
 
-                      {hasNoPlanningYear && (
+                      {hasNoTargetOptions && (
                         <p className="mt-1 text-xs text-gray-500">
-                          None marked "Planning" yet.
+                          {isSelectedSourceClosed
+                            ? "No Planning or Active school year to copy into yet."
+                            : 'None marked "Planning" yet.'}
+                        </p>
+                      )}
+
+                      {values.targetSchoolYear && (
+                        <p className="mt-1 text-xs text-success">
+                          {!isSelectedSourceClosed
+                            ? "Will become the new Active school year."
+                            : selectedTarget?.status === "active"
+                              ? "Sections are added into the current Active school year."
+                              : 'Stays "Planning" - sections are just copied in.'}
                         </p>
                       )}
                     </div>
@@ -344,7 +416,7 @@ function Newschoolyearmodal({
                     </div>
                   </div>
 
-                  <SectionCarryOverPreview gradeLevel={values.gradeLevel} />
+                  <SectionCarryOverPreview sourceLabel={selectedSource?.label} gradeLevel={values.gradeLevel} />
 
                   {submitError && <p className={errorClass}>{submitError}</p>}
                 </div>
@@ -355,7 +427,13 @@ function Newschoolyearmodal({
                     disabled={isStartDisabled}
                     className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSubmitting ? "Starting..." : "Start New School Year"}
+                    {isSubmitting
+                      ? isSelectedSourceClosed
+                        ? "Cloning..."
+                        : "Starting..."
+                      : isSelectedSourceClosed
+                        ? "Clone Sections"
+                        : "Start New School Year"}
                   </button>
 
                   <button

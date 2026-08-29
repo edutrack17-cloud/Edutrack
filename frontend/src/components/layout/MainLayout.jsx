@@ -11,7 +11,6 @@ const pageTitles = {
   "/sf2-attendance": "SF2 Attendance",
   "/enrollment": "Enrollment",
   "/promote-student": "Promote Student",
-  "/rfid-attendance": "RFID Attendance",
   "/school-year": "School Year",
   "/section-level": "Section & Level",
   "/logs-reports": "Logs & Reports",

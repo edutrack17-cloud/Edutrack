@@ -43,7 +43,7 @@ function useClickOutside(isOpen, ref, onClose) {
 // Generic dropdown used for both filters so their open/close icon
 // behavior stays perfectly in sync (a native <select> can't animate its
 // own arrow, which was the source of the mismatch).
-function FilterDropdown({ options, value, onChange, ariaLabel }) {
+function FilterDropdown({ options, value, onChange, ariaLabel, onOpen }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
@@ -55,11 +55,23 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
     setIsOpen(false);
   }
 
+  // Only fires on the closed -> open transition (not on close), so a
+  // caller can lazily refresh whatever backs `options` right before the
+  // list is actually shown - e.g. picking up a school year that was
+  // created elsewhere after this page's initial data load, instead of
+  // only ever reflecting a fetch made once on mount.
+  function handleToggle() {
+    setIsOpen((prev) => {
+      if (!prev) onOpen?.();
+      return !prev;
+    });
+  }
+
   return (
     <div className={wrapperClass} ref={dropdownRef}>
       <button
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={handleToggle}
         className={`${triggerClass} ${selected.textClass || "text-gray-700"}`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -98,7 +110,32 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
   );
 }
 
-function Sectionlevelfilters({ gradeLevel, status, onGradeLevelChange, onStatusChange }) {
+function Sectionlevelfilters({
+  gradeLevel,
+  status,
+  schoolYear,
+  schoolYearOptions,
+  onGradeLevelChange,
+  onStatusChange,
+  onSchoolYearChange,
+  onSchoolYearDropdownOpen,
+}) {
+  // School Year filter is optional - only rendered once a page wires up
+  // schoolYearOptions + onSchoolYearChange, so this component stays a
+  // drop-in for any existing callers that haven't added that prop yet.
+  const showSchoolYearFilter = Array.isArray(schoolYearOptions) && !!onSchoolYearChange;
+
+  const schoolYearMenuOptions = showSchoolYearFilter
+    ? [
+        { value: "", label: "School Year", textClass: "text-gray-700" },
+        ...schoolYearOptions.map((sy) => ({
+          value: String(sy.id),
+          label: sy.label,
+          textClass: "text-gray-700",
+        })),
+      ]
+    : [];
+
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <FilterDropdown
@@ -114,6 +151,16 @@ function Sectionlevelfilters({ gradeLevel, status, onGradeLevelChange, onStatusC
         onChange={onStatusChange}
         ariaLabel="Filter by status"
       />
+
+      {showSchoolYearFilter && (
+        <FilterDropdown
+          options={schoolYearMenuOptions}
+          value={schoolYear}
+          onChange={onSchoolYearChange}
+          ariaLabel="Filter by school year"
+          onOpen={onSchoolYearDropdownOpen}
+        />
+      )}
     </div>
   );
 }

@@ -2,7 +2,6 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
-  IdCard,
   ClipboardCheck,
   FileSpreadsheet,
   UserPlus,
@@ -21,9 +20,15 @@ const ICON_SIZE = 18;
 // TODO: once auth/roles exist (see the route-guarding TODO in
 // AppRoutes.jsx), MainLayout should get the role from the logged-in
 // user's session instead of guessing it from the current path.
+//
+// NOTE: "RFID Attendance" used to be its own nav item/route here -
+// removed since that screen now lives as the "Attendance Screen" tab
+// inside /attendance (Rfidattendancepage.jsx moved into the attendance
+// feature folder). There's no /rfid-attendance route left in
+// AppRoutes.jsx, so keeping this link would have pointed at a blank
+// page with no matching <Route>.
 const TEACHER_NAV_ITEMS = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-  { name: "RFID Attendance", path: "/rfid-attendance", icon: IdCard },
   { name: "Attendance", path: "/attendance", icon: ClipboardCheck },
   { name: "SF2 Attendance", path: "/sf2-attendance", icon: FileSpreadsheet },
   { name: "Enrollment", path: "/enrollment", icon: UserPlus },

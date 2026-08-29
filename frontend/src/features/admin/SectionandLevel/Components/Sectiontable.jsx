@@ -56,16 +56,18 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
       <table className="w-full min-w-160 table-fixed border-collapse">
         <colgroup>
-          <col className="w-[22%]" />
-          <col className="w-[16%]" />
-          <col className="w-[26%]" />
           <col className="w-[18%]" />
+          <col className="w-[14%]" />
+          <col className="w-[14%]" />
+          <col className="w-[20%]" />
+          <col className="w-[16%]" />
           <col className="w-[18%]" />
         </colgroup>
         <thead className="bg-primary">
           <tr>
             <th className={thClass}>Section</th>
             <th className={thClass}>Grade Level</th>
+            <th className={thClass}>School Year</th>
             <th className={thClass}>Adviser</th>
             <th className={thClass}>Status</th>
             <th className={thClass}>Action</th>
@@ -75,7 +77,7 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
         <tbody>
           {sections.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-6 py-6 text-center text-sm text-gray">
+              <td colSpan={6} className="px-6 py-6 text-center text-sm text-gray">
                 No sections found.
               </td>
             </tr>
@@ -87,6 +89,9 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
                 {section.sectionName}
               </td>
               <td className={tdClass}>{formatGradeLevel(section.gradeLevel)}</td>
+              <td className={tdClass} title={section.schoolYear || undefined}>
+                {section.schoolYear || "—"}
+              </td>
               <td className={tdClass} title={section.adviser || undefined}>
                 {section.adviser || "—"}
               </td>

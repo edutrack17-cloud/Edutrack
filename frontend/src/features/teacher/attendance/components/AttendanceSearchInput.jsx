@@ -1,7 +1,7 @@
 import React from "react";
 import { Search } from "lucide-react";
 
-function AttendanceSearchInput({ value, onChange, placeholder = "Search by student name" }) {
+function AttendanceSearchInput({ value, onChange, placeholder = "Search LRN or Name" }) {
   return (
     <div className="relative">
       <Search

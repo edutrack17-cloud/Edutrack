@@ -5,7 +5,7 @@ const STATUS_STYLES = {
   Absent: "text-danger",
 };
 
-function AttendanceStatus({ status }) {
+function GuardAttendanceStatus({ status }) {
   const colorClass = STATUS_STYLES[status] || "text-gray-500";
 
   return (
@@ -13,4 +13,4 @@ function AttendanceStatus({ status }) {
   );
 }
 
-export default AttendanceStatus;
+export default GuardAttendanceStatus;
