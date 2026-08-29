@@ -1,5 +1,6 @@
 package com.edutrack.attendance.service;
 
+import com.edutrack.attendance.dto.request.ManualAttendanceRequest;
 import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
 import com.edutrack.attendance.entity.Attendance;
@@ -32,6 +33,11 @@ public class AttendanceService {
         this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
     }
 
+    private StudentSectionAssignment findAssignmentByStudentId(Long studentId){
+        return studentSectionAssignmentRepository
+                .findByStudent_StudentIdAndLeftAtIsNull(studentId)
+                .orElseThrow(AssignmentNotFound::new);
+    }
 
     LocalDate today = LocalDate.now();
 
@@ -42,8 +48,6 @@ public class AttendanceService {
     //TIME-IN
     @Transactional
     public AttendanceResponse createAttendance(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
-
-
         StudentSectionAssignment studentToTimeIn = studentSectionAssignmentRepository.
                 findByStudent_RfidAndLeftAtIsNull(timeInAndOutAttendanceRequest.rfid())
                 .orElseThrow(AssignmentNotFound::new);
@@ -69,11 +73,53 @@ public class AttendanceService {
         return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
     }
 
-//    //MANUAL ATTENDANCE
-//    @Transactional
-//    public AttendanceResponse manualAttendance(Long studentId, ){
-//
-//    }
+    //MANUAL ATTENDANCE
+    @Transactional
+    public AttendanceResponse manualAttendance(Long studentId, ManualAttendanceRequest manualAttendanceRequest){
+        StudentSectionAssignment studentToTimeIn = findAssignmentByStudentId(studentId);
+
+        Attendance manualAttendance = new Attendance();
+        manualAttendance.setAttendanceStatus(AttendanceStatus.present);
+        manualAttendance.setDateTimeIn(manualAttendanceRequest.dateTimeIn());
+        manualAttendance.setStudentSectionAssignment(studentToTimeIn);
+
+        Specification<Attendance> filters = Specification
+                .where(AttendanceSpecification.hasAssignment(studentToTimeIn.getAssignmentId()))
+                .and(AttendanceSpecification.timeInBetween(startOfDay, startOfNextDay));
+
+        if (attendanceRepository.exists(filters)){
+            throw new AlreadyHasARecord();
+        }
+
+        Attendance savedAttendance = attendanceRepository.save(manualAttendance);
+        return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
+    }
+
+    //MANUAL TIME-OUT
+    @Transactional
+    public AttendanceResponse manualTimeOut(Long studentId){
+        StudentSectionAssignment studentToTimeOut = findAssignmentByStudentId(studentId);
+
+        Specification<Attendance> filters = Specification
+                .where(AttendanceSpecification.hasAssignment(studentToTimeOut.getAssignmentId()))
+                .and(AttendanceSpecification.timeInBetween(startOfDay, startOfNextDay));
+
+        Attendance attendanceToTimeOUt = attendanceRepository
+                .findOne(filters)
+                .orElseThrow(AttendanceNotFound::new);
+
+        if (attendanceToTimeOUt.getAttendanceStatus() == AttendanceStatus.on_school){
+            throw new NoClassromTap();
+        }
+
+        if (attendanceToTimeOUt.getDateTimeOut() != null){
+            throw new AlreadyTimedOut();
+        }
+
+        attendanceToTimeOUt.setDateTimeOut(LocalDateTime.now());
+        Attendance savedTimeOutAttendance = attendanceRepository.save(attendanceToTimeOUt);
+        return attendanceMapper.toAttendanceResponseDTO(savedTimeOutAttendance);
+    }
 
     //MARK AS PRESENT
     @Transactional

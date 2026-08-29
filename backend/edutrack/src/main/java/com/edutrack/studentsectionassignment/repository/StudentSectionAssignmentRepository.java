@@ -20,4 +20,6 @@ public interface StudentSectionAssignmentRepository
     );
 
     Optional<StudentSectionAssignment> findByStudent_RfidAndLeftAtIsNull(String rfid);
+
+    Long student(Student student);
 }

@@ -11,6 +11,5 @@ public record AttendanceResponse(
    String gradeAndSection,
    LocalDateTime dateTimeIn,
    LocalDateTime dateTimeOut,
-   AttendanceStatus attendanceStatus,
-   boolean confirmed
+   AttendanceStatus attendanceStatus
 ) {}

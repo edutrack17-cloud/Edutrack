@@ -1,7 +1,9 @@
 package com.edutrack.attendance.controller;
 
+import com.edutrack.attendance.dto.request.ManualAttendanceRequest;
 import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
+import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.service.AttendanceService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +25,21 @@ public class AttendanceController {
         return ResponseEntity.ok(savedAttendance);
     }
 
-    //CONFIRM ATTENDANCE
+    //MANUAL ATTENDANCE
+    @PostMapping("manual/{studentId}")
+    public ResponseEntity<AttendanceResponse> manualAttendance(@PathVariable Long studentId, @RequestBody ManualAttendanceRequest request){
+        AttendanceResponse savedManualAttendance = attendanceService.manualAttendance(studentId, request);
+        return ResponseEntity.ok(savedManualAttendance);
+    }
+
+    //MANUAL TIME-OUT
+    @PatchMapping("manual-timeout/{studentId}")
+    public ResponseEntity<AttendanceResponse> manualTimeOut(@PathVariable Long studentId){
+        AttendanceResponse savedTimedOutAttendance = attendanceService.manualTimeOut(studentId);
+        return ResponseEntity.ok(savedTimedOutAttendance);
+    }
+
+    //MARK AS PRESENT
     @PatchMapping("present")
     public ResponseEntity<AttendanceResponse> markAsPresent(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
         AttendanceResponse confirmedAttendance = attendanceService.markAsPresent(request);
