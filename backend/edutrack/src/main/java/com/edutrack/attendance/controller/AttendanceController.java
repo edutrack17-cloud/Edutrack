@@ -5,9 +5,13 @@ import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
 import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.service.AttendanceService;
+import com.edutrack.student.dto.response.StudentResponse;
+import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("api/attendance")
@@ -51,5 +55,11 @@ public class AttendanceController {
     public ResponseEntity<AttendanceResponse> timeOut(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
         AttendanceResponse timedOutAttendance = attendanceService.timeOut(request);
         return ResponseEntity.ok(timedOutAttendance);
+    }
+
+    //MULTIPLE ABSENT
+    @PostMapping("close-attendance")
+    public ResponseEntity<List<AttendanceResponse>> bulkMarkAsAbsent(@RequestParam String sectionName){
+        return ResponseEntity.ok(attendanceService.bulkMarkAsAbsent(sectionName));
     }
 }

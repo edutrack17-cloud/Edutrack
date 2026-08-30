@@ -31,6 +31,7 @@ public interface SectionRepository extends JpaRepository<Section, Integer>, JpaS
     @Override
     List<Section> findAll(Specification<Section> spec);
 
+
     @EntityGraph(attributePaths = {"user"})
     List<Section> findAllBySchoolYear_SchoolYearId(Long schoolYearId);
 

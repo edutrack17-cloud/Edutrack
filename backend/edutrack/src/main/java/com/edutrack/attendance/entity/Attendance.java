@@ -5,6 +5,7 @@ import com.edutrack.student.entity.Student;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.persistence.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,6 +26,8 @@ public class Attendance {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AttendanceStatus attendanceStatus;
+
+    private LocalDate createdAt = LocalDate.now();
 
     public long getAttendanceId() {
         return attendanceId;
@@ -66,4 +69,11 @@ public class Attendance {
         this.attendanceStatus = attendanceStatus;
     }
 
+    public LocalDate getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDate createdAt) {
+        this.createdAt = createdAt;
+    }
 }
