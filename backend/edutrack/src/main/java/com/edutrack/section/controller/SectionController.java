@@ -46,6 +46,12 @@ public class SectionController {
                 .ok(sectionService.getSection(fullName, gradeLevel, sectionStatus, sectionName, pageable));
     }
 
+    //READ BY ADVISER
+    @GetMapping("{userId}")
+    public ResponseEntity<List<SectionResponse>> readSectionByAdviser(@PathVariable Long userId){
+        return ResponseEntity.ok(sectionService.readSectionByAdviser(userId));
+    }
+
     //SECTION DROPDOWN
     @GetMapping("dropdown")
     public ResponseEntity<List<SectionResponse>> sectionDropdown(@RequestParam(required = false) GradeLevel gradeLevel){

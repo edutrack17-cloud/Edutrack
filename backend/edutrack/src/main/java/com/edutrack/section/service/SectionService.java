@@ -89,6 +89,19 @@ public class SectionService {
         return sectionRepository.findAll(filters ,pageable).map(sectionMapper::toResponseDTO);
     }
 
+    //READ BY ADVISER
+    public List<SectionResponse> readSectionByAdviser(Long userId){
+        List<Section> listOfSections = sectionRepository.findAllByUser_UserId(userId);
+
+        if (listOfSections.isEmpty()){
+            throw new AdvisorySectionNotFound();
+        }
+
+        return listOfSections.stream()
+                .map(sectionMapper::toResponseDTO)
+                .toList();
+    }
+
     //SECTION DROPDOWN
     public List<SectionResponse> sectionDropDown(GradeLevel gradeLevel){
         Specification<Section> filters = Specification
@@ -141,10 +154,15 @@ public class SectionService {
             fieldsChanged = true;
         }
 
-        if (updateSectionRequest.userId() != null &&
-                (sectionToUpdate.getUser() == null ||
+        if (updateSectionRequest.userId() != null && (sectionToUpdate.getUser() == null ||
                  !sectionToUpdate.getUser().getUserId().equals(updateSectionRequest.userId()))) {
+
             User newAdviser = getByUserId(updateSectionRequest.userId());
+
+            if (newAdviser.getAccountStatus() == AccountStatus.disabled){
+                throw new TeacherAccountDisabled();
+            }
+
             sectionToUpdate.setUser(newAdviser);
             fieldsChanged = true;
         }
