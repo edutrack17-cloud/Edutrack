@@ -14,7 +14,7 @@ public class SchoolYear {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long schoolYearId;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 100, unique = true)
     private String schoolYearName;
 
     @Column(nullable = false)

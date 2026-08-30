@@ -7,9 +7,11 @@ import com.edutrack.schoolyear.entity.SchoolYear;
 import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.schoolyear.exception.*;
 import com.edutrack.schoolyear.mapper.SchoolYearMapper;
+import com.edutrack.schoolyear.repository.SchoolYearLockRepository;
 import com.edutrack.schoolyear.repository.SchoolYearRepository;
 import com.edutrack.schoolyear.specification.SchoolYearSpecification;
 import com.edutrack.shared.exception.NoChangesDetected;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -21,10 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class SchoolYearService {
     private final SchoolYearRepository schoolYearRepository;
     private final SchoolYearMapper schoolYearMapper;
+    private final SchoolYearLockRepository schoolYearLockRepository;
 
-    public SchoolYearService(SchoolYearRepository schoolYearRepository, SchoolYearMapper schoolYearMapper){
+    public SchoolYearService(SchoolYearRepository schoolYearRepository,
+                             SchoolYearMapper schoolYearMapper,
+                             SchoolYearLockRepository schoolYearLockRepository){
         this.schoolYearRepository = schoolYearRepository;
         this.schoolYearMapper = schoolYearMapper;
+        this.schoolYearLockRepository = schoolYearLockRepository;
     }
 
     //CREATE
@@ -35,14 +41,15 @@ public class SchoolYearService {
             throw new SchoolYearAlreadyExists(schoolYearRequest.schoolYearName());
         }
 
-        if(schoolYearRepository.existsBySchoolYearStatusEquals(SchoolYearStatus.active) && schoolYearRequest.schoolYearStatus() == SchoolYearStatus.active){
-            throw new ActiveSchoolYearAlreadyExists();
-        }
-
         SchoolYear schoolYearToEntity = schoolYearMapper.toEntity(schoolYearRequest);
-        SchoolYear savedSchoolYear = schoolYearRepository.save(schoolYearToEntity);
+        schoolYearToEntity.setSchoolYearStatus(SchoolYearStatus.planning);
 
-        return schoolYearMapper.toResponseDTO(savedSchoolYear);
+        try {
+            SchoolYear savedSchoolYear = schoolYearRepository.save(schoolYearToEntity);
+            return schoolYearMapper.toResponseDTO(savedSchoolYear);
+        } catch (DataIntegrityViolationException e) {
+            throw new SchoolYearAlreadyExists(schoolYearRequest.schoolYearName());
+        }
     }
 
     //READ
@@ -60,8 +67,8 @@ public class SchoolYearService {
         SchoolYear schoolYearToUpdate = schoolYearRepository.findById(schoolYearId).orElseThrow(SchoolYearNotFound::new);
         boolean fieldsChanged = false;
         if (updateSchoolYearRequest.schoolYearName() != null &&
-            !updateSchoolYearRequest.schoolYearName().isEmpty() &&
-            !schoolYearToUpdate.getSchoolYearName().equalsIgnoreCase(updateSchoolYearRequest.schoolYearName())
+                !updateSchoolYearRequest.schoolYearName().isEmpty() &&
+                !schoolYearToUpdate.getSchoolYearName().equalsIgnoreCase(updateSchoolYearRequest.schoolYearName())
         ){
             if (schoolYearRepository.existsBySchoolYearNameIgnoreCase(updateSchoolYearRequest.schoolYearName())){
                 throw new SchoolYearAlreadyExists(updateSchoolYearRequest.schoolYearName());
@@ -72,7 +79,7 @@ public class SchoolYearService {
         }
 
         if (updateSchoolYearRequest.startDate() != null &&
-            !schoolYearToUpdate.getStartDate().equals(updateSchoolYearRequest.startDate())){
+                !schoolYearToUpdate.getStartDate().equals(updateSchoolYearRequest.startDate())){
 
             schoolYearToUpdate.setStartDate(updateSchoolYearRequest.startDate());
             fieldsChanged = true;
@@ -89,7 +96,12 @@ public class SchoolYearService {
             throw new NoChangesDetected();
         }
 
-        return schoolYearMapper.toResponseDTO(schoolYearToUpdate);
+        try {
+            SchoolYear updated = schoolYearRepository.saveAndFlush(schoolYearToUpdate);
+            return schoolYearMapper.toResponseDTO(updated);
+        } catch (DataIntegrityViolationException e) {
+            throw new SchoolYearAlreadyExists(updateSchoolYearRequest.schoolYearName());
+        }
     }
 
     //ARCHIVE
@@ -108,6 +120,9 @@ public class SchoolYearService {
     //MARK AS ACTIVE
     @Transactional
     public SchoolYearResponse restoreSchoolYear(Long schoolYearId){
+        schoolYearLockRepository.acquireActivationLock()
+                .orElseThrow(ActiveSchoolYearLockUnavailable::new);
+
         SchoolYear schoolYearToUpdate = schoolYearRepository.findById(schoolYearId).orElseThrow(SchoolYearNotFound::new);
 
         if (schoolYearToUpdate.getSchoolYearStatus().equals(SchoolYearStatus.active)){
