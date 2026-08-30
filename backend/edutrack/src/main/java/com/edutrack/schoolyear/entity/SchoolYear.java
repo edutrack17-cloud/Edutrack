@@ -25,7 +25,7 @@ public class SchoolYear {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SchoolYearStatus schoolYearStatus;
+    private SchoolYearStatus schoolYearStatus = SchoolYearStatus.planning;
 
     @Column(nullable = false)
     private LocalDate createdAt = LocalDate.now();

@@ -14,8 +14,5 @@ public record CreateSchoolYearRequest(
         LocalDate startDate,
 
         @NotNull(message = "End date is required")
-        LocalDate endDate,
-
-        @NotNull(message = "School year status is required")
-        SchoolYearStatus schoolYearStatus
+        LocalDate endDate
 ) {}
