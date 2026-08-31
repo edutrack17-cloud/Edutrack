@@ -28,21 +28,22 @@ function formatTime(datetime) {
   return time ? time.slice(0, 5) : ""; // "07:00:00" -> "07:00"
 }
 
-// CONFIRMED via AttendanceResponse.java / AttendanceMapper.java - flat
-// record: attendanceId, studentName, gradeAndSection, dateTimeIn,
-// dateTimeOut, attendanceStatus, confirmed. No "rfid" field, and
-// gradeAndSection is one pre-combined string, not separate
-// gradeLevel/section - same limitation as before.
-//
-// NOTE on `confirmed`: AttendanceResponse.java still declares this
-// field, but Attendance.java (the entity) has NO matching property -
-// the backend dropped the old confirmed-boolean model in favor of the
-// 3-value attendanceStatus enum (on_school -> present, see
-// AttendanceStatus.java + AttendanceService.java markAsPresent/timeOut).
-// MapStruct has nothing to map `confirmed` from, so don't trust
-// whatever comes back in that field - derive it from attendanceStatus
-// instead. Worth flagging to backend so they either wire it up or drop
-// it from the DTO.
+// ManualAttendanceRequest.java's dateTimeIn is a full LocalDateTime, not
+// just a clock time - Jackson's default LocalDateTime format is
+// "yyyy-MM-dd'T'HH:mm:ss", so the "HH:mm" ManualTimeModal hands back has
+// to be stitched onto today's date before it's sent. A manual entry is
+// always for "today" (there's no date picker in that modal), so "now"'s
+// date is always correct here.
+function buildTodayDateTimeISO(hhmm) {
+  const [hours, minutes] = hhmm.split(":");
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hours}:${minutes}:00`;
+}
+
+// CONFIRMED via AttendanceResponse.java / AttendanceMapper.java - flat record: attendanceId, studentName, gradeAndSection, dateTimeIn, dateTimeOut, attendanceStatus. No "rfid" field, no "confirmed" field (dropped from the DTO), and gradeAndSection is one pre-combined string, not separate gradeLevel/section.
 function mapAttendanceRecord(record) {
   return {
     id: record.attendanceId,
@@ -177,20 +178,104 @@ export async function timeOutAttendance(rfid) {
  * Student Record tab stay in sync while there's no real backend yet.
  * ========================================================================= */
 
-// TODO: mock only, stands in for GET /api/student-section-assignment
-// (or similar) until it exists. Shape matches what the Student Record
-// table + action modals need: base student info plus "todayAttendance"
-// (null when the student hasn't tapped/been marked yet today).
+// CONFIRMED via StudentController.java / StudentService.java - GET
+// /api/student?gradeLevel=&sectionName=&studentStatus=&studentName=&page=&size=
+// is real: filtered, paginated, built off
+// StudentSectionAssignmentSpecification (same isCurrent()/leftAt-is-null
+// pattern the attendance side uses). This is the roster HALF of what
+// this function needs - but only the roster half. There is still no
+// GET endpoint anywhere on the attendance side (AttendanceController.java
+// has zero @GetMapping methods), so there's nothing to join in for
+// "today's" attendance per student - every row below comes back with
+// todayAttendance: null (== "no record yet", per getRowActionState)
+// regardless of what actually happened today. Once an attendance GET
+// endpoint ships, that's a second fetch to merge in here by studentId.
 //
-// UPDATED per the latest backend pull: status is now one of "On
-// School" / "Present" / "Absent" (mirrors AttendanceStatus.java's
-// on_school/present/absent), and the separate isConfirmed boolean is
-// gone - "On School" itself now means "guard tapped in, not yet
-// present". assignmentId 6 (Athena) is seeded at "On School" on
-// purpose to keep that state testable without a real guard page.
+// IMPORTANT: studentStatus here is StudentStatus.java
+// (enrolled/dropped/transferred_out/graduated) - a completely
+// different thing from the "Present / On School / Absent" status
+// dropdown in AttendaceFilters.jsx, which is about TODAY's attendance,
+// not enrollment. Sending that dropdown's value as studentStatus would
+// silently break the query ("Present" isn't a valid StudentStatus), so
+// it's never sent - this always hard-codes studentStatus=enrolled
+// (attendance-taking should never surface dropped/graduated/transferred
+// students), and the Present/On School/Absent filter stays client-side
+// against todayAttendance, same as AttendanceTable.jsx already does as
+// a fallback.
+//
+// StudentResponse.java has NO assignmentId field (that FK is never
+// exposed) - studentId is the real id, and it's ALSO what the manual
+// attendance endpoints (POST /api/attendance/manual/{studentId}, PATCH
+// /api/attendance/manual-timeout/{studentId}) key off. assignmentId is
+// set equal to studentId below purely so AttendanceTable.jsx's existing
+// record.assignmentId reads (used only as a row key / pending-state
+// key) don't need to change.
+//
+// GUESS, unconfirmed: SectionResponse.java's gradeLevel shape wasn't in
+// this pull, so its exact casing ("Grade_4" vs "grade_4" vs "GRADE_4")
+// is assumed here via a loose regex rather than an exact enum map -
+// flag to backend if grade level ends up blank in the table.
+function formatGradeLevelLabel(gradeLevel) {
+  if (!gradeLevel) return "";
+  const match = /grade[_\s]?(\d+)/i.exec(String(gradeLevel));
+  return match ? `Grade ${match[1]}` : String(gradeLevel);
+}
+
+export async function fetchStudentRecords({
+  page = 1,
+  level = "",
+  section = "",
+  search = "",
+} = {}) {
+  const params = new URLSearchParams();
+  if (level) params.set("gradeLevel", LABEL_TO_GRADE_LEVEL[level] ?? level);
+  if (section) params.set("sectionName", section);
+  if (search) params.set("studentName", search);
+  params.set("studentStatus", "enrolled");
+  params.set("page", String(page - 1)); // Spring Pageable is 0-indexed
+  params.set("size", "20");
+
+  const response = await fetch(`${BASE_URL}/student?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(`GET /api/student failed (${response.status})`);
+  }
+
+  const pageData = await response.json();
+  const content = Array.isArray(pageData.content) ? pageData.content : [];
+
+  const records = content.map((student) => ({
+    assignmentId: student.studentId,
+    studentId: student.studentId,
+    lrn: student.lrn ?? "",
+    rfid: student.rfid ?? "",
+    name: student.fullName ?? "",
+    gradeLevel: formatGradeLevelLabel(student.section?.gradeLevel),
+    section: student.section?.sectionName ?? "",
+    todayAttendance: null,
+  }));
+
+  return {
+    records,
+    totalPages: pageData.totalPages ?? 1,
+    currentPage: page,
+  };
+}
+// NO LONGER used by fetchStudentRecords() above - that now hits the
+// real GET /api/student roster (see the big comment there). This array
+// is kept only for the Attendance Screen tab (Rfidattendancepage.jsx)
+// and its mocked functions further down this file
+// (teacherScannerTap/findEnrolledStudentByRfid/searchEnrolledStudents/
+// fetchTodaysActivity/markRemainingAsAbsent), which have no real
+// backend to hit at all yet (no GET on the attendance side) and so
+// stay on this fake roster for now. The two rosters will disagree with
+// each other (different ids, different students) until the Attendance
+// Screen tab also moves onto the real student list + a real attendance
+// GET endpoint.
 let MOCK_STUDENTS = [
   {
     assignmentId: 1,
+    studentId: 201,
     lrn: "090941037",
     rfid: "090941037",
     name: "Yuri Sakazaki",
@@ -200,6 +285,7 @@ let MOCK_STUDENTS = [
   },
   {
     assignmentId: 2,
+    studentId: 202,
     lrn: "090941038",
     rfid: "090941038",
     name: "Kyo Kusanagi",
@@ -214,6 +300,7 @@ let MOCK_STUDENTS = [
   },
   {
     assignmentId: 4,
+    studentId: 204,
     lrn: "090941040",
     rfid: "090941040",
     name: "Juan Dela Cruz",
@@ -228,6 +315,7 @@ let MOCK_STUDENTS = [
   },
   {
     assignmentId: 5,
+    studentId: 205,
     lrn: "090941041",
     rfid: "090941041",
     name: "Maria Santos",
@@ -242,6 +330,7 @@ let MOCK_STUDENTS = [
   },
   {
     assignmentId: 6,
+    studentId: 206,
     lrn: "090941042",
     rfid: "090941042",
     name: "Athena Asamiya",
@@ -282,119 +371,125 @@ export function getRowActionState(todayAttendance) {
   return "done";
 }
 
-// TODO: BACKEND CONNECTION
-// CONNECT: GET /api/student-section-assignment?adviserId={id}&gradeLevel={}&section={}&search={}&page={}
-// Should return enrolled students for sections this adviser handles,
-// each with today's attendance record (or null) embedded/joined -
-// same shape as MOCK_STUDENTS above.
-export async function fetchStudentRecords({
-  page = 1,
-  level = "",
-  section = "",
-  search = "",
-} = {}) {
-  await new Promise((resolve) => setTimeout(resolve, 300)); // simulate latency
+// The real fetchStudentRecords() is defined above, right after
+// MOCK_STUDENTS was still being used for it - see the big comment
+// there for what's real (roster/filter/pagination via GET /api/student)
+// vs still blocked (today's attendance per student).
 
-  const filtered = MOCK_STUDENTS.filter((student) => {
-    const matchesLevel = !level || student.gradeLevel === level;
-    const matchesSection = !section || student.section === section;
-    const matchesSearch =
-      !search ||
-      student.name.toLowerCase().includes(search.toLowerCase()) ||
-      student.lrn.includes(search);
-    return matchesLevel && matchesSection && matchesSearch;
+// CONFIRMED via AttendanceController.java - POST /api/attendance/manual/{studentId}.
+// Body: ManualAttendanceRequest, i.e. { dateTimeIn }. This is the
+// adviser clicking "Present" and picking a time in, for a student who
+// has NO record yet today at all (walk-in / forgot card / guard never
+// caught them). Unlike the rfid flow this jumps straight to status =
+// present (AttendanceService.manualAttendance) - a person is entering
+// it directly, there's no on_school stage to pass through first.
+//
+// KEYED BY studentId, NOT assignmentId - AttendanceService looks the
+// student's current assignment up itself
+// (findAssignmentByStudentId -> findByStudent_StudentIdAndLeftAtIsNull).
+// The Student Record roster (MOCK_STUDENTS today, GET
+// /api/student-section-assignment eventually) needs a studentId field
+// on each row for this to work - added here as `studentId`.
+//
+// Response is an AttendanceResponse - attendanceId/studentName/
+// gradeAndSection/dateTimeIn/dateTimeOut/attendanceStatus only, no
+// assignmentId/studentId echoed back. The caller (AttendancePage.jsx)
+// already knows which row this was for from the click that opened the
+// modal, so it merges the returned fields into that row itself rather
+// than matching on anything in the response.
+export async function markPresentManual(studentId, timeIn) {
+  const dateTimeIn = buildTodayDateTimeISO(timeIn);
+
+  const response = await fetch(`${BASE_URL}/attendance/manual/${studentId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dateTimeIn }),
   });
 
-  return { records: filtered, totalPages: 1, currentPage: page };
+  if (!response.ok) {
+    throw await buildAttendanceError(response, `POST /api/attendance/manual/${studentId}`);
+  }
+
+  const data = await response.json();
+  return mapAttendanceRecord(data);
 }
 
-// TODO: BACKEND CONNECTION
-// CONNECT: POST /api/attendance/manual (or similar)
-// Body: { assignmentId, timeIn }
-// This is the adviser clicking "Present" and picking a time in, for a
-// student who has NO record yet today at all (walk-in / forgot card /
-// guard never caught them). Unlike the rfid flow this jumps straight
-// to status = present - a person is entering it directly, there's no
-// on_school stage to pass through first.
-export async function markPresentManual(assignmentId, timeIn) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
-  const student = MOCK_STUDENTS.find((s) => s.assignmentId === assignmentId);
-  if (!student) throw new Error("Student not found");
-
-  student.todayAttendance = {
-    id: Date.now(),
-    status: "Present",
-    timeIn,
-    timeOut: null,
-  };
-  return { ...student };
-}
-
-// TODO: BACKEND CONNECTION
-// CONNECT: PATCH /api/attendance/manual-present (or similar,
-// assignmentId-keyed). Does NOT exist on the backend yet - only PATCH
-// /api/attendance/present (rfid-keyed, meant for an actual tap on the
-// teacher's scanner) exists today. This is the manual fallback for
-// when a guard-tapped ("On School") record is sitting with no time-in
-// and the student can't tap the teacher's scanner (lost card, scanner
-// down, etc). RENAMED from confirmManual() - matches the backend's
-// confirm -> present rename.
+// STILL BLOCKED after this pull - checked AttendanceController.java/
+// AttendanceService.java and there is still no studentId/assignmentId
+// -keyed way to flip an "On School" record to "Present". The only
+// present-marking endpoint that exists is PATCH /api/attendance/present,
+// and it's hard-keyed to rfid (TimeInAndOutAttendanceRequest) - it
+// re-looks-up the assignment by
+// findByStudent_RfidAndLeftAtIsNull(request.rfid()), there's no
+// overload that takes an id instead. So this manual fallback (student
+// can't tap the teacher's scanner - lost card, scanner down, etc) has
+// nothing to call yet. Worth flagging to backend: either a
+// PATCH /api/attendance/manual-present/{studentId} companion to the
+// manual/{studentId} time-in endpoint, or accept an optional id on the
+// existing present request.
+//
+// No longer faked against MOCK_STUDENTS either - now that
+// fetchStudentRecords() returns the REAL roster (real studentIds from
+// GET /api/student), a row passed in here won't exist in MOCK_STUDENTS
+// at all, so a silent mock "success" would be actively misleading.
+// Fails loudly instead until there's something real to call.
 export async function markPresentFromOnSchool(assignmentId) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
-  const student = MOCK_STUDENTS.find((s) => s.assignmentId === assignmentId);
-  if (!student || !student.todayAttendance) throw new Error("No record to mark present");
-
-  const now = new Date();
-  const nowHHmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-  student.todayAttendance = {
-    ...student.todayAttendance,
-    status: "Present",
-    timeIn: student.todayAttendance.timeIn ?? nowHHmm,
-  };
-  return { ...student };
+  throw new Error(
+    "Marking present from On School isn't available on the backend yet - see the comment on markPresentFromOnSchool() in Attendanceservice.js."
+  );
 }
 
-// TODO: BACKEND CONNECTION
-// CONNECT: POST /api/attendance/manual-absent (or similar)
-// Body: { assignmentId }
+// STILL BLOCKED after this pull. AttendanceController.java only gained
+// two new endpoints this time: POST /api/attendance/manual/{studentId}
+// (present, wired up above) and PATCH
+// /api/attendance/manual-timeout/{studentId} (wired up below). There is
+// still no single-student "mark this one absent" endpoint - the only
+// absent-marking capability in AttendanceService is bulkMarkAsAbsent(),
+// which is section-wide (POST /api/attendance/close-attendance?sectionName=)
+// and - per its actual logic - only creates absent rows for students
+// with ZERO attendance record for the day. It does NOT flip an existing
+// "On School" record to absent, so it can't cover the "needs-present"
+// case either, only "needs-status". Keeping this mocked and flagging to
+// backend: needs either a single-student absent endpoint, or
+// bulkMarkAsAbsent needs to also sweep existing on_school rows to
+// absent (right now those get silently skipped since they already
+// "have a record").
 // Adviser clicking "Absent" - covers both a student with no record at
 // all today, AND a student stuck at "On School" (guard tapped in, but
 // never got a time-in with the teacher) - see getRowActionState's
 // "needs-status" and "needs-present" states.
+//
+// No longer faked against MOCK_STUDENTS either - same reasoning as
+// markPresentFromOnSchool() above: real roster rows (from GET
+// /api/student) won't exist in that fake array, so this fails loudly
+// now instead of pretending to succeed.
 export async function markAbsentManual(assignmentId) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
-  const student = MOCK_STUDENTS.find((s) => s.assignmentId === assignmentId);
-  if (!student) throw new Error("Student not found");
-
-  student.todayAttendance = {
-    id: Date.now(),
-    status: "Absent",
-    timeIn: null,
-    timeOut: null,
-  };
-  return { ...student };
+  throw new Error(
+    "Marking a single student absent isn't available on the backend yet - see the comment on markAbsentManual() in Attendanceservice.js."
+  );
 }
 
-// TODO: BACKEND CONNECTION
-// CONNECT: PATCH /api/attendance/{attendanceId}/time-out (or similar,
-// keyed by attendanceId/assignmentId instead of rfid - the adviser
-// doesn't have the student's card in hand when clicking this in the
-// table). Fires immediately with "now" as dateTimeOut, no modal.
-export async function manualTimeOut(assignmentId) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
+// CONFIRMED via AttendanceController.java - PATCH
+// /api/attendance/manual-timeout/{studentId}. No request body - the
+// server just stamps dateTimeOut = now on that student's today record
+// (AttendanceService.manualTimeOut). Fires immediately, no modal, same
+// as before.
+//
+// KEYED BY studentId, same caveat as markPresentManual above. Throws
+// 400 (NoClassromTap) if the record is still "on_school" (never got a
+// time-in), 400 (AlreadyTimedOut) if dateTimeOut is already set, 404
+// (AssignmentNotFound) if there's no record for today at all.
+export async function manualTimeOut(studentId) {
+  const response = await fetch(`${BASE_URL}/attendance/manual-timeout/${studentId}`, {
+    method: "PATCH",
+  });
 
-  const student = MOCK_STUDENTS.find((s) => s.assignmentId === assignmentId);
-  if (!student || !student.todayAttendance) throw new Error("No record to time out");
+  if (!response.ok) {
+    throw await buildAttendanceError(response, `PATCH /api/attendance/manual-timeout/${studentId}`);
+  }
 
-  const now = new Date();
-  const timeOut = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-  student.todayAttendance = { ...student.todayAttendance, timeOut };
-  return { ...student };
+  const data = await response.json();
+  return mapAttendanceRecord(data);
 }
 
 /* =========================================================================
@@ -470,14 +565,22 @@ export async function teacherScannerTap(rfid) {
   return { action: "already-done", student: { ...student } };
 }
 
-// TODO: BACKEND CONNECTION
-// CONNECT: PATCH /api/attendance/mark-remaining-absent (or similar) -
-// bulk action, no body needed (server just works off "today"). Real
-// equivalent: find every row still stuck at attendanceStatus =
-// on_school for today (guard tapped them in via POST /api/attendance,
-// but they never got the PATCH /api/attendance/present tap from the
-// teacher's scanner) and set attendanceStatus = absent on all of them
-// in one shot.
+// STILL BLOCKED for this button specifically, even though a real bulk
+// endpoint now exists: POST /api/attendance/close-attendance?sectionName=
+// (AttendanceController.bulkMarkAsAbsent). Two mismatches against what
+// this button needs:
+//   1. It's SECTION-scoped (sectionName is a required query param), but
+//      this "Mark Remaining as Absent" button lives on the teacher
+//      scanner screen with no section context at all - it's meant to
+//      sweep everyone, across every section, in one tap.
+//   2. Per AttendanceService.bulkMarkAsAbsent's actual logic, it only
+//      creates absent rows for students with NO attendance record at
+//      all today. A guard-tapped "On School" row already has a record
+//      (just the wrong status), so it's excluded, not flipped to
+//      absent - the opposite of what this button is for.
+// Wired up closeAttendanceForSection() below against the real endpoint
+// for whenever a section-scoped bulk-absent UI gets built, but this
+// specific global button stays mocked. Flagging both points to backend.
 //
 // This is the button the teacher taps once they're done checking
 // attendance for the period - anyone still sitting at "on school" past
@@ -507,6 +610,30 @@ export async function markRemainingAsAbsent() {
 export async function fetchTodaysActivity() {
   await new Promise((resolve) => setTimeout(resolve, 150));
   return MOCK_STUDENTS.filter((s) => s.todayAttendance).map((s) => ({ ...s }));
+}
+
+// CONFIRMED via AttendanceController.java - POST
+// /api/attendance/close-attendance?sectionName={sectionName}. No body.
+// Creates an "absent" row for every currently-enrolled student in that
+// section with NO attendance record yet today (see the semantics
+// caveat on markRemainingAsAbsent above - this does NOT touch existing
+// "On School" rows). Returns a List<AttendanceResponse>. Not called
+// from anywhere in this file yet - kept ready for whenever a
+// section-scoped "close attendance" action gets built (e.g. an
+// adviser closing out their own section from the Student Record tab).
+export async function closeAttendanceForSection(sectionName) {
+  const params = new URLSearchParams({ sectionName });
+
+  const response = await fetch(`${BASE_URL}/attendance/close-attendance?${params.toString()}`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw await buildAttendanceError(response, "POST /api/attendance/close-attendance");
+  }
+
+  const data = await response.json();
+  return (Array.isArray(data) ? data : []).map(mapAttendanceRecord);
 }
 
 /* =========================================================================

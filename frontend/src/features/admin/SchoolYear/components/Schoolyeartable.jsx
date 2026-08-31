@@ -58,6 +58,9 @@ const STATUS_ACTIONS = {
 // dropdown - "show every status except the current one" was letting a
 // Closed year get bounced back to Planning/Active, which doesn't make
 // sense for a year that has already run its course.
+//
+// Mirrors ALLOWED_TRANSITIONS in SchoolYearService.java (backend) 1:1 -
+// keep these two in sync if the backend transition map ever changes:
 //   Planning -> Active or Archive
 //   Active   -> Closed or Archive
 //   Closed   -> Archive only
@@ -69,11 +72,19 @@ const ALLOWED_TRANSITIONS = {
   archived: [],
 };
 
+// Statuses past their editable window. Mirrors the backend's terminal /
+// closed-out states - a school year that's Closed has already run its
+// course (same as Archived), so its name/dates shouldn't be editable
+// anymore either. Previously only "archived" was excluded here, which
+// left a "Edit" option visibly clickable on Closed rows even though
+// editing a closed school year doesn't make sense.
+const NON_EDITABLE_STATUSES = ["archived", "closed"];
+
 function otherStatuses(currentStatus) {
   return ALLOWED_TRANSITIONS[currentStatus] ?? [];
 }
 
-function SchoolYearTable({ schoolYears, onEdit, onChangeStatus }) {
+function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, hasActiveSchoolYear = false }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
@@ -136,75 +147,94 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus }) {
             </tr>
           )}
 
-          {schoolYears.map((schoolYear) => (
-            <tr key={schoolYear.schoolYearId} className="border-b border-gray-200 transition hover:bg-gray-50">
-              <td className={tdClass} title={schoolYear.schoolYearName}>
-                {schoolYear.schoolYearName}
-              </td>
-              <td className={tdClass}>{formatDate(schoolYear.startDate)}</td>
-              <td className={tdClass}>{formatDate(schoolYear.endDate)}</td>
-              <td className={tdClass}>
-                <span className={`text-sm font-semibold ${getSchoolYearStatusColorClass(schoolYear.schoolYearStatus)}`}>
-                  {getSchoolYearStatusLabel(schoolYear.schoolYearStatus)}
-                </span>
-              </td>
+          {schoolYears.map((schoolYear) => {
+            const isEditable = !NON_EDITABLE_STATUSES.includes(schoolYear.schoolYearStatus);
+            const availableStatuses = otherStatuses(schoolYear.schoolYearStatus);
 
-              <td className="relative px-3 py-1.5 text-center sm:px-4 sm:py-2">
-                <button
-                  type="button"
-                  data-kebab-trigger
-                  onClick={(event) => toggleMenu(schoolYear.schoolYearId, event)}
-                  aria-label="Row actions"
-                  className="rounded-lg p-2 transition hover:bg-gray-100"
-                >
-                  <MoreHorizontal size={20} />
-                </button>
+            // Soft, UI-level guard: don't even offer "Mark Active" when
+            // another row is already Active, instead of showing it
+            // disabled/greyed out. This only reflects the currently
+            // loaded page of results - the backend's
+            // ActiveSchoolYearAlreadyExists / pessimistic lock check
+            // (SchoolYearService.java) remains the real source of
+            // truth, since an Active row on a different page/filter
+            // wouldn't be visible here to check against.
+            const visibleStatuses = availableStatuses.filter(
+              (status) => !(status === "active" && hasActiveSchoolYear)
+            );
+            const hasAnyAction = isEditable || visibleStatuses.length > 0;
 
-                {openMenuId === schoolYear.schoolYearId && (
-                  <div
-                    ref={menuRef}
-                    style={{ top: menuPosition.top, left: menuPosition.left }}
-                    className="fixed z-50 w-48 rounded-xl border border-gray-200 bg-white py-2 text-left shadow-xl"
+            return (
+              <tr key={schoolYear.schoolYearId} className="border-b border-gray-200 transition hover:bg-gray-50">
+                <td className={tdClass} title={schoolYear.schoolYearName}>
+                  {schoolYear.schoolYearName}
+                </td>
+                <td className={tdClass}>{formatDate(schoolYear.startDate)}</td>
+                <td className={tdClass}>{formatDate(schoolYear.endDate)}</td>
+                <td className={tdClass}>
+                  <span className={`text-sm font-semibold ${getSchoolYearStatusColorClass(schoolYear.schoolYearStatus)}`}>
+                    {getSchoolYearStatusLabel(schoolYear.schoolYearStatus)}
+                  </span>
+                </td>
+
+                <td className="relative px-3 py-1.5 text-center sm:px-4 sm:py-2">
+                  <button
+                    type="button"
+                    data-kebab-trigger
+                    onClick={(event) => toggleMenu(schoolYear.schoolYearId, event)}
+                    aria-label="Row actions"
+                    className="rounded-lg p-2 transition hover:bg-gray-100"
                   >
-                    {schoolYear.schoolYearStatus !== "archived" && (
-                      <button
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          onEdit?.(schoolYear);
-                        }}
-                        className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
-                      >
-                        <Pencil size={16} />
-                        Edit
-                      </button>
-                    )}
+                    <MoreHorizontal size={20} />
+                  </button>
 
-                    {otherStatuses(schoolYear.schoolYearStatus).map((status) => {
-                      const action = STATUS_ACTIONS[status];
-                      const Icon = action.icon;
-                      return (
+                  {openMenuId === schoolYear.schoolYearId && (
+                    <div
+                      ref={menuRef}
+                      style={{ top: menuPosition.top, left: menuPosition.left }}
+                      className="fixed z-50 w-48 rounded-xl border border-gray-200 bg-white py-2 text-left shadow-xl"
+                    >
+                      {isEditable && (
                         <button
-                          key={status}
                           onClick={() => {
                             setOpenMenuId(null);
-                            onChangeStatus?.(schoolYear, status);
+                            onEdit?.(schoolYear);
                           }}
-                          className={`flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition ${action.colorClass}`}
+                          className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
                         >
-                          <Icon size={16} />
-                          {action.label}
+                          <Pencil size={16} />
+                          Edit
                         </button>
-                      );
-                    })}
+                      )}
 
-                    {schoolYear.schoolYearStatus === "archived" && (
-                      <p className="px-4 py-2 text-sm text-gray-400">No actions available</p>
-                    )}
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
+                      {visibleStatuses.map((status) => {
+                        const action = STATUS_ACTIONS[status];
+                        const Icon = action.icon;
+
+                        return (
+                          <button
+                            key={status}
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              onChangeStatus?.(schoolYear, status);
+                            }}
+                            className={`flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition ${action.colorClass}`}
+                          >
+                            <Icon size={16} />
+                            {action.label}
+                          </button>
+                        );
+                      })}
+
+                      {!hasAnyAction && (
+                        <p className="px-4 py-2 text-sm text-gray-400">No actions available</p>
+                      )}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

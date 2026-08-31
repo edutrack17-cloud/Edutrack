@@ -34,8 +34,6 @@ function SchoolYearManagementpage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add");
   const [selectedSchoolYear, setSelectedSchoolYear] = useState(null);
-  const [hasActiveSchoolYear, setHasActiveSchoolYear] = useState(false);
-
 
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
 
@@ -100,30 +98,10 @@ function SchoolYearManagementpage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, status, currentPage]);
 
-  // Lets the Add form know up front whether an Active school year already
-  // exists, so its Initial Status field can leave "Active" out of the
-  // options entirely instead of letting the person pick it and only find
-  // out from the backend's ActiveSchoolYearAlreadyExists error after
-  // submitting. `schoolYears` in this component's own state can't be used
-  // for this check - it reflects whatever status filter/page is currently
-  // being viewed on the table, not the full dataset. size: 1 is enough
-  // since only existence matters, not the actual record. Best-effort only:
-  // if another admin activates a year in the moment between this check and
-  // actually submitting, the backend's own check still catches it.
-  async function checkActiveSchoolYearExists() {
-    try {
-      const response = await getSchoolYears({ status: "active", size: 1 });
-      setHasActiveSchoolYear(response.content.length > 0);
-    } catch (error) {
-      setHasActiveSchoolYear(false);
-    }
-  }
-
   function handleOpenAdd() {
     setModalMode("add");
     setSelectedSchoolYear(null);
     setIsModalOpen(true);
-    checkActiveSchoolYearExists();
   }
 
   function handleOpenEdit(schoolYear) {
@@ -219,6 +197,14 @@ function SchoolYearManagementpage() {
               schoolYears={schoolYears}
               onEdit={handleOpenEdit}
               onChangeStatus={handleRequestStatusChange}
+              // Soft, page-local guard only - reflects whether an Active
+              // row is visible in the currently loaded page/filter, so
+              // "Mark Active" can be disabled before the user even clicks
+              // it. The backend (ActiveSchoolYearAlreadyExists /
+              // acquireActivationLock in SchoolYearService.java) remains
+              // the real enforcement, since an Active row on another
+              // page/filter wouldn't be caught by this check.
+              hasActiveSchoolYear={schoolYears.some((sy) => sy.schoolYearStatus === "active")}
             />
             <SchoolYearPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
           </>
@@ -229,7 +215,6 @@ function SchoolYearManagementpage() {
         isOpen={isModalOpen}
         mode={modalMode}
         initialData={selectedSchoolYear}
-        hasActiveSchoolYear={hasActiveSchoolYear}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmitSchoolYear}
       />

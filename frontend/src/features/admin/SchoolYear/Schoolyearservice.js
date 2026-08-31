@@ -6,19 +6,6 @@ const schoolYearApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Options for the "Initial Status" field on the Add School Year form
-// (Schoolyearformmodal.jsx) - intentionally NOT the full SchoolYearStatus
-// enum. A school year that's just being created shouldn't be creatable as
-// already "Closed" or "Archived" - those are states a school year moves
-// into later via the table's status actions, not a valid starting point.
-// (The status FILTER dropdown in Schoolyearfilters.jsx is a separate,
-// independent list and still offers all 4 - filtering by/finding closed
-// or archived years is still valid.)
-export const SCHOOL_YEAR_STATUS_OPTIONS = [
-  { value: "planning", label: "Planning" },
-  { value: "active", label: "Active" },
-];
-
 function getErrorMessage(error, fallback) {
   return error?.response?.data?.message || fallback;
 }
@@ -44,9 +31,9 @@ export async function getSchoolYears({ search, status, page = 0, size = 10, sign
 }
 
 // CONNECT: POST /api/school-year
-// Body: CreateSchoolYearRequest - schoolYearName, startDate, endDate,
-// schoolYearStatus (all required server-side, including the initial
-// status - unlike Section, there's no server-side default).
+// Body: CreateSchoolYearRequest - schoolYearName, startDate, endDate only.
+// No status field - the backend always creates new school years as
+// "planning"; use the table's status actions to move it to Active later.
 export async function createSchoolYear(data) {
   try {
     const response = await schoolYearApi.post("/school-year", data);

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { X, ChevronDown } from "lucide-react";
+import { X } from "lucide-react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
-import { SCHOOL_YEAR_STATUS_OPTIONS } from "../Schoolyearservice";
 import { getSchoolYearFormSchema, emptySchoolYearForm } from "../Schoolyearschema";
 
 const inputClass = (hasError) =>
@@ -24,7 +23,7 @@ function getTodayDateString() {
   return `${year}-${month}-${day}`;
 }
 
-function SchoolYearFormModal({ isOpen, mode = "add", initialData, hasActiveSchoolYear = false, onClose, onSubmit }) {
+function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSubmit }) {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -49,13 +48,6 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, hasActiveSchoo
 
   if (!isOpen) return null;
 
-  // Drop "Active" from the choices when one already exists elsewhere -
-  // see hasActiveSchoolYear's origin (checkActiveSchoolYearExists) in
-  // SchoolyearmanagementPage.jsx for why this can't be checked from here.
-  const statusOptions = hasActiveSchoolYear
-    ? SCHOOL_YEAR_STATUS_OPTIONS.filter((opt) => opt.value !== "active")
-    : SCHOOL_YEAR_STATUS_OPTIONS;
-
   const initialValues =
     mode === "edit" && initialData
       ? {
@@ -71,9 +63,10 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, hasActiveSchoo
     setIsSubmitting(true);
     try {
       // CONNECT: createSchoolYear() / updateSchoolYear() in SchoolYearService.js
-      // schoolYearStatus is only sent on create - UpdateSchoolYearRequest
-      // doesn't have a status field, status changes go through the
-      // dedicated archive/active/planning actions in the table instead.
+      // No status field on either request anymore - CreateSchoolYearRequest
+      // always creates as "planning" server-side, and status changes go
+      // through the dedicated archive/active/planning actions in the
+      // table instead.
       const trimmedName = values.schoolYearName?.trim();
 
       const payload =
@@ -87,9 +80,7 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, hasActiveSchoo
               schoolYearName: trimmedName,
               startDate: values.startDate,
               endDate: values.endDate,
-              schoolYearStatus: values.schoolYearStatus,
             };
-
 
       await onSubmit(payload);
       onClose();
@@ -121,7 +112,7 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, hasActiveSchoo
 
         <Formik
           initialValues={initialValues}
-          validationSchema={getSchoolYearFormSchema(mode)}
+          validationSchema={getSchoolYearFormSchema(mode, initialData?.startDate ?? null)}
           onSubmit={handleFormSubmit}
           enableReinitialize
         >
@@ -191,30 +182,9 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, hasActiveSchoo
                 </div>
 
                 {mode === "add" && (
-                  <div>
-                    <label className={labelClass}>Initial Status</label>
-                    <div className="relative">
-                      <Field
-                        as="select"
-                        name="schoolYearStatus"
-                        className={`${inputClass(errors.schoolYearStatus && touched.schoolYearStatus)} appearance-none pr-9`}
-                      >
-                        <option value="">Select initial status</option>
-                        {statusOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </Field>
-                      <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                    </div>
-                    <ErrorMessage name="schoolYearStatus" component="p" className={errorClass} />
-                    <p className="mt-1 text-xs text-gray-500">
-                      {hasActiveSchoolYear
-                        ? "An Active school year already exists, so this one can only start as Planning."
-                        : "Ideally only one school year should be Active at a time."}
-                    </p>
-                  </div>
+                  <p className="text-xs text-gray-500">
+                    New school years always start as Planning. Use the row actions on the table to mark one Active later.
+                  </p>
                 )}
 
                 {submitError && <p className={errorClass}>{submitError}</p>}

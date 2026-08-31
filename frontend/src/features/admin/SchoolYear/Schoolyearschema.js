@@ -4,7 +4,6 @@ const MESSAGES = {
   schoolYearName: "School year name is required.",
   startDate: "Start date is required.",
   endDate: "End date is required.",
-  schoolYearStatus: "Initial status is required.",
 };
 
 function parseLocalDate(value) {
@@ -20,7 +19,7 @@ function startOfToday() {
   return today;
 }
 
-export function getSchoolYearFormSchema(mode = "add") {
+export function getSchoolYearFormSchema(mode = "add", originalStartDate = null) {
   return Yup.object({
     schoolYearName: Yup.string().trim().required(MESSAGES.schoolYearName),
     startDate: Yup.date()
@@ -31,6 +30,14 @@ export function getSchoolYearFormSchema(mode = "add") {
         "Start date cannot be in the past.",
         function (value) {
           if (!value) return true; // let required() report empties
+
+          // In edit mode, an already-started (or already-Active) school
+          // year legitimately has a start date in the past. Only enforce
+          // "not in the past" if the person actually changed the start
+          // date - otherwise editing just the name, say, would fail on a
+          // field they never touched.
+          if (mode === "edit" && value === originalStartDate) return true;
+
           const parsed = parseLocalDate(value);
           if (!parsed) return true;
           return parsed >= startOfToday();
@@ -45,18 +52,13 @@ export function getSchoolYearFormSchema(mode = "add") {
         "End date must be after the start date.",
         function (value) {
           const { startDate } = this.parent;
-          if (!value || !startDate) return true; // let required() report empties
-          const end = parseLocalDate(value);
+          if (!value || !startDate) return true;
           const start = parseLocalDate(startDate);
+          const end = parseLocalDate(value);
           if (!end || !start) return true;
           return end > start;
         }
       ),
-  
-    schoolYearStatus:
-      mode === "add"
-        ? Yup.string().required(MESSAGES.schoolYearStatus)
-        : Yup.string().notRequired(),
   });
 }
 
@@ -64,5 +66,4 @@ export const emptySchoolYearForm = {
   schoolYearName: "",
   startDate: "",
   endDate: "",
-  schoolYearStatus: "",
 };

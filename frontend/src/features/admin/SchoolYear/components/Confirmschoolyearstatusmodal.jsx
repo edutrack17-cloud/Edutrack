@@ -14,7 +14,7 @@ const STATUS_META = {
     Icon: Archive,
     badgeClass: "bg-secondary/10 text-secondary",
     confirmButtonClass: "bg-secondary hover:bg-red-700",
-    bodyText: "It will be hidden from the active list until you restore it.",
+    bodyText: "It will be removed from the list. You won't see it anymore unless you check Archived.",
   },
   planning: {
     verb: "Mark Planning",
@@ -22,7 +22,7 @@ const STATUS_META = {
     Icon: Hourglass,
     badgeClass: "bg-warning/10 text-warning",
     confirmButtonClass: "bg-warning hover:bg-amber-600",
-    bodyText: "It will be set aside as a planning year, ready to become Active later.",
+    bodyText: "It's not in use yet, but it's ready. You can make it Active anytime.",
   },
   active: {
     verb: "Mark Active",
@@ -30,7 +30,7 @@ const STATUS_META = {
     Icon: CircleCheck,
     badgeClass: "bg-success/10 text-success",
     confirmButtonClass: "bg-success hover:bg-emerald-700",
-    bodyText: "It will become the current Active school year.",
+    bodyText: "This will be the school year in use starting now.",
   },
   closed: {
     verb: "Mark Closed",
@@ -38,7 +38,7 @@ const STATUS_META = {
     Icon: Lock,
     badgeClass: "bg-danger/10 text-danger",
     confirmButtonClass: "bg-danger hover:bg-red-700",
-    bodyText: "It will be marked closed and no longer counted as an active school year.",
+    bodyText: "This school year is done. It won't be the active one anymore.",
   },
 };
 
@@ -123,7 +123,7 @@ function ConfirmSchoolYearStatusModal({
             <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
             {isVacatingOnlyActive && (
               <p className="mt-2 rounded-md bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
-                This is the current Active school year. After this change, no school year will be marked Active until you activate another one.
+                Heads up: this is your Active school year right now. Once you do this, none will be Active until you set a new one.
               </p>
             )}
           </div>

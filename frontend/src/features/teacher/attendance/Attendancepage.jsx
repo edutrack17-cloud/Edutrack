@@ -105,9 +105,10 @@ function AttendancePage() {
   async function handleAbsentClick(record) {
     setPendingAssignmentId(record.assignmentId);
     try {
-      // CONNECT: POST /api/attendance/manual-absent (or similar) -
-      // NOT built yet. markAbsentManual() is mocked in
-      // Attendanceservice.js. Body: { assignmentId: record.assignmentId }.
+      // STILL BLOCKED after the latest backend pull - no single-student
+      // absent endpoint exists yet, only a section-wide bulk one that
+      // doesn't cover this case either. markAbsentManual() stays mocked
+      // in Attendanceservice.js - see the comment there for the gap.
       const updated = await markAbsentManual(record.assignmentId);
       setRecords((prev) =>
         prev.map((r) => (r.assignmentId === updated.assignmentId ? updated : r))
@@ -126,13 +127,12 @@ function AttendancePage() {
   async function handleConfirmClick(record) {
     setPendingAssignmentId(record.assignmentId);
     try {
-      // CONNECT: PATCH /api/attendance/manual-present (or similar,
-      // assignmentId-keyed) - NOT the same endpoint as the real
-      // PATCH /api/attendance/present used by Rfidattendancepage.jsx
-      // (that one is rfid-keyed, for an actual scanner tap). This is
-      // the manual fallback when the student can't reach the teacher's
-      // scanner - doesn't exist on the backend yet, markPresentFromOnSchool()
-      // is mocked in Attendanceservice.js. Body: { assignmentId: record.assignmentId }.
+      // STILL BLOCKED after the latest backend pull - PATCH
+      // /api/attendance/present still only exists rfid-keyed (for an
+      // actual scanner tap, used by Rfidattendancepage.jsx). No
+      // studentId/assignmentId-keyed way to flip an "On School" record
+      // to present exists yet. markPresentFromOnSchool() stays mocked
+      // in Attendanceservice.js - see the comment there for the gap.
       const updated = await markPresentFromOnSchool(record.assignmentId);
       setRecords((prev) =>
         prev.map((r) => (r.assignmentId === updated.assignmentId ? updated : r))
@@ -147,14 +147,21 @@ function AttendancePage() {
   async function handleTimeOutClick(record) {
     setPendingAssignmentId(record.assignmentId);
     try {
-      // CONNECT: PATCH /api/attendance/{attendanceId}/time-out (or
-      // similar, assignmentId/attendanceId-keyed) - NOT the same
-      // endpoint as the real PATCH /api/attendance/time-out (that one
-      // is rfid-keyed, for a scanner tap). Doesn't exist on the
-      // backend yet, manualTimeOut() is mocked in Attendanceservice.js.
-      const updated = await manualTimeOut(record.assignmentId);
+      // CONNECT: PATCH /api/attendance/manual-timeout/{studentId} - now
+      // real (confirmed in the latest backend pull). Keyed by
+      // studentId, not assignmentId/attendanceId - see the comment on
+      // manualTimeOut() in Attendanceservice.js. The response
+      // (AttendanceResponse) doesn't carry assignmentId back, so this
+      // merges the returned time/status fields into the row we already
+      // know we're updating (record.assignmentId) instead of matching
+      // on anything in the response.
+      const updated = await manualTimeOut(record.studentId);
       setRecords((prev) =>
-        prev.map((r) => (r.assignmentId === updated.assignmentId ? updated : r))
+        prev.map((r) =>
+          r.assignmentId === record.assignmentId
+            ? { ...r, todayAttendance: { ...r.todayAttendance, timeOut: updated.timeOut } }
+            : r
+        )
       );
     } catch (error) {
       setLoadError(error.message);
@@ -172,12 +179,28 @@ function AttendancePage() {
     if (!presentTarget) return;
     setPendingAssignmentId(presentTarget.assignmentId);
     try {
-      // CONNECT: POST /api/attendance/manual (or similar) - NOT built
-      // yet. markPresentManual() is mocked in Attendanceservice.js.
-      // Body: { assignmentId: presentTarget.assignmentId, timeIn: time }.
-      const updated = await markPresentManual(presentTarget.assignmentId, time);
+      // CONNECT: POST /api/attendance/manual/{studentId} - now real
+      // (confirmed in the latest backend pull). Keyed by studentId, not
+      // assignmentId - see the comment on markPresentManual() in
+      // Attendanceservice.js. Same as the time-out merge above: the
+      // response doesn't echo assignmentId back, so this updates the
+      // row we already know is presentTarget rather than matching on
+      // the response.
+      const updated = await markPresentManual(presentTarget.studentId, time);
       setRecords((prev) =>
-        prev.map((r) => (r.assignmentId === updated.assignmentId ? updated : r))
+        prev.map((r) =>
+          r.assignmentId === presentTarget.assignmentId
+            ? {
+                ...r,
+                todayAttendance: {
+                  id: updated.id,
+                  status: updated.status,
+                  timeIn: updated.timeIn,
+                  timeOut: updated.timeOut,
+                },
+              }
+            : r
+        )
       );
     } catch (error) {
       setLoadError(error.message);
