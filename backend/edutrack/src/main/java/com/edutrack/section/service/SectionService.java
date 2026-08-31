@@ -2,10 +2,8 @@ package com.edutrack.section.service;
 
 import com.edutrack.schoolyear.entity.SchoolYear;
 import com.edutrack.schoolyear.enums.SchoolYearStatus;
-import com.edutrack.schoolyear.exception.ActiveSchoolYearNotFound;
-import com.edutrack.schoolyear.exception.SchoolYearAlreadyActive;
-import com.edutrack.schoolyear.exception.SchoolYearAlreadyExists;
-import com.edutrack.schoolyear.exception.SchoolYearNotFound;
+import com.edutrack.schoolyear.exception.*;
+import com.edutrack.schoolyear.repository.SchoolYearLockRepository;
 import com.edutrack.schoolyear.repository.SchoolYearRepository;
 import com.edutrack.section.dto.request.CreateSectionRequest;
 import com.edutrack.section.dto.request.NewSchoolYearRequest;
@@ -25,6 +23,7 @@ import com.edutrack.user.enums.AccountStatus;
 import com.edutrack.user.exception.AccountDisabled;
 import com.edutrack.user.exception.UserNotFoundException;
 import com.edutrack.user.repository.UserRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -40,6 +39,8 @@ public class SectionService {
     private final UserRepository userRepository;
     private final SectionMapper sectionMapper;
     private final SchoolYearRepository schoolYearRepository;
+    private final SchoolYearLockRepository schoolYearLockRepository;
+
 
     private Section getById(Integer sectionId){
         return sectionRepository.findById(sectionId).orElseThrow(() -> new SectionNotFound(sectionId));
@@ -54,11 +55,16 @@ public class SectionService {
             .orElseThrow(() -> new UserNotFoundException(userId));
     }
 
-    public SectionService(SectionRepository sectionRepository, UserRepository userRepository, SectionMapper sectionMapper, SchoolYearRepository schoolYearRepository) {
+    public SectionService(SectionRepository sectionRepository,
+                          UserRepository userRepository,
+                          SectionMapper sectionMapper,
+                          SchoolYearRepository schoolYearRepository,
+                          SchoolYearLockRepository schoolYearLockRepository) {
         this.sectionRepository = sectionRepository;
         this.userRepository = userRepository;
         this.sectionMapper = sectionMapper;
         this.schoolYearRepository = schoolYearRepository;
+        this.schoolYearLockRepository = schoolYearLockRepository;
     }
 
     //CREATE
@@ -75,8 +81,12 @@ public class SectionService {
         sectionEntity.setUser(adviserToBeAssign);
         sectionEntity.setSchoolYear(schoolYearToBeAssign);
 
-        Section savedSection = sectionRepository.save(sectionEntity);
-        return sectionMapper.toResponseDTO(savedSection);
+        try {
+            Section savedSection = sectionRepository.save(sectionEntity);
+            return sectionMapper.toResponseDTO(savedSection);
+        } catch (DataIntegrityViolationException e) {
+            throw new SectionAlreadyExists(sectionRequest.sectionName());
+        }
     }
 
     //READ
@@ -155,7 +165,7 @@ public class SectionService {
         }
 
         if (updateSectionRequest.userId() != null && (sectionToUpdate.getUser() == null ||
-                 !sectionToUpdate.getUser().getUserId().equals(updateSectionRequest.userId()))) {
+                !sectionToUpdate.getUser().getUserId().equals(updateSectionRequest.userId()))) {
 
             User newAdviser = getByUserId(updateSectionRequest.userId());
 
@@ -171,7 +181,12 @@ public class SectionService {
             throw new NoChangesDetected();
         }
 
-        return sectionMapper.toResponseDTO(sectionToUpdate);
+        try {
+            Section updatedSection = sectionRepository.saveAndFlush(sectionToUpdate);
+            return sectionMapper.toResponseDTO(updatedSection);
+        } catch (DataIntegrityViolationException e) {
+            throw new SectionAlreadyExists(finalSectionName);
+        }
     }
 
     //ARCHIVE
@@ -203,6 +218,9 @@ public class SectionService {
     //START NEW SCHOOL YEAR
     @Transactional
     public List<SectionResponse> newSchoolYear(NewSchoolYearRequest request){
+        schoolYearLockRepository.acquireActivationLock()
+                .orElseThrow(ActiveSchoolYearLockUnavailable::new);
+
         SchoolYear currentSchoolYear = schoolYearRepository
                 .findBySchoolYearStatus(SchoolYearStatus.active)
                 .orElseThrow(ActiveSchoolYearNotFound::new);
@@ -249,10 +267,13 @@ public class SectionService {
                 })
                 .toList();
 
-        List<Section> savedSections = sectionRepository.saveAll(newSections);
-
-        return savedSections.stream()
-                .map(sectionMapper::toResponseDTO)
-                .toList();
+        try {
+            List<Section> savedSections = sectionRepository.saveAll(newSections);
+            return savedSections.stream()
+                    .map(sectionMapper::toResponseDTO)
+                    .toList();
+        } catch (DataIntegrityViolationException e) {
+            throw new SchoolYearAlreadyHasSections();
+        }
     }
 }

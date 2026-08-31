@@ -12,7 +12,12 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 @Entity
-@Table(name = "sections")
+@Table(name = "sections",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_section_name_school_year",
+                columnNames = {"school_year_id", "section_name"}
+        )
+)
 public class Section {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
