@@ -84,7 +84,7 @@ function otherStatuses(currentStatus) {
   return ALLOWED_TRANSITIONS[currentStatus] ?? [];
 }
 
-function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, hasActiveSchoolYear = false }) {
+function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, activeSchoolYear = null }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
@@ -150,19 +150,25 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, hasActiveSchoolY
           {schoolYears.map((schoolYear) => {
             const isEditable = !NON_EDITABLE_STATUSES.includes(schoolYear.schoolYearStatus);
             const availableStatuses = otherStatuses(schoolYear.schoolYearStatus);
+            const hasAnyAction = isEditable || availableStatuses.length > 0;
 
-            // Soft, UI-level guard: don't even offer "Mark Active" when
-            // another row is already Active, instead of showing it
-            // disabled/greyed out. This only reflects the currently
-            // loaded page of results - the backend's
-            // ActiveSchoolYearAlreadyExists / pessimistic lock check
-            // (SchoolYearService.java) remains the real source of
-            // truth, since an Active row on a different page/filter
-            // wouldn't be visible here to check against.
-            const visibleStatuses = availableStatuses.filter(
-              (status) => !(status === "active" && hasActiveSchoolYear)
-            );
-            const hasAnyAction = isEditable || visibleStatuses.length > 0;
+            // "Mark Active" while another school year already holds that
+            // status - kept visible but disabled (with a tooltip naming
+            // which one) instead of silently disappearing, so the person
+            // knows why the action isn't available rather than wondering
+            // if the menu is missing an option. activeSchoolYear is
+            // fetched independently of this page's rows (see
+            // SchoolyearmanagementPage.jsx), so this stays correct even
+            // when the Active row itself is on a different page/filter.
+            // The backend (ActiveSchoolYearAlreadyExists / pessimistic
+            // lock in SchoolYearService.java) remains the real guard.
+            function isActionBlocked(status) {
+              return (
+                status === "active" &&
+                activeSchoolYear != null &&
+                activeSchoolYear.schoolYearId !== schoolYear.schoolYearId
+              );
+            }
 
             return (
               <tr key={schoolYear.schoolYearId} className="border-b border-gray-200 transition hover:bg-gray-50">
@@ -207,21 +213,35 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, hasActiveSchoolY
                         </button>
                       )}
 
-                      {visibleStatuses.map((status) => {
+                      {availableStatuses.map((status) => {
                         const action = STATUS_ACTIONS[status];
                         const Icon = action.icon;
+                        const isBlocked = isActionBlocked(status);
 
                         return (
                           <button
                             key={status}
+                            type="button"
+                            disabled={isBlocked}
+                            title={isBlocked ? `${activeSchoolYear.schoolYearName} is already Active` : undefined}
                             onClick={() => {
+                              if (isBlocked) return;
                               setOpenMenuId(null);
                               onChangeStatus?.(schoolYear, status);
                             }}
-                            className={`flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition ${action.colorClass}`}
+                            className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-sm font-medium transition ${
+                              isBlocked
+                                ? "cursor-not-allowed text-gray-300"
+                                : `cursor-pointer ${action.colorClass}`
+                            }`}
                           >
-                            <Icon size={16} />
-                            {action.label}
+                            <span className="flex items-center gap-3">
+                              <Icon size={16} />
+                              {action.label}
+                            </span>
+                            {isBlocked && (
+                              <span className="text-[10px] font-normal text-gray-400">In use</span>
+                            )}
                           </button>
                         );
                       })}

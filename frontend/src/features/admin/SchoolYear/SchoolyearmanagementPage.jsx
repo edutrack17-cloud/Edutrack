@@ -15,6 +15,7 @@ import {
   restoreSchoolYear,
   closeSchoolYear,
   markAsPlanning,
+  getActiveSchoolYear,
 } from "./Schoolyearservice";
 
 const PAGE_SIZE = 10;
@@ -37,7 +38,24 @@ function SchoolYearManagementpage() {
 
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
 
+  // The school year that is currently Active, fetched independently of
+  // the table's page/filter/search - so "Mark Active" can be correctly
+  // guarded even when that Active row isn't part of the currently
+  // loaded page. Null means either there's no Active school year, or
+  // the lookup itself failed (treated the same way: don't block on it).
+  const [activeSchoolYear, setActiveSchoolYear] = useState(null);
+
   const { toasts, showToast, dismissToast } = useToasts();
+
+  // CONNECT: GET /api/school-year?schoolYearStatus=active
+  async function loadActiveSchoolYear() {
+    const result = await getActiveSchoolYear();
+    setActiveSchoolYear(result);
+  }
+
+  useEffect(() => {
+    loadActiveSchoolYear();
+  }, []);
 
   // Holds the AbortController for whichever /api/school-year request is
   // currently in flight, so that if filters/search/page change again
@@ -159,6 +177,7 @@ function SchoolYearManagementpage() {
         showToast(`${schoolYear.schoolYearName} was marked planning.`);
       }
       await loadSchoolYears();
+      await loadActiveSchoolYear();
     } catch (error) {
       setErrorMessage(error.message);
       showToast(error.message, "error");
@@ -197,14 +216,14 @@ function SchoolYearManagementpage() {
               schoolYears={schoolYears}
               onEdit={handleOpenEdit}
               onChangeStatus={handleRequestStatusChange}
-              // Soft, page-local guard only - reflects whether an Active
-              // row is visible in the currently loaded page/filter, so
-              // "Mark Active" can be disabled before the user even clicks
-              // it. The backend (ActiveSchoolYearAlreadyExists /
-              // acquireActivationLock in SchoolYearService.java) remains
-              // the real enforcement, since an Active row on another
-              // page/filter wouldn't be caught by this check.
-              hasActiveSchoolYear={schoolYears.some((sy) => sy.schoolYearStatus === "active")}
+              // Fetched independently of the table's page/filter/search
+              // (see loadActiveSchoolYear above), so "Mark Active" is
+              // correctly disabled even when the Active row itself isn't
+              // part of the currently loaded page. The backend
+              // (ActiveSchoolYearAlreadyExists / acquireActivationLock in
+              // SchoolYearService.java) remains the real enforcement -
+              // this is purely a UX guard to avoid an avoidable round trip.
+              activeSchoolYear={activeSchoolYear}
             />
             <SchoolYearPagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
           </>

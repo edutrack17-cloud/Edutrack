@@ -96,4 +96,23 @@ export async function markAsPlanning(schoolYearId) {
   }
 }
 
+// CONNECT: GET /api/school-year?schoolYearStatus=active
+// Deliberately independent of whatever page/filter/search is currently
+// loaded in the table - this is the only reliable way to know whether
+// (and which) school year is Active right now. Relying on the currently
+// loaded page's rows (schoolYears.some(...)) misses an Active row that
+// happens to sit on a different page or be filtered out.
+export async function getActiveSchoolYear() {
+  try {
+    const { data } = await schoolYearApi.get("/school-year", {
+      params: { schoolYearStatus: "active", page: 0, size: 1 },
+    });
+    return data.content?.[0] ?? null;
+  } catch {
+    // Non-critical lookup - if this fails, treat it as "no known Active
+    // school year" rather than blocking the rest of the page on it.
+    return null;
+  }
+}
+
 export default schoolYearApi;

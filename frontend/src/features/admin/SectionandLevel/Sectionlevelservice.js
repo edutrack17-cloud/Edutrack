@@ -18,13 +18,22 @@ function getErrorMessage(error, fallback) {
 
 
 // CONNECT: GET /api/section
-export async function getSections({ search, sectionSearch, gradeLevel, status, schoolYearId, page = 0, size = 10, signal } = {}) {
+// NOTE: no schoolYearId param here on purpose - GET /api/section has no
+// matching query param on the backend (SectionController /
+// SectionSpecification only support fullName, gradeLevel, sectionStatus,
+// sectionName), so it would be silently dropped by Spring anyway. The
+// School Year filter is applied entirely client-side instead - see
+// SCHOOL_YEAR_FETCH_SIZE and loadSections() in Sectionlevelpage.jsx. If
+// the backend ever adds real schoolYearId support, re-add it here AND
+// simplify away the client-side fetch-a-batch-and-match-by-label
+// workaround in Sectionlevelpage.jsx - keeping both at once would just
+// be redundant.
+export async function getSections({ search, sectionSearch, gradeLevel, status, page = 0, size = 10, signal } = {}) {
   const params = {};
   if (search) params.fullName = search;
   if (sectionSearch) params.sectionName = sectionSearch;
   if (gradeLevel) params.gradeLevel = gradeLevel;
   if (status) params.sectionStatus = status;
-  if (schoolYearId) params.schoolYearId = schoolYearId;
   params.page = page;
   params.size = size;
 

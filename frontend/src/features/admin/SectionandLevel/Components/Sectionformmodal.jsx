@@ -15,15 +15,30 @@ const errorClass = "mt-1 text-xs text-danger";
 // Searchable adviser picker: advisers are sorted alphabetically and can be
 // filtered by typing, since the adviser list can grow well past what's
 // comfortable to scan in a plain <select>.
-function AdviserSearchField({ advisers, value, onChange, placeholder, hasError }) {
+function AdviserSearchField({ advisers, value, onChange, placeholder, hasError, mode, currentAdviserName }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const wrapperRef = useRef(null);
 
-  const sortedAdvisers = useMemo(
-    () => [...advisers].sort((a, b) => a.name.localeCompare(b.name)),
-    [advisers]
-  );
+  // Same fix as sortedSchoolYears below: in edit mode, drop the section's
+  // own current adviser from the list. Without this, re-picking the exact
+  // same adviser would look like a real edit even though nothing actually
+  // changed - the backend would then reject the submit with
+  // NoChangesDetected, which reads as a confusing error for something the
+  // UI just let you click. Filtering it out here is also what
+  // hasRealChanges (below, in Sectionformmodal) relies on: any non-empty
+  // userId value it sees is guaranteed to be a genuinely different
+  // adviser. Matches by name (AdminCreateUserResponse / SectionResponse
+  // don't expose a shared id here), so this only holds up as long as
+  // adviser full names stay unique - same caveat as the school year label
+  // match.
+  const sortedAdvisers = useMemo(() => {
+    const base =
+      mode === "edit" && currentAdviserName
+        ? advisers.filter((teacher) => teacher.name !== currentAdviserName)
+        : advisers;
+    return [...base].sort((a, b) => a.name.localeCompare(b.name));
+  }, [advisers, mode, currentAdviserName]);
 
   const filteredAdvisers = useMemo(() => {
     if (!query.trim()) return sortedAdvisers;
@@ -261,7 +276,7 @@ function Sectionformmodal({
   }
 
   return (
-    <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+    <div className="font-primary fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16 pb-8">
       <div className="flex w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
         <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
           <div className="w-6" />
@@ -290,13 +305,39 @@ function Sectionformmodal({
             errors,
             touched,
             isSubmitting,
-            dirty,
             values,
             setFieldValue,
             resetForm,
           }) => {
+            // Formik's own `dirty` does a strict string compare, so a
+            // case-only sectionName edit (e.g. "Apple" -> "APPLE") flips it
+            // to true and enables Save - but the backend's updateSection()
+            // compares sectionName with equalsIgnoreCase when deciding
+            // whether anything actually changed, so that submit comes back
+            // as a NoChangesDetected error even though the button said it
+            // was fine to save. This mirrors the backend's own change
+            // detection instead of Formik's, so Save only enables when the
+            // backend would actually agree something changed:
+            //  - sectionName: compare trimmed + lowercased, same as the
+            //    backend's equalsIgnoreCase
+            //  - gradeLevel: plain equality, same as the backend
+            //  - schoolYear / userId: any non-empty selection here is
+            //    already guaranteed to differ from the current one, since
+            //    sortedSchoolYears / sortedAdvisers exclude the section's
+            //    current school year and adviser from their option lists
+            const isSectionNameChanged =
+              mode === "edit" &&
+              (values.sectionName?.trim().toLowerCase() || "") !==
+                (initialData?.sectionName?.trim().toLowerCase() || "");
+
+            const hasRealChanges =
+              isSectionNameChanged ||
+              values.gradeLevel !== initialValues.gradeLevel ||
+              Boolean(values.schoolYear) ||
+              Boolean(values.userId);
+
             const isSaveDisabled =
-              isSubmitting || (mode === "edit" && !dirty);
+              isSubmitting || (mode === "edit" && !hasRealChanges);
 
             function handleClear() {
               resetForm();
@@ -436,6 +477,8 @@ function Sectionformmodal({
                     <AdviserSearchField
                       advisers={advisers}
                       value={values.userId}
+                      mode={mode}
+                      currentAdviserName={initialData?.adviser}
                       onChange={(nextValue) =>
                         setFieldValue("userId", nextValue)
                       }
