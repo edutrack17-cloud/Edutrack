@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,6 +23,7 @@ public class SchoolYearController {
     }
 
     //CREATE
+    @PreAuthorize("hasRole('admin')")
     @PostMapping
     public ResponseEntity<SchoolYearResponse> createSchoolYear(@Valid @RequestBody CreateSchoolYearRequest schoolYearRequest){
         SchoolYearResponse savedSchoolYear = schoolYearService.createSchoolYear(schoolYearRequest);
@@ -31,6 +33,7 @@ public class SchoolYearController {
     }
 
     //READ
+    @PreAuthorize("hasRole('admin')")
     @GetMapping
     public ResponseEntity<Page<SchoolYearResponse>> getSchoolYear(@RequestParam(required = false) String schoolYearName,
                                                                   @RequestParam(required = false) SchoolYearStatus schoolYearStatus,
@@ -39,6 +42,7 @@ public class SchoolYearController {
     }
 
     //UPDATE
+    @PreAuthorize("hasRole('admin')")
     @PatchMapping("{schoolYearId}")
     public ResponseEntity<SchoolYearResponse> updateSchoolYear(@PathVariable Long schoolYearId, @RequestBody UpdateSchoolYearRequest updateSchoolYearRequest){
         SchoolYearResponse updatedSchoolYear = schoolYearService.updateSchoolYear(schoolYearId, updateSchoolYearRequest);
@@ -48,6 +52,7 @@ public class SchoolYearController {
     }
 
     //ARCHIVE
+    @PreAuthorize("hasRole('admin')")
     @PatchMapping("{schoolYearId}/school-year-status/archive")
     public ResponseEntity<SchoolYearResponse> archiveSchoolYear(@PathVariable Long schoolYearId){
         SchoolYearResponse archivedSchoolYear = schoolYearService.archiveSchoolYear(schoolYearId);
@@ -57,6 +62,7 @@ public class SchoolYearController {
     }
 
     //MARK AS ACTIVE
+    @PreAuthorize("hasRole('admin')")
     @PatchMapping("{schoolYearId}/school-year-status/active")
     public ResponseEntity<SchoolYearResponse> restoreSchoolYear(@PathVariable Long schoolYearId){
         SchoolYearResponse restoredSchoolYear = schoolYearService.restoreSchoolYear(schoolYearId);
@@ -66,6 +72,7 @@ public class SchoolYearController {
     }
 
     //MARK AS CLOSED
+    @PreAuthorize("hasRole('admin')")
     @PatchMapping("{schoolYearId}/school-year-status/close")
     public ResponseEntity<SchoolYearResponse> closeSchoolYear(@PathVariable Long schoolYearId){
         SchoolYearResponse closedSchoolYear = schoolYearService.closeSchoolYear(schoolYearId);
@@ -73,6 +80,7 @@ public class SchoolYearController {
     }
 
     //MARK AS PLANNING
+    @PreAuthorize("hasRole('admin')")
     @PatchMapping("{schoolYearId}/school-year-status/planning")
     public ResponseEntity<SchoolYearResponse> markAsPlanning(@PathVariable Long schoolYearId){
         SchoolYearResponse markedAsPlanning = schoolYearService.markAsPlanning(schoolYearId);

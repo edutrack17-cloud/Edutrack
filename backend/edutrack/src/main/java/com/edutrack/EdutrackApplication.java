@@ -2,6 +2,7 @@ package com.edutrack;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,4 +18,5 @@ public class EdutrackApplication {
     public String welcome(){
         return "Welcome to Edutrack API";
     }
+
 }

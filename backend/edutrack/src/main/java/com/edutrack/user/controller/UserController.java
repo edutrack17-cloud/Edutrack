@@ -7,12 +7,13 @@ import com.edutrack.user.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("api/user")
 public class UserController {
     private final UserService userService;
 
@@ -21,6 +22,7 @@ public class UserController {
     }
 
     //CREATE
+    @PreAuthorize("hasRole('admin')")
     @PostMapping("createTeacher")
     public ResponseEntity<AdminCreateUserResponse> createTeacher(@Valid @RequestBody AdminCreateUserRequest clientRequest){
         AdminCreateUserResponse createdUser = userService.createTeacher(clientRequest);
@@ -28,6 +30,7 @@ public class UserController {
     }
 
     //TEACHER DROPDOWN
+    @PreAuthorize("hasRole('admin')")
     @GetMapping("teachers")
     public ResponseEntity<List<AdminCreateUserResponse>> teacherDropdown(){
         return ResponseEntity.ok(userService.teacherDropdown());

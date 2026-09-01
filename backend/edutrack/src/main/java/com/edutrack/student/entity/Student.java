@@ -15,7 +15,7 @@ public class Student {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long studentId;
 
-    @Column(nullable = false, length = 12)
+    @Column(nullable = false, length = 12, unique = true)
     private String lrn;
 
     @Column(nullable = false, length = 100)
@@ -36,7 +36,7 @@ public class Student {
     @Column(nullable = false, length = 11)
     private String guardianPhoneNumber;
 
-    @Column(nullable = false, length = 255)
+    @Column(nullable = false, length = 255, unique = true)
     private String rfid;
 
     @Enumerated(EnumType.STRING)

@@ -9,6 +9,7 @@ import com.edutrack.student.dto.response.StudentResponse;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,6 +24,7 @@ public class AttendanceController {
     }
 
     //CREATE
+    @PreAuthorize("hasAnyRole('admin', 'teacher', 'guard')")
     @PostMapping
     public ResponseEntity<AttendanceResponse> createAttendance(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
         AttendanceResponse savedAttendance = attendanceService.createAttendance(request);
@@ -30,6 +32,7 @@ public class AttendanceController {
     }
 
     //MANUAL ATTENDANCE
+    @PreAuthorize("hasAnyRole('admin', 'teacher')")
     @PostMapping("manual/{studentId}")
     public ResponseEntity<AttendanceResponse> manualAttendance(@PathVariable Long studentId, @RequestBody ManualAttendanceRequest request){
         AttendanceResponse savedManualAttendance = attendanceService.manualAttendance(studentId, request);
@@ -37,6 +40,7 @@ public class AttendanceController {
     }
 
     //MANUAL TIME-OUT
+    @PreAuthorize("hasAnyRole('admin', 'teacher')")
     @PatchMapping("manual-timeout/{studentId}")
     public ResponseEntity<AttendanceResponse> manualTimeOut(@PathVariable Long studentId){
         AttendanceResponse savedTimedOutAttendance = attendanceService.manualTimeOut(studentId);
@@ -44,6 +48,7 @@ public class AttendanceController {
     }
 
     //MARK AS PRESENT
+    @PreAuthorize("hasAnyRole('admin', 'teacher')")
     @PatchMapping("present")
     public ResponseEntity<AttendanceResponse> markAsPresent(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
         AttendanceResponse confirmedAttendance = attendanceService.markAsPresent(request);
@@ -51,6 +56,7 @@ public class AttendanceController {
     }
 
     //TIME-OUT
+    @PreAuthorize("hasAnyRole('admin', 'teacher', 'guard')")
     @PatchMapping("time-out")
     public ResponseEntity<AttendanceResponse> timeOut(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
         AttendanceResponse timedOutAttendance = attendanceService.timeOut(request);
@@ -58,6 +64,7 @@ public class AttendanceController {
     }
 
     //MULTIPLE ABSENT
+    @PreAuthorize("hasAnyRole('admin', 'teacher')")
     @PostMapping("close-attendance")
     public ResponseEntity<List<AttendanceResponse>> bulkMarkAsAbsent(@RequestParam String sectionName){
         return ResponseEntity.ok(attendanceService.bulkMarkAsAbsent(sectionName));
