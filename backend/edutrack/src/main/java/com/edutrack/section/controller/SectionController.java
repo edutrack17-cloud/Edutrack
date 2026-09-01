@@ -28,7 +28,7 @@ public class SectionController {
     }
 
     //CREATE
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<SectionResponse> createSection(@Valid @RequestBody CreateSectionRequest sectionRequest){
         SectionResponse savedSection = sectionService.createSection(sectionRequest);
@@ -38,7 +38,7 @@ public class SectionController {
     }
 
     //READ
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<Page<SectionResponse>> getSection(@RequestParam(required = false) String fullName,
                                                             @RequestParam(required = false) GradeLevel gradeLevel,
@@ -50,21 +50,21 @@ public class SectionController {
     }
 
     //READ BY ADVISER
-    @PreAuthorize("hasAnyRole('admin', 'teacher')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("{userId}")
     public ResponseEntity<List<SectionResponse>> readSectionByAdviser(@PathVariable Long userId){
         return ResponseEntity.ok(sectionService.readSectionByAdviser(userId));
     }
 
     //SECTION DROPDOWN
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("dropdown")
     public ResponseEntity<List<SectionResponse>> sectionDropdown(@RequestParam(required = false) GradeLevel gradeLevel){
         return ResponseEntity.ok(sectionService.sectionDropDown(gradeLevel));
     }
 
     //UPDATE
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{sectionId}")
     public ResponseEntity<SectionResponse> updateSection(
             @PathVariable Integer sectionId,
@@ -75,7 +75,7 @@ public class SectionController {
     }
 
     //ARCHIVE
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("{sectionId}/section-status/archive")
     public ResponseEntity<SectionResponse> archiveSection(@PathVariable Integer sectionId) {
         SectionResponse response = sectionService.archiveSection(sectionId);
@@ -83,7 +83,7 @@ public class SectionController {
     }
 
     //RESTORE
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("{sectionId}/section-status/active")
     public ResponseEntity<SectionResponse> restoreSection(@PathVariable Integer sectionId) {
         SectionResponse response = sectionService.restoreSection(sectionId);
@@ -91,7 +91,7 @@ public class SectionController {
     }
 
     //START NEW SCHOOL YEAR
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("school-year/new-school-year")
     public ResponseEntity<List<SectionResponse>> startNewSchoolYear(@RequestBody NewSchoolYearRequest request){
         return ResponseEntity.ok(sectionService.newSchoolYear(request));

@@ -1,8 +1,9 @@
 package com.edutrack.user.controller;
 
 import com.edutrack.user.dto.request.AdminCreateUserRequest;
-import com.edutrack.user.dto.response.AdminCreateUserResponse;
-import com.edutrack.user.entity.User;
+import com.edutrack.user.dto.request.UpdateUserRequest;
+import com.edutrack.user.dto.response.UserResponse;
+import com.edutrack.user.repository.UserRepository;
 import com.edutrack.user.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -16,24 +17,42 @@ import java.util.List;
 @RequestMapping("api/user")
 public class UserController {
     private final UserService userService;
+    private final UserRepository userRepository;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, UserRepository userRepository) {
         this.userService = userService;
+        this.userRepository = userRepository;
     }
 
     //CREATE
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("createTeacher")
-    public ResponseEntity<AdminCreateUserResponse> createTeacher(@Valid @RequestBody AdminCreateUserRequest clientRequest){
-        AdminCreateUserResponse createdUser = userService.createTeacher(clientRequest);
+    public ResponseEntity<UserResponse> createTeacher(@Valid @RequestBody AdminCreateUserRequest clientRequest){
+        UserResponse createdUser = userService.createTeacher(clientRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }
 
     //TEACHER DROPDOWN
-    @PreAuthorize("hasRole('admin')")
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("teachers")
-    public ResponseEntity<List<AdminCreateUserResponse>> teacherDropdown(){
+    public ResponseEntity<List<UserResponse>> teacherDropdown(){
         return ResponseEntity.ok(userService.teacherDropdown());
+    }
+
+    //READ LOGGED-IN USER
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @GetMapping("{userId}")
+    public UserResponse readAuthenticatedUser(@PathVariable Long userId){
+        UserResponse foundAuthenticatedUser = userService.authenticatedUser(userId);
+        return ResponseEntity.ok(foundAuthenticatedUser).getBody();
+    }
+
+    //UPDATE
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PatchMapping("update/{userId}")
+    public ResponseEntity<UserResponse> updateUser(@PathVariable Long userId, @RequestBody UpdateUserRequest request){
+        UserResponse updatedUser = userService.updateUser(userId, request);
+        return ResponseEntity.ok(updatedUser);
     }
 
 }
