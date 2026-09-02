@@ -6,7 +6,5 @@ public record CreateLogRequest(
    String logHeader,
 
    @Column(columnDefinition = "TEXT")
-   String logDescription,
-
-   Long userId
+   String logDescription
 ) {}

@@ -1,5 +1,7 @@
+
 package com.edutrack.student.service;
 
+import com.edutrack.activitylog.service.ActivityLogService;
 import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
@@ -42,6 +44,25 @@ public class StudentService {
     private final SectionRepository sectionRepository;
     private final StudentSectionAssignmentRepository studentSectionAssignmentRepository;
     private final SectionService sectionService;
+    private final ActivityLogService activityLogService;
+
+    private boolean hasText(String field){
+        return field != null && !field.isBlank();
+    }
+    public StudentService(StudentRepository studentRepository,
+                          StudentMapper studentMapper,
+                          SectionRepository sectionRepository,
+                          SectionService sectionService,
+                          StudentSectionAssignmentRepository studentSectionAssignmentRepository,
+                          ActivityLogService activityLogService) {
+        this.studentRepository = studentRepository;
+        this.studentMapper = studentMapper;
+        this.sectionRepository = sectionRepository;
+        this.sectionService = sectionService;
+        this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
+        this.activityLogService = activityLogService;
+    }
+
     LocalDate now = LocalDate.now();
 
     private Section getBySectionId(int sectionId){
@@ -62,21 +83,6 @@ public class StudentService {
                 .orElseThrow(() -> new SectionAssignmentNotFound(studentId));
     }
 
-
-    private boolean hasText(String field){
-        return field != null && !field.isBlank();
-    }
-    public StudentService(StudentRepository studentRepository,
-                          StudentMapper studentMapper,
-                          SectionRepository sectionRepository,
-                          SectionService sectionService,
-                          StudentSectionAssignmentRepository studentSectionAssignmentRepository) {
-        this.studentRepository = studentRepository;
-        this.studentMapper = studentMapper;
-        this.sectionRepository = sectionRepository;
-        this.sectionService = sectionService;
-        this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
-    }
 
     //ENROLL STUDENT
     @Transactional
@@ -117,6 +123,12 @@ public class StudentService {
        assignmentToCreate.setStudent(savedStudent);
        assignmentToCreate.setSection(sectionToBeAssigned);
        studentSectionAssignmentRepository.save(assignmentToCreate);
+
+       //LOG CREATION
+       activityLogService.createLogRecord(
+               "STUDENT ENROLLED",
+               "d"
+       );
 
        return studentMapper.toStudentResponseDTO(savedStudent, sectionToBeAssigned);
     }
