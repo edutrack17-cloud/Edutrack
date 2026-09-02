@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
+import { useAuth } from "../../Context/Authcontext";
 
 
 const pageTitles = {
@@ -18,11 +19,6 @@ const pageTitles = {
   "/change-password": "Change Password",
 };
 
-// Only used as a FALLBACK for as long as there's no auth backend to
-// log in against (see the TODO in AppRoutes.jsx). Once real login
-// works, useAuth().role takes over and this is never consulted.
-const ADMIN_ONLY_PATHS = ["/user-management", "/section-level", "/logs-reports", "/school-year"];
-
 function MainLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -30,14 +26,13 @@ function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const pageTitle = pageTitles[location.pathname] || "Dashboard";
+  // MainLayout only ever renders behind <ProtectedRoute>, which already
+  // guarantees an AuthProvider is above it and that the user is logged
+  // in, so it's safe to read real session data here now instead of
+  // guessing the role from the current path.
+  const { user, role, logout } = useAuth();
 
-  // TEMP: AuthContext exists (src/Context/AuthContext.jsx) but no
-  // <AuthProvider> wraps the app yet, so useAuth() throws. Reverted to
-  // URL-only guessing for now since only User Management is in scope -
-  // swap back to useAuth() once AuthProvider is wired up in
-  // App.jsx/main.jsx.
-  const role = ADMIN_ONLY_PATHS.includes(location.pathname) ? "admin" : "teacher";
+  const pageTitle = pageTitles[location.pathname] || "Dashboard";
   const isAdmin = role === "admin";
 
   function toggleSidebarCollapse() {
@@ -52,17 +47,16 @@ function MainLayout() {
     setIsMobileSidebarOpen(false);
   }
 
-  function handleLogout() {
-    // TEMP: real session clearing (logout() from useAuth) comes back
-    // once AuthProvider wraps the app - for now this just navigates away.
+  async function handleLogout() {
+    await logout();
     navigate("/login", { replace: true });
   }
 
   const contentMarginClass = isSidebarCollapsed ? "md:ml-20" : "md:ml-72";
 
-  // TEMP: placeholder only - will read the real logged-in user's name
-  // once useAuth() is back.
-  const fullname = isAdmin ? "ADMINISTRATOR" : "IORI YAGAMI";
+  // Backend's LoginResponse only sends back a username (no first/last
+  // name), so that's what gets shown here.
+  const fullname = user?.username ?? (isAdmin ? "ADMINISTRATOR" : "TEACHER");
 
   return (
     <div className="min-h-screen bg-gray/40">

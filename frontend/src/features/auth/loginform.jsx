@@ -1,26 +1,34 @@
 import React from "react";
 import { useFormik } from "formik";
+import { useNavigate } from "react-router-dom";
 import { User, Lock } from "lucide-react";
 
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import loginSchema from "./loginSchema";
 import { loginUser } from "./authService";
+import { useAuth } from "../../Context/Authcontext";
 
 function LoginForm() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
   async function handleLoginSubmit(values, formikHelpers) {
     formikHelpers.setStatus(undefined);
 
     try {
-      // TODO: Connect to Spring Boot Login API
-      // POST /api/auth/login
-      const data = await loginUser(values);
+      // authService.loginUser() already returns { token, user: { id, username, role } }
+      // normalized from the backend's LoginResponse - nothing left to map here.
+      const { token, user } = await loginUser(values);
 
-      // TODO: JWT token storage (placeholder only for now)
-      localStorage.setItem("token", data.token);
+      login({ token, user });
 
-      // TODO: Redirect to the correct dashboard once it exists
-      console.log("Login successful. Would redirect to a dashboard here.");
+      // Guards don't use the MainLayout/dashboard shell (no sidebar nav
+      // items exist for them) - send them straight to their own screen.
+      // Admins and teachers both land on /dashboard; MainLayout/Sidebar
+      // already branch their UI off `role`.
+      const redirectPath = user.role === "guard" ? "/guard-attendance" : "/dashboard";
+      navigate(redirectPath, { replace: true });
     } catch (error) {
       formikHelpers.setStatus("Login failed. Please check your username and password.");
     }

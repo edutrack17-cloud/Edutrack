@@ -2,12 +2,10 @@
 //
 // Single source of truth for "who is logged in and what's their role."
 // Sidebar/MainLayout/route guards all read from here instead of
-// guessing role from the URL (MainLayout.jsx used to do
-// ADMIN_ONLY_PATHS.includes(pathname), which is just cosmetic - it
-// never actually blocked anyone from typing /user-management in the
-// address bar).
+// guessing role from the URL.
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { logoutUser } from "../features/auth/authService";
 
 const AuthContext = createContext(null);
 
@@ -36,30 +34,36 @@ export function AuthProvider({ children }) {
 
   // Called by LoginForm.jsx right after loginUser() resolves.
   //
-  // EXPECTED shape from POST /api/auth/login (Spring Boot):
-  //   { token: "...", user: { id, username, firstName, lastName, role } }
+  // Expects: { token: "...", user: { id, username, role } }
   //
-  // role MUST come back lowercase - "admin" | "teacher" - matching
-  // users.role ENUM(admin, teacher) in the DB. Sidebar.jsx and
+  // role MUST be lowercase - "admin" | "teacher" - Sidebar.jsx and
   // ProtectedRoute.jsx both compare against these lowercase values.
-  //
-  // TODO: BACKEND CONNECTION - if the real login response is shaped
-  // differently (e.g. role nested under a "roles" array, or the user
-  // fields under a different key), adjust this function only - nothing
-  // else in the app needs to change since everyone else reads from
-  // useAuth().
+  // authService.loginUser() already normalizes the backend's flat
+  // LoginResponse (token, userId, username, userRole) into this shape,
+  // so this function and everything downstream of it stays the same
+  // no matter how the backend's DTO is shaped.
   function login({ token, user: loggedInUser }) {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(loggedInUser));
     setUser(loggedInUser);
   }
 
-  function logout() {
-    // TODO: BACKEND CONNECTION - also call POST /api/auth/logout to
-    // invalidate the session server-side, not just clear it locally.
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    setUser(null);
+  // Clears the session locally AND revokes the token server-side via
+  // POST /api/auth/logout, so an old/copied token can't keep being
+  // used after the user's logged out.
+  async function logout() {
+    try {
+      await logoutUser();
+    } catch (error) {
+      // Still clear the local session even if the server call fails
+      // (expired token, network hiccup, etc.) - better to be logged
+      // out locally than stuck in a broken "logged in" state.
+      console.error("Logout request failed:", error);
+    } finally {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      setUser(null);
+    }
   }
 
   const value = {

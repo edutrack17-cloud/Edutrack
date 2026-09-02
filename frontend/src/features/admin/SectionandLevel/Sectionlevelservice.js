@@ -6,6 +6,33 @@ const sectionApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Attach the JWT to every outgoing request so the backend's
+// @PreAuthorize checks (hasRole('ADMIN'), etc.) actually see who's calling.
+// Without this, requests go out unauthenticated even after a successful
+// login - AuthContext.jsx stores the token under localStorage key "token".
+sectionApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// If the token is missing/expired/revoked, the backend responds 401.
+// Clear the stale session and send the user back to login instead of
+// letting every subsequent call fail silently.
+sectionApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login"; // adjust to your actual login route
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const GRADE_LEVEL_OPTIONS = [
   { value: "Grade_4", label: "Grade 4" },
   { value: "Grade_5", label: "Grade 5" },
