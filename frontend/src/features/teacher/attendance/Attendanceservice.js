@@ -1,5 +1,21 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
 
+async function authFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+  const headers = { ...options.headers };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+  }
+
+  return response;
+}
+
 // CONFIRMED via AttendanceStatus.java (com.edutrack.attendance.enums) -
 // THREE values as of the latest backend pull: present / on_school /
 // absent (previously we only mapped present/absent - on_school is the

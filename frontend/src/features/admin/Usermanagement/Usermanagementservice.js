@@ -6,6 +6,26 @@ const userApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+userApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+userApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
 function getErrorMessage(error, fallback) {
   return error?.response?.data?.message || fallback;
 }
@@ -106,7 +126,7 @@ async function getActiveSectionsByAdviserName() {
 // section-assignment data to the teacher response.
 export async function getUsers({ status, search, page = 1, size = 10 } = {}) {
   try {
-    const { data } = await userApi.get("/teachers");
+    const { data } = await userApi.get("user/teachers");
     let mapped = data.map(mapTeacherResponse);
 
     // TEMPORARY STOPGAP - see getActiveSectionsByAdviserName() above.

@@ -77,7 +77,7 @@ export async function getSections({ search, sectionSearch, gradeLevel, status, p
 }
 
 
-// CONNECT: POST /api/section
+// CONNECT: POST /api/section/
 export async function createSection(data) {
   try {
     const response = await sectionApi.post("/section", data);
@@ -124,7 +124,7 @@ export async function restoreSection(sectionId) {
 // CONNECT: GET /api/teachers
 export async function getTeachers() {
   try {
-    const { data } = await sectionApi.get("/teachers");
+    const { data } = await sectionApi.get("user/teachers");
     return data.map((teacher) => ({
       id: teacher.userId,
       name: teacher.fullName,

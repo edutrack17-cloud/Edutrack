@@ -6,9 +6,31 @@ const schoolYearApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+schoolYearApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+schoolYearApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
 function getErrorMessage(error, fallback) {
   return error?.response?.data?.message || fallback;
 }
+
+
 
 // CONNECT: GET /api/school-year
 export async function getSchoolYears({ search, status, page = 0, size = 10, signal } = {}) {

@@ -14,6 +14,26 @@ const studentApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+studentApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+studentApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
 // BACKEND GAP: there is no @ControllerAdvice/@ExceptionHandler on the
 // backend, so custom exceptions (StudentAlreadyExists, RFIDAlreadyExists,
 // StudentUnderAge, InactiveSectionNotAllowed, etc. - each with a real,
