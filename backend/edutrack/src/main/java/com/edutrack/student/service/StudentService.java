@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.Period;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -62,6 +63,8 @@ public class StudentService {
         this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
         this.activityLogService = activityLogService;
     }
+
+    private static final DateTimeFormatter DATE_FORMATTER =                                                                                                                                         DateTimeFormatter.ofPattern("MMM d, yyyy");
 
     LocalDate now = LocalDate.now();
 
@@ -127,7 +130,12 @@ public class StudentService {
        //LOG CREATION
        activityLogService.createLogRecord(
                "STUDENT ENROLLED",
-               "d"
+                "enrolled student "
+                        + NameUtil.buildFullName(
+                                savedStudent.getFirstName(),
+                                savedStudent.getMiddleName(),
+                                savedStudent.getLastName()
+                ) + " to section " + sectionToBeAssigned.getSectionName()
        );
 
        return studentMapper.toStudentResponseDTO(savedStudent, sectionToBeAssigned);
@@ -161,43 +169,45 @@ public class StudentService {
     public StudentEditResponse updateStudent(Long studentId, UpdateStudentRequest updateStudentRequest){
         Student studentToUpdate = getByStudentId(studentId);
         StudentSectionAssignment sectionOfStudent = studentSection(studentId);
-        boolean fieldsChanged = false;
+        List<String> changes = new ArrayList<>();
 
         if (updateStudentRequest.firstName() != null &&
                 !updateStudentRequest.firstName().isBlank() &&
                 !studentToUpdate.getFirstName().equalsIgnoreCase(updateStudentRequest.firstName())){
+            changes.add("first name: from " + studentToUpdate.getFirstName() + " to " + updateStudentRequest.firstName());
             studentToUpdate.setFirstName(updateStudentRequest.firstName());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.middleName() != null) {
             String normalizedMiddleName = updateStudentRequest.middleName().isBlank()
                     ? null : updateStudentRequest.middleName();
             if (!Objects.equals(studentToUpdate.getMiddleName(), normalizedMiddleName)) {
+                String oldMiddleName = studentToUpdate.getMiddleName() == null ? "none" : studentToUpdate.getMiddleName();
+                String newMiddleName = normalizedMiddleName == null ? "none" : normalizedMiddleName;
+                changes.add("middle name: from " + oldMiddleName + " to " + newMiddleName);
                 studentToUpdate.setMiddleName(normalizedMiddleName);
-                fieldsChanged = true;
             }
         }
 
         if (updateStudentRequest.lastName() != null &&
                 !updateStudentRequest.lastName().isBlank() &&
                 !studentToUpdate.getLastName().equalsIgnoreCase(updateStudentRequest.lastName())){
+            changes.add("last name: from " + studentToUpdate.getLastName() + " to " + updateStudentRequest.lastName());
             studentToUpdate.setLastName(updateStudentRequest.lastName());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.guardian() != null &&
                 !updateStudentRequest.guardian().isBlank() &&
                 !studentToUpdate.getGuardian().equalsIgnoreCase(updateStudentRequest.guardian())){
+            changes.add("guardian: from " + studentToUpdate.getGuardian() + " to " + updateStudentRequest.guardian());
             studentToUpdate.setGuardian(updateStudentRequest.guardian());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.guardianPhoneNumber() != null &&
                 !updateStudentRequest.guardianPhoneNumber().isBlank() &&
                 !studentToUpdate.getGuardianPhoneNumber().equalsIgnoreCase(updateStudentRequest.guardianPhoneNumber())){
+            changes.add("guardian phone number: from " + studentToUpdate.getGuardianPhoneNumber() + " to " + updateStudentRequest.guardianPhoneNumber());
             studentToUpdate.setGuardianPhoneNumber(updateStudentRequest.guardianPhoneNumber());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.rfid() != null &&
@@ -206,18 +216,18 @@ public class StudentService {
             if (studentRepository.existsByRfid(updateStudentRequest.rfid())){
                 throw new RFIDAlreadyExists();
             }
+            changes.add("RFID: from " + studentToUpdate.getRfid() + " to " + updateStudentRequest.rfid());
             studentToUpdate.setRfid(updateStudentRequest.rfid());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.lrn() != null &&
                 !updateStudentRequest.lrn().isBlank() &&
-                !studentToUpdate.getLrn().equalsIgnoreCase(updateStudentRequest.lrn())){ // fixed
+                !studentToUpdate.getLrn().equalsIgnoreCase(updateStudentRequest.lrn())){
             if (studentRepository.existsByLrn(updateStudentRequest.lrn())){
                 throw new StudentAlreadyExists(updateStudentRequest.lrn());
             }
+            changes.add("LRN: from " + studentToUpdate.getLrn() + " to " + updateStudentRequest.lrn());
             studentToUpdate.setLrn(updateStudentRequest.lrn());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.birthDate() != null &&
@@ -226,14 +236,15 @@ public class StudentService {
             if (age < 9){
                 throw new StudentUnderAge();
             }
+            changes.add("birth date: from " + studentToUpdate.getBirthDate().format(DATE_FORMATTER)
+                    + " to " + updateStudentRequest.birthDate().format(DATE_FORMATTER));
             studentToUpdate.setBirthDate(updateStudentRequest.birthDate());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.admissionType() != null &&
                 studentToUpdate.getAdmissionType() != updateStudentRequest.admissionType()){
+            changes.add("admission type: from " + studentToUpdate.getAdmissionType() + " to " + updateStudentRequest.admissionType());
             studentToUpdate.setAdmissionType(updateStudentRequest.admissionType());
-            fieldsChanged = true;
         }
 
         if (updateStudentRequest.sectionId() != null){
@@ -253,20 +264,23 @@ public class StudentService {
             }
 
             if (assignment.getSection().getSectionId() != updateStudentRequest.sectionId()){
-                Section section = sectionRepository
-                        .findById(updateStudentRequest.sectionId())
-                        .orElseThrow(() -> new SectionNotFound(updateStudentRequest.sectionId()));
+                changes.add("section: from " + assignment.getSection().getSectionName() + " to " + sectionRequest.getSectionName());
 
-                assignment.setSection(section);
+                assignment.setSection(sectionRequest);
                 assignment.setUpdatedAt(now);
-
-                fieldsChanged = true;
             }
         }
 
-        if (!fieldsChanged){
+        if (changes.isEmpty()){
             throw new NoChangesDetected();
         }
+
+        activityLogService.createLogRecord(
+                "STUDENT INFORMATION UPDATED",
+                "updated the student information of "
+                        + NameUtil.buildFullName(studentToUpdate.getFirstName(), studentToUpdate.getMiddleName(), studentToUpdate.getLastName())
+                        + ", " + String.join(", ", changes)
+        );
 
         return studentMapper.toStudentEditResponseDTO(studentToUpdate, sectionOfStudent);
     }
@@ -286,11 +300,14 @@ public class StudentService {
         }
 
         List<StudentResponse> responses = new ArrayList<>();
+        List<String> promotedStudents = new ArrayList<>();
 
         studentsToUpdate.forEach(student -> {
             StudentSectionAssignment currentAssignment =
                     studentSectionAssignmentRepository.findByStudentAndLeftAtIsNull(student)
                             .orElseThrow(() -> new StudentNotFound(student.getStudentId()));
+
+            String previousSectionName = currentAssignment.getSection().getSectionName();
 
             currentAssignment.setLeftAt(now);
             currentAssignment.setUpdatedAt(now);
@@ -303,6 +320,11 @@ public class StudentService {
 
             studentSectionAssignmentRepository.save(newAssignment);
 
+            promotedStudents.add(
+                    NameUtil.buildFullName(student.getFirstName(), student.getMiddleName(), student.getLastName())
+                            + " (from " + previousSectionName + ")"
+            );
+
             StudentResponse response =
                     studentMapper.toStudentResponseDTO(
                             student,
@@ -311,6 +333,13 @@ public class StudentService {
 
             responses.add(response);
         });
+
+        activityLogService.createLogRecord(
+                "STUDENT PROMOTED",
+                "promoted " + promotedStudents.size() + " student(s) to section "
+                        + promotedStudentSection.getSectionName() + ": "
+                        + String.join(", ", promotedStudents)
+        );
 
         return responses;
     }
@@ -339,6 +368,13 @@ public class StudentService {
             assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
         }
 
+        activityLogService.createLogRecord(
+                "STUDENT DROPPED",
+                "marked " +
+                NameUtil.buildFullName(studentToDrop.getFirstName(), studentToDrop.getMiddleName(), studentToDrop.getLastName()) +
+                " as dropped"
+
+        );
         return studentMapper.toStudentEditResponseDTO(studentToDrop, sectionOfStudent);
     }
 
@@ -366,6 +402,14 @@ public class StudentService {
             assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
         }
 
+        activityLogService.createLogRecord(
+                "STUDENT TRANSFERRED OUT",
+                "marked " +
+                        NameUtil.buildFullName(studentToTransfer.getFirstName(), studentToTransfer.getMiddleName(), studentToTransfer.getLastName()) +
+                        " as transferred out"
+
+        );
+
         return studentMapper.toStudentEditResponseDTO(studentToTransfer, sectionOfStudent);
     }
 
@@ -392,6 +436,14 @@ public class StudentService {
                 !updateStudentStatusRequest.remarks().isBlank()){
             assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
         }
+
+        activityLogService.createLogRecord(
+                "STUDENT GRADUATED",
+                "marked " +
+                        NameUtil.buildFullName(studentToGraduate.getFirstName(), studentToGraduate.getMiddleName(), studentToGraduate.getLastName()) +
+                        " as graduated"
+
+        );
 
         return studentMapper.toStudentEditResponseDTO(studentToGraduate, sectionOfStudent);
     }
@@ -432,6 +484,15 @@ public class StudentService {
         newStudentSectionAssignment.setAssignedAt(now);
         newStudentSectionAssignment.setCreatedAt(now);
         studentSectionAssignmentRepository.save(newStudentSectionAssignment);
+
+        activityLogService.createLogRecord(
+                "STUDENT SECTION TRANSFER",
+                "transferred " +
+                        NameUtil.buildFullName(studentToTransfer.getFirstName(), studentToTransfer.getMiddleName(), studentToTransfer.getLastName()) +
+                        " from section " + sectionAssignmentOfStudent.getSection().getSectionName() +
+                        " to section " + selectedSection.getSectionName()
+
+        );
 
         return studentMapper.toStudentEditResponseDTO(
                 studentToTransfer,

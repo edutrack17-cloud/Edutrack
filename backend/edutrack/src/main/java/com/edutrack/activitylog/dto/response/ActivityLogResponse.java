@@ -10,5 +10,5 @@ public record ActivityLogResponse(
    @Column(columnDefinition = "TEXT")
    String logDescription,
    LocalDateTime createdAt,
-   Long userId
+   String userFullName
 ) {}

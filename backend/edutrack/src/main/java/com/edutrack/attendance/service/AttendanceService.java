@@ -1,5 +1,6 @@
 package com.edutrack.attendance.service;
 
+import com.edutrack.activitylog.service.ActivityLogService;
 import com.edutrack.attendance.dto.request.ManualAttendanceRequest;
 import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
@@ -9,6 +10,7 @@ import com.edutrack.attendance.exception.*;
 import com.edutrack.attendance.mapper.AttendanceMapper;
 import com.edutrack.attendance.repository.AttendanceRepository;
 import com.edutrack.attendance.specification.AttendanceSpecification;
+import com.edutrack.shared.util.NameUtil;
 import com.edutrack.student.mapper.StudentMapper;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
@@ -30,14 +32,18 @@ public class AttendanceService {
     private AttendanceRepository attendanceRepository;
     private AttendanceMapper attendanceMapper;
     private StudentSectionAssignmentRepository studentSectionAssignmentRepository;
+    private final ActivityLogService activityLogService;
 
-    public AttendanceService(AttendanceRepository attendanceRepository,
+    public AttendanceService(StudentMapper studentMapper,
+                             AttendanceRepository attendanceRepository,
                              AttendanceMapper attendanceMapper,
-                             StudentSectionAssignmentRepository studentSectionAssignmentRepository, StudentMapper studentMapper) {
+                             StudentSectionAssignmentRepository studentSectionAssignmentRepository,
+                             ActivityLogService activityLogService) {
+        this.studentMapper = studentMapper;
         this.attendanceRepository = attendanceRepository;
         this.attendanceMapper = attendanceMapper;
         this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
-        this.studentMapper = studentMapper;
+        this.activityLogService = activityLogService;
     }
 
     private StudentSectionAssignment findAssignmentByStudentId(Long studentId){
@@ -103,6 +109,15 @@ public class AttendanceService {
         }
 
         Attendance savedAttendance = attendanceRepository.save(manualAttendance);
+
+        activityLogService.createLogRecord(
+                "MANUAL ATTENDANCE",
+                "manually marked Student " +
+                NameUtil.buildFullName(studentToTimeIn.getStudent().getFirstName(),
+                                       studentToTimeIn.getStudent().getMiddleName(),
+                                       studentToTimeIn.getStudent().getLastName()) +
+                " as present"
+        );
         return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
     }
 
@@ -128,6 +143,14 @@ public class AttendanceService {
 
         attendanceToTimeOUt.setDateTimeOut(LocalDateTime.now());
         Attendance savedTimeOutAttendance = attendanceRepository.save(attendanceToTimeOUt);
+
+        activityLogService.createLogRecord(
+                "MANUAL ATTENDANCE",
+                "manually closed the attendance record of Student " +
+                        NameUtil.buildFullName(studentToTimeOut.getStudent().getFirstName(),
+                                studentToTimeOut.getStudent().getMiddleName(),
+                                studentToTimeOut.getStudent().getLastName())
+        );
         return attendanceMapper.toAttendanceResponseDTO(savedTimeOutAttendance);
     }
 
@@ -214,6 +237,8 @@ public class AttendanceService {
                 .filter(s -> !assignmentIdsWithAttendance.contains(s.getAssignmentId()))
                 .toList();
 
+        if (absentStudents.isEmpty()) return List.of();
+
         List<Attendance> absentRecords = absentStudents.stream()
                 .map(assignment -> {
                     Attendance absentAttendanceRecord = new Attendance();
@@ -224,6 +249,18 @@ public class AttendanceService {
                 .toList();
 
         List<Attendance> savedAbsentRecords = attendanceRepository.saveAll(absentRecords);
+
+        String studentNames = absentStudents.stream()
+                .map(assignment -> NameUtil.buildFullName(
+                        assignment.getStudent().getFirstName(),
+                        assignment.getStudent().getMiddleName(),
+                        assignment.getStudent().getLastName()))
+                .collect(Collectors.joining(", "));
+
+        activityLogService.createLogRecord(
+                "MARKED STUDENTS AS ABSENT",
+                "marked Students: " + studentNames + " as absent in Section " + sectionName
+        );
 
         return savedAbsentRecords.stream()
                 .map(attendanceMapper::toAttendanceResponseDTO)
