@@ -72,4 +72,11 @@ public class StudentSectionAssignmentSpecification {
             );
         };
     }
+
+    public static Specification<StudentSectionAssignment> hasAdviserId(Long adviserId){
+        return (root, query, criteriaBuilder) -> {
+            if (adviserId == null) return criteriaBuilder.conjunction();
+            return criteriaBuilder.equal(root.get("section").get("user").get("userId"), adviserId);
+        };
+    }
 }

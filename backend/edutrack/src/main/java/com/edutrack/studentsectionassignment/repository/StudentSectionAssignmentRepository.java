@@ -22,5 +22,7 @@ public interface StudentSectionAssignmentRepository
 
     Optional<StudentSectionAssignment> findByStudent_RfidAndLeftAtIsNull(String rfid);
 
+    List<StudentSectionAssignment> findByStudent_StudentIdInAndLeftAtIsNull(List<Long> studentIds);
+
     Long student(Student student);
 }

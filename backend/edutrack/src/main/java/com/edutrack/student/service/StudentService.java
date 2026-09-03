@@ -9,6 +9,7 @@ import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.section.exception.SectionNotFound;
 import com.edutrack.section.repository.SectionRepository;
 import com.edutrack.section.service.SectionService;
+import com.edutrack.security.CustomUserDetails;
 import com.edutrack.shared.exception.NoChangesDetected;
 import com.edutrack.shared.util.NameUtil;
 import com.edutrack.student.dto.request.*;
@@ -24,9 +25,11 @@ import com.edutrack.studentsectionassignment.enums.ExitType;
 import com.edutrack.studentsectionassignment.exception.SectionAssignmentNotFound;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
+import com.edutrack.user.enums.UserRole;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -142,11 +145,9 @@ public class StudentService {
     }
 
     //READ
-    public Page<StudentResponse> getStudents(GradeLevel gradeLevel,
-                                             String sectionName,
-                                             StudentStatus studentStatus,
-                                             String studentName,
-                                             Pageable pageable){
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
+    public Page<StudentResponse> getStudents(GradeLevel gradeLevel, String sectionName, StudentStatus studentStatus,
+                                             String studentName, Pageable pageable, CustomUserDetails principal){
 
         Specification<StudentSectionAssignment> filters = Specification
                 .where(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
@@ -155,16 +156,17 @@ public class StudentService {
                 .and(StudentSectionAssignmentSpecification.isCurrent())
                 .and(StudentSectionAssignmentSpecification.hasStudentName(studentName));
 
+        if (principal.getUser().getUserRole() == UserRole.teacher){
+            filters = filters.and(StudentSectionAssignmentSpecification.hasAdviserId(principal.getUser().getUserId()));
+        }
+
         return studentSectionAssignmentRepository
                 .findAll(filters, pageable)
-                .map(assignment ->
-                        studentMapper.toStudentResponseDTO(
-                                assignment.getStudent(),
-                                assignment.getSection()
-                        ));
+                .map(assignment -> studentMapper.toStudentResponseDTO(assignment.getStudent(), assignment.getSection()));
     }
 
     //UPDATE
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse updateStudent(Long studentId, UpdateStudentRequest updateStudentRequest){
         Student studentToUpdate = getByStudentId(studentId);
@@ -286,6 +288,7 @@ public class StudentService {
     }
 
     //BULK PROMOTION
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#promotionRequest.studentIds()))")
     @Transactional
     public List<StudentResponse> promoteStudents(BulkPromotionRequest promotionRequest){
         Section promotedStudentSection = getBySectionId(promotionRequest.targetSectionId());
@@ -345,6 +348,7 @@ public class StudentService {
     }
 
     //DROP STUDENT
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse dropStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
         Student studentToDrop = getByStudentId(studentId);
@@ -379,6 +383,7 @@ public class StudentService {
     }
 
     //TRANSFER OUT STUDENT
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse transferOutStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
         Student studentToTransfer = getByStudentId(studentId);
@@ -414,6 +419,7 @@ public class StudentService {
     }
 
     //GRADUATED
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse graduateStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
         Student studentToGraduate = getByStudentId(studentId);
@@ -449,6 +455,7 @@ public class StudentService {
     }
 
     //SECTION TRANSFER
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse transferStudent(Long studentId, TransferSectionRequest transferSectionRequest){
         Section selectedSection = getBySectionId(transferSectionRequest.sectionId());

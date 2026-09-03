@@ -1,6 +1,7 @@
 package com.edutrack.student.controller;
 
 import com.edutrack.section.enums.GradeLevel;
+import com.edutrack.security.CustomUserDetails;
 import com.edutrack.student.dto.request.*;
 import com.edutrack.student.dto.response.StudentEditResponse;
 import com.edutrack.student.dto.response.StudentResponse;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,7 +27,7 @@ public class StudentController {
     }
 
     //ENROLL STUDENT
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @PostMapping
     public ResponseEntity<StudentResponse> enrollStudent(@Valid @RequestBody CreateStudentRequest studentRequest){
         StudentResponse enrolledStudent = studentService.enrollStudent(studentRequest);
@@ -33,20 +35,30 @@ public class StudentController {
                 .ok(enrolledStudent);
     }
 
-    //READ
+    // READ
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     @GetMapping
-    public ResponseEntity<Page<StudentResponse>> getStudents(@RequestParam(required = false) GradeLevel gradeLevel,
-                                                             @RequestParam(required = false) String sectionName,
-                                                             @RequestParam(required = false) StudentStatus studentStatus,
-                                                             @RequestParam(required = false) String studentName,
-                                                             Pageable pageable){
+    public ResponseEntity<Page<StudentResponse>> getStudents(
+            @RequestParam(required = false) GradeLevel gradeLevel,
+            @RequestParam(required = false) String sectionName,
+            @RequestParam(required = false) StudentStatus studentStatus,
+            @RequestParam(required = false) String studentName,
+            Pageable pageable,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
         return ResponseEntity
-                .ok(studentService.getStudents(gradeLevel, sectionName, studentStatus, studentName, pageable));
+                .ok(studentService.getStudents(
+                        gradeLevel,
+                        sectionName,
+                        studentStatus,
+                        studentName,
+                        pageable,
+                        principal
+                ));
     }
 
     //UPDATE
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @PatchMapping("{studentId}")
     public ResponseEntity<StudentEditResponse> updateStudent(@PathVariable Long studentId, @RequestBody UpdateStudentRequest updateStudentRequest){
         StudentEditResponse updatedStudent = studentService.updateStudent(studentId, updateStudentRequest);
@@ -54,7 +66,7 @@ public class StudentController {
     }
 
     //DROP STUDENT
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @PatchMapping("{studentId}/student-status/drop")
     public ResponseEntity<StudentEditResponse> dropStudent(@PathVariable Long studentId, @RequestBody UpdateStudentStatusRequest updateStudentStatusRequest){
         StudentEditResponse droppedStudent = studentService.dropStudent(studentId, updateStudentStatusRequest);
@@ -62,7 +74,7 @@ public class StudentController {
     }
 
     //TRANSFER OUT STUDENT
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @PatchMapping("{studentId}/student-status/transfer-out")
     public ResponseEntity<StudentEditResponse> transferOutStudent(@PathVariable Long studentId, @RequestBody UpdateStudentStatusRequest updateStudentStatusRequest){
         StudentEditResponse transferredOutStudent = studentService.transferOutStudent(studentId, updateStudentStatusRequest);
@@ -70,7 +82,7 @@ public class StudentController {
     }
 
     //GRADUATE STUDENT
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @PatchMapping("{studentId}/student-status/graduate")
     public ResponseEntity<StudentEditResponse> graduateStudent(@PathVariable Long studentId, @RequestBody UpdateStudentStatusRequest updateStudentStatusRequest){
         StudentEditResponse graduatedStudent = studentService.graduateStudent(studentId, updateStudentStatusRequest);
@@ -78,7 +90,7 @@ public class StudentController {
     }
 
     //BULK PROMOTE
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @PatchMapping("/grade-level/promote")
     public ResponseEntity<List<StudentResponse>> promoteStudents(@RequestBody BulkPromotionRequest promotionRequest){
         List<StudentResponse> promotedStudents = studentService.promoteStudents(promotionRequest);
@@ -86,7 +98,7 @@ public class StudentController {
     }
 
     //SECTION TRANSFER
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @PatchMapping("{studentId}/section-assignment/transfer")
     public ResponseEntity<StudentEditResponse> transferStudent(@PathVariable Long studentId, @RequestBody TransferSectionRequest transferSectionRequest){
         StudentEditResponse newStudentSection = studentService.transferStudent(studentId, transferSectionRequest);
