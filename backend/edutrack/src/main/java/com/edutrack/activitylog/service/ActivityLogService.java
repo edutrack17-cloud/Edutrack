@@ -5,6 +5,7 @@ import com.edutrack.activitylog.dto.response.ActivityLogResponse;
 import com.edutrack.activitylog.entity.ActivityLog;
 import com.edutrack.activitylog.mapper.ActivityLogMapper;
 import com.edutrack.activitylog.repository.ActivityLogRepository;
+import com.edutrack.activitylog.specification.ActivityLogSpecification;
 import com.edutrack.security.SecurityUtils;
 import com.edutrack.shared.util.NameUtil;
 import com.edutrack.user.entity.User;
@@ -13,6 +14,7 @@ import com.edutrack.user.exception.UserNotFoundException;
 import com.edutrack.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,9 +64,11 @@ public class ActivityLogService {
     }
 
     //READ
-    public Page<ActivityLogResponse> getLogs(Pageable pageable){
+    public Page<ActivityLogResponse> getLogs(Pageable pageable, String logHeader){
+        Specification<ActivityLog> filters = Specification
+                .where(ActivityLogSpecification.hasHeader(logHeader));
 
-        return activityLogRepository.findAll(pageable)
+        return activityLogRepository.findAll(filters, pageable)
                 .map(activityLogMapper::toActivityLogResponse);
     }
 }

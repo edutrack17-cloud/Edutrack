@@ -16,6 +16,7 @@ import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -90,6 +91,7 @@ public class AttendanceService {
     }
 
     //MANUAL ATTENDANCE
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public AttendanceResponse manualAttendance(Long studentId, ManualAttendanceRequest manualAttendanceRequest){
         LocalDate today = LocalDate.now();
@@ -122,6 +124,7 @@ public class AttendanceService {
     }
 
     //MANUAL TIME-OUT
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public AttendanceResponse manualTimeOut(Long studentId){
         LocalDate today = LocalDate.now();
@@ -145,7 +148,7 @@ public class AttendanceService {
         Attendance savedTimeOutAttendance = attendanceRepository.save(attendanceToTimeOUt);
 
         activityLogService.createLogRecord(
-                "MANUAL ATTENDANCE",
+                "MANUAL TIMEOUT",
                 "manually closed the attendance record of Student " +
                         NameUtil.buildFullName(studentToTimeOut.getStudent().getFirstName(),
                                 studentToTimeOut.getStudent().getMiddleName(),
@@ -155,6 +158,7 @@ public class AttendanceService {
     }
 
     //MARK AS PRESENT
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudentByRfid(#timeInAndOutAttendanceRequest.rfid()))")
     @Transactional
     public AttendanceResponse markAsPresent(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
         LocalDate today = LocalDate.now();
@@ -205,6 +209,7 @@ public class AttendanceService {
     }
 
     //MULTIPLE ABSENT
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfSectionName(#sectionName))")
     @Transactional
     public List<AttendanceResponse> bulkMarkAsAbsent(String sectionName){
         LocalDate today = LocalDate.now();
