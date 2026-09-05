@@ -1,6 +1,7 @@
 package com.edutrack.user.service;
 
 import com.edutrack.refreshtoken.service.RefreshTokenService;
+import com.edutrack.section.repository.SectionRepository;
 import com.edutrack.user.dto.request.AdminCreateUserRequest;
 import com.edutrack.user.dto.request.UpdateUserRequest;
 import com.edutrack.user.dto.response.UserResponse;
@@ -24,12 +25,18 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
+    private final SectionRepository sectionRepository;
 
-    public UserService(UserRepository userRepository, UserMapper userMapper, PasswordEncoder passwordEncoder, RefreshTokenService refreshTokenService) {
+    public UserService(UserRepository userRepository,
+                       UserMapper userMapper,
+                       PasswordEncoder passwordEncoder,
+                       RefreshTokenService refreshTokenService,
+                       SectionRepository sectionRepository) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenService = refreshTokenService;
+        this.sectionRepository = sectionRepository;
     }
 
     private User findUserByUserId(Long userId){

@@ -18,6 +18,7 @@ import com.edutrack.section.repository.SectionRepository;
 import com.edutrack.section.specification.SectionSpecification;
 import com.edutrack.shared.exception.NoChangesDetected;
 import com.edutrack.shared.util.NameUtil;
+import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import com.edutrack.user.entity.User;
 import com.edutrack.user.enums.AccountStatus;
 import com.edutrack.user.exception.AccountDisabled;
@@ -40,6 +41,21 @@ public class SectionService {
     private final SectionMapper sectionMapper;
     private final SchoolYearRepository schoolYearRepository;
     private final SchoolYearLockRepository schoolYearLockRepository;
+    private final StudentSectionAssignmentRepository studentSectionAssignmentRepository;
+
+    public SectionService(SectionRepository sectionRepository,
+                          UserRepository userRepository,
+                          SectionMapper sectionMapper,
+                          SchoolYearRepository schoolYearRepository,
+                          SchoolYearLockRepository schoolYearLockRepository,
+                          StudentSectionAssignmentRepository studentSectionAssignmentRepository) {
+        this.sectionRepository = sectionRepository;
+        this.userRepository = userRepository;
+        this.sectionMapper = sectionMapper;
+        this.schoolYearRepository = schoolYearRepository;
+        this.schoolYearLockRepository = schoolYearLockRepository;
+        this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
+    }
 
 
     private Section getById(Integer sectionId){
@@ -55,18 +71,6 @@ public class SectionService {
             .orElseThrow(() -> new UserNotFoundException(userId));
     }
 
-    public SectionService(SectionRepository sectionRepository,
-                          UserRepository userRepository,
-                          SectionMapper sectionMapper,
-                          SchoolYearRepository schoolYearRepository,
-                          SchoolYearLockRepository schoolYearLockRepository) {
-        this.sectionRepository = sectionRepository;
-        this.userRepository = userRepository;
-        this.sectionMapper = sectionMapper;
-        this.schoolYearRepository = schoolYearRepository;
-        this.schoolYearLockRepository = schoolYearLockRepository;
-    }
-
     //CREATE
     @Transactional
     public SectionResponse createSection(CreateSectionRequest sectionRequest){
@@ -75,6 +79,10 @@ public class SectionService {
 
         if (sectionRepository.existsBySectionNameAndSchoolYear_SchoolYearId(sectionRequest.sectionName(), sectionRequest.schoolYear())){
             throw new SectionAlreadyExists(sectionRequest.sectionName());
+        }
+
+        if (adviserToBeAssign.getAccountStatus() == AccountStatus.disabled){
+            throw new AdviserAccountDisabled();
         }
 
         Section sectionEntity = sectionMapper.toEntity(sectionRequest);
@@ -196,6 +204,10 @@ public class SectionService {
 
         if (sectionToArchive.getSectionStatus().equals(SectionStatus.archived)) {
             throw new AlreadyArchived(sectionToArchive.getSectionName(), sectionId);
+        }
+
+        if (studentSectionAssignmentRepository.existsBySectionAndSection_SchoolYear_SchoolYearStatus(sectionToArchive, SchoolYearStatus.active)){
+            throw new SectionHasEnrolledStudents();
         }
 
         sectionToArchive.setSectionStatus(SectionStatus.archived);

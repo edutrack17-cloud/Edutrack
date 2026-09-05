@@ -5,6 +5,7 @@ import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
+import com.edutrack.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -45,6 +46,8 @@ public interface SectionRepository extends JpaRepository<Section, Integer>, JpaS
     List<Section> findAllBySchoolYear_SchoolYearIdAndGradeLevel(Long schoolYearId, GradeLevel gradeLevel);
 
     Integer countBySchoolYear(SchoolYear schoolYear);
+
+    Boolean existsByUser(User user);
 
     Boolean existsBySectionNameAndSchoolYear(String sectionName, SchoolYear schoolYear);
 }

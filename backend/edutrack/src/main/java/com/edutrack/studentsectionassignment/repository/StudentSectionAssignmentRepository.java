@@ -1,5 +1,8 @@
 package com.edutrack.studentsectionassignment.repository;
 
+import com.edutrack.schoolyear.entity.SchoolYear;
+import com.edutrack.schoolyear.enums.SchoolYearStatus;
+import com.edutrack.section.entity.Section;
 import com.edutrack.student.entity.Student;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,6 +26,8 @@ public interface StudentSectionAssignmentRepository
     Optional<StudentSectionAssignment> findByStudent_RfidAndLeftAtIsNull(String rfid);
 
     List<StudentSectionAssignment> findByStudent_StudentIdInAndLeftAtIsNull(List<Long> studentIds);
+
+    Boolean existsBySectionAndSection_SchoolYear_SchoolYearStatus(Section section, SchoolYearStatus schoolYearStatus);
 
     Long student(Student student);
 }
