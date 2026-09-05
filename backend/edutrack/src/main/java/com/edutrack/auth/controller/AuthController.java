@@ -1,6 +1,7 @@
 package com.edutrack.auth.controller;
 
 import com.edutrack.auth.dto.request.LoginRequest;
+import com.edutrack.auth.dto.request.RefreshRequest;
 import com.edutrack.auth.dto.response.LoginResponse;
 import com.edutrack.auth.service.AuthService;
 import jakarta.validation.Valid;
@@ -20,6 +21,11 @@ public class AuthController {
     @PostMapping("login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("refresh")
+    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        return ResponseEntity.ok(authService.refresh(request.refreshToken()));
     }
 
     @PostMapping("logout")

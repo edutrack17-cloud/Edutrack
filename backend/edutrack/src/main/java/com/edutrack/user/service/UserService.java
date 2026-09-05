@@ -1,13 +1,13 @@
 package com.edutrack.user.service;
 
+import com.edutrack.refreshtoken.service.RefreshTokenService;
 import com.edutrack.user.dto.request.AdminCreateUserRequest;
 import com.edutrack.user.dto.request.UpdateUserRequest;
 import com.edutrack.user.dto.response.UserResponse;
 import com.edutrack.user.entity.User;
 import com.edutrack.user.enums.AccountStatus;
 import com.edutrack.user.enums.UserRole;
-import com.edutrack.user.exception.UserNotFoundException;
-import com.edutrack.user.exception.UsernameAlreadyExists;
+import com.edutrack.user.exception.*;
 import com.edutrack.user.mapper.UserMapper;
 import com.edutrack.user.repository.UserRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,11 +23,13 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final RefreshTokenService refreshTokenService;
 
-    public UserService(UserRepository userRepository, UserMapper userMapper, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, UserMapper userMapper, PasswordEncoder passwordEncoder, RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+        this.refreshTokenService = refreshTokenService;
     }
 
     private User findUserByUserId(Long userId){
@@ -108,6 +110,42 @@ public class UserService {
 
         User savedUser = changed ? userRepository.save(userToUpdate) : userToUpdate;
         return userMapper.toResponseDTO(savedUser);
+    }
+
+    //DISABLE ACCOUNT
+    @Transactional
+    public UserResponse disableAccount(Long userId){
+        User userToDisable = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
+
+        if (userToDisable.getUserRole() == UserRole.admin){
+            throw new UserRoleIsAdmin();
+        }
+
+        if (userToDisable.getAccountStatus() == AccountStatus.disabled){
+            throw new AccountAlreadyDisabled();
+        }
+
+        userToDisable.setAccountStatus(AccountStatus.disabled);
+        User disabledUser = userRepository.save(userToDisable);
+
+        refreshTokenService.revokeAllForUser(disabledUser);
+
+        return userMapper.toResponseDTO(disabledUser);
+    }
+
+    //RESTORE ACCOUNT
+    @Transactional
+    public UserResponse restoreAccount(Long userId){
+        User userToRestore = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
+
+        if (userToRestore.getAccountStatus() == AccountStatus.active){
+            throw new AccountAlreadyActive();
+        }
+
+        userToRestore.setAccountStatus(AccountStatus.active);
+        User restoredUser = userRepository.save(userToRestore);
+
+        return userMapper.toResponseDTO(restoredUser);
     }
 
 }

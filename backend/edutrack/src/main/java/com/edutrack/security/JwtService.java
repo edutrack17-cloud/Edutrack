@@ -18,8 +18,8 @@ public class JwtService {
     @Value("${jwt.secret}")
     private String secretKey;
 
-    @Value("${jwt.expiration}")
-    private long jwtExpiration;
+    @Value("${jwt.access-expiration}")
+    private long accessTokenExpiration;
 
     private SecretKey getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
@@ -28,7 +28,7 @@ public class JwtService {
 
     public String generateToken(UserDetails userDetails) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + jwtExpiration);
+        Date expiry = new Date(now.getTime() + accessTokenExpiration);
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
@@ -56,7 +56,9 @@ public class JwtService {
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        return extractUsername(token).equals(userDetails.getUsername()) && !isTokenExpired(token);
+        return extractUsername(token).equals(userDetails.getUsername())
+                && !isTokenExpired(token)
+                && userDetails.isEnabled();
     }
 
     private Claims extractAllClaims(String token) {

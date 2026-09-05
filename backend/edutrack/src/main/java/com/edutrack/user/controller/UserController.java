@@ -55,4 +55,20 @@ public class UserController {
         return ResponseEntity.ok(updatedUser);
     }
 
+    //DISABLE ACCOUNT
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("disable/{userId}")
+    public ResponseEntity<UserResponse> disableUser(@PathVariable Long userId){
+        UserResponse disabledUser = userService.disableAccount(userId);
+        return ResponseEntity.ok(disabledUser);
+    }
+
+    //RESTORE ACCOUNT
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("restore/{userId}")
+    public ResponseEntity<UserResponse> restoreUser(@PathVariable Long userId){
+        UserResponse restoredUser = userService.restoreAccount(userId);
+        return ResponseEntity.ok(restoredUser);
+    }
+
 }
