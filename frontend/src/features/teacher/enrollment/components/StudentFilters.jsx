@@ -4,8 +4,16 @@ import { Check, ChevronDown } from "lucide-react";
 
 // Colors stay as-is (success/danger/warning/primary) - only the hover
 // tint and font-weight below were changed to match Sectionlevelfilters.
+//
+// The "" option used to just read as a neutral "Status" placeholder,
+// back when a backend listing bug meant most non-enrolled students
+// didn't reliably show up anyway. Now that the bug's fixed (see the
+// EduTrack backend-changes doc), selecting "" genuinely returns every
+// status - dropped/transferred/graduated students included - so it's
+// labeled "All Statuses" to make that an intentional choice rather than
+// something that looks like an unset filter.
 const STATUS_OPTIONS = [
-  { value: "", label: "Status", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
+  { value: "", label: "All Statuses", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
   { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "", selectedBgClass: "bg-success/10" },
   { value: "dropped", label: "Dropped", textClass: "text-danger", hoverClass: "", selectedBgClass: "bg-danger/10" },
   { value: "transferred_out", label: "Transferred", textClass: "text-warning", hoverClass: "", selectedBgClass: "bg-warning/10" },

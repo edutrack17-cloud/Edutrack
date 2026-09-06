@@ -10,6 +10,7 @@ import {
 import ViewStudentModal from "./ViewStudentModal";
 import EditStudentModal from "./EditStudentModal";
 import ConfirmStatusModal from "./ConfirmStatusModal";
+import StatusDetailsModal from "./Statusdetailsmodal";
 import {
   updateStudent,
   dropStudent,
@@ -37,7 +38,7 @@ export function getStudentStatusColorClass(status) {
 }
 
 export function getStudentStatusLabel(status) {
-  if (status === "transferred_out") return "Transferred";
+  if (status === "transferred_out") return "Transferred Out";
   if (status === "dropped") return "Dropped";
   if (status === "graduated") return "Graduated";
   return "Enrolled";
@@ -61,6 +62,12 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkD
   // correcting a past student's record is still a valid use case.
   const isEnrolled = studentStatus === "enrolled";
 
+  // A student who has left outright (dropped/transferred out) shouldn't
+  // have their record edited anymore from here. Graduated isn't included -
+  // correcting a graduated student's record is still a valid use case, same
+  // as the reasoning above for why View/Edit otherwise stay available.
+  const canEdit = studentStatus !== "dropped" && studentStatus !== "transferred_out";
+
   return (
     <div
       ref={menuRef}
@@ -72,10 +79,12 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkD
         View
       </button>
 
-      <button onClick={onEdit} className={`${menuButtonClass} ${actionColorClass.edit}`}>
-        <Pencil size={16} />
-        Edit
-      </button>
+      {canEdit && (
+        <button onClick={onEdit} className={`${menuButtonClass} ${actionColorClass.edit}`}>
+          <Pencil size={16} />
+          Edit
+        </button>
+      )}
 
       {isEnrolled && (
         <>
@@ -86,7 +95,7 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkD
 
           <button onClick={onMarkTransferred} className={`${menuButtonClass} ${actionColorClass.transferred_out}`}>
             <Shuffle size={16} />
-            Transferred
+            Transferred Out
           </button>
 
           {/* Graduate is also reachable in bulk from the Promote Student
@@ -115,7 +124,12 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
 
   const [viewingStudent, setViewingStudent] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
-  // { student, newStatus } while the confirm dialog is open, else null.
+  // { student, newStatus } while StatusDetailsModal (the remarks/leftAt
+  // step) is open, else null. Used for "dropped" and "transferred_out".
+  const [detailsRequest, setDetailsRequest] = useState(null);
+  // { student, newStatus, remarks?, leftAt? } while the confirm dialog is
+  // open, else null. remarks/leftAt are only present when this came from
+  // detailsRequest above (i.e. the Dropped/Transferred Out flow).
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -186,16 +200,34 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
     setStatusChangeRequest({ student, newStatus });
   }
 
+  // "Dropped" and "Transferred Out" both go through StatusDetailsModal
+  // first (to collect remarks + leftAt) instead of straight to
+  // ConfirmStatusModal. "Graduated" still goes straight to
+  // handleRequestStatusChange above - only these two were asked for.
+  function handleRequestStatusWithDetails(student, newStatus) {
+    setOpenMenu(null);
+    setDetailsRequest({ student, newStatus });
+  }
+
+  // Fires once StatusDetailsModal's remarks/leftAt are both filled in and
+  // "Next" is pressed - stash the values and move on to the same
+  // ConfirmStatusModal every other status change already uses.
+  function handleDetailsSubmit({ remarks, leftAt }) {
+    if (!detailsRequest) return;
+    setStatusChangeRequest({ ...detailsRequest, remarks, leftAt });
+    setDetailsRequest(null);
+  }
+
   async function handleConfirmStatusChange() {
     if (!statusChangeRequest) return;
-    const { student, newStatus } = statusChangeRequest;
+    const { student, newStatus, remarks, leftAt } = statusChangeRequest;
 
     try {
       setErrorMessage("");
       if (newStatus === "dropped") {
-        await dropStudent(student.studentId);
+        await dropStudent(student.studentId, remarks, leftAt);
       } else if (newStatus === "transferred_out") {
-        await transferOutStudent(student.studentId);
+        await transferOutStudent(student.studentId, remarks, leftAt);
       } else if (newStatus === "graduated") {
         await graduateStudent(student.studentId);
       }
@@ -291,8 +323,8 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                       studentStatus={student.studentStatus}
                       onView={() => handleView(student)}
                       onEdit={() => handleEdit(student)}
-                      onMarkDropped={() => handleRequestStatusChange(student, "dropped")}
-                      onMarkTransferred={() => handleRequestStatusChange(student, "transferred_out")}
+                      onMarkDropped={() => handleRequestStatusWithDetails(student, "dropped")}
+                      onMarkTransferred={() => handleRequestStatusWithDetails(student, "transferred_out")}
                       onMarkGraduated={() => handleRequestStatusChange(student, "graduated")}
                     />
                   )}
@@ -351,8 +383,8 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                 studentStatus={student.studentStatus}
                 onView={() => handleView(student)}
                 onEdit={() => handleEdit(student)}
-                onMarkDropped={() => handleRequestStatusChange(student, "dropped")}
-                onMarkTransferred={() => handleRequestStatusChange(student, "transferred_out")}
+                onMarkDropped={() => handleRequestStatusWithDetails(student, "dropped")}
+                onMarkTransferred={() => handleRequestStatusWithDetails(student, "transferred_out")}
                 onMarkGraduated={() => handleRequestStatusChange(student, "graduated")}
               />
             )}
@@ -374,6 +406,17 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
         student={editingStudent}
         sections={sections}
         onRefreshSections={onRefreshSections}
+      />
+
+      <StatusDetailsModal
+        isOpen={detailsRequest !== null}
+        onClose={() => setDetailsRequest(null)}
+        onNext={handleDetailsSubmit}
+        studentName={detailsRequest?.student.fullName ?? ""}
+        statusLabel={detailsRequest ? getStudentStatusLabel(detailsRequest.newStatus) : ""}
+        statusColorClass={
+          detailsRequest ? getStudentStatusColorClass(detailsRequest.newStatus) : ""
+        }
       />
 
       <ConfirmStatusModal

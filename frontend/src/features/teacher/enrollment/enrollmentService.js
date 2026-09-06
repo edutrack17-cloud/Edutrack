@@ -15,16 +15,34 @@ const studentApi = axios.create({
 });
 
 // --- Client-side rate-limit throttle ------------------------------------
-// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
-// 1 minute) = 1 token added every 6s. Same throttle idea as
-// Attendanceservice.js - and the same actual backend bucket, since it's
-// keyed per logged-in user and this page shares that login with the
-// Attendance page. Every call through studentApi (roster paging/
+// Mirrors the current RateLimitConfig.java: capacity 50, refillGreedy(50,
+// 1 minute) = 1 token added every 1.2s (60_000ms / 50 - Bucket4j's greedy
+// refill spreads the batch evenly across the window, so the per-token
+// interval is just duration / capacity). This used to mirror an older
+// capacity-10/refill-every-6s config; bump these two constants again if
+// RateLimitConfig.java's numbers ever change - everything else in this
+// throttle (queueing, the 429 retry below) is written generically off
+// of them, not hardcoded to any particular capacity/refill pair.
+//
+// Same throttle idea as Attendanceservice.js - and the same actual
+// backend bucket: RateLimitFilter.resolveKey() keys on "user:<id>" (or
+// "ip:<addr>" if unauthenticated), not per-endpoint, so every request
+// this logged-in user makes anywhere in the app - this page, the
+// Attendance page, another tab - draws from ONE 50-token bucket, not a
+// separate one per screen. Every call through studentApi (roster paging/
 // filters, section dropdowns, enroll/edit/status changes) draws from
 // this local bucket first via the request interceptor below, instead
 // of firing immediately and letting the backend answer some with 429.
-const RATE_LIMIT_CAPACITY = 10;
-const RATE_LIMIT_REFILL_MS = 6000;
+//
+// NOTE: if Attendanceservice.js's copy of this same throttle isn't
+// bumped to these same two numbers, its local bucket and this one will
+// each think they have their own fresh 50-token budget instead of
+// splitting the ONE the backend actually enforces per user - harmless
+// (the 429 retry below still recovers either way), just less effective
+// at heading off a 429 in the first place when both pages are open at
+// once. Flag that file for the same update if/when it's in scope here.
+const RATE_LIMIT_CAPACITY = 50;
+const RATE_LIMIT_REFILL_MS = 1200;
 
 let availableTokens = RATE_LIMIT_CAPACITY;
 let lastRefillAt = Date.now();
@@ -301,6 +319,18 @@ export async function getStudents({ search, level, section, status, page = 0, si
 // sectionId (int). EnrollStudentModal.jsx already builds a payload in
 // this exact shape (it strips the UI-only "level" field itself), but
 // this also strips/coerces defensively so it's safe regardless of caller.
+//
+// RE-ENROLLMENT: per the EduTrack backend-changes doc, if the submitted
+// lrn/rfid matches a student who is NOT currently enrolled (dropped/
+// transferred_out/graduated), the backend reactivates that existing
+// record instead of throwing StudentAlreadyExists/RFIDAlreadyExists -
+// it does NOT create a new student row. Only studentStatus and rfid get
+// written back on the reactivated record; name/birthDate/guardian/
+// guardianPhoneNumber/admissionType keep whatever was already stored,
+// NOT what's in this payload. There's no "reactivated: true" flag in
+// the response, so a caller that wants to detect this (to message it
+// differently than a brand-new enroll) has to compare what it submitted
+// against what actually comes back - see wasStudentReactivated() below.
 export async function enrollStudent(values) {
   const { level, ...rest } = values;
   const payload = { ...rest, sectionId: Number(rest.sectionId) };
@@ -311,6 +341,40 @@ export async function enrollStudent(values) {
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to enroll student"));
   }
+}
+
+// Heuristic only - the backend doesn't return an explicit "reactivated"
+// flag (this is called out as an open question in the EduTrack
+// backend-changes doc). On a brand-new enroll every one of these fields
+// will match what was just submitted, since the backend just persisted
+// exactly that. On a reactivation of an existing dropped/transferred-
+// out/graduated record, only studentStatus + rfid are overwritten - so
+// any mismatch here means the record shown is the student's OLD stored
+// data for that field, not what was just typed into the form.
+export function wasStudentReactivated(submittedValues, studentResponse) {
+  if (!studentResponse) return false;
+
+  const submittedFullName = [
+    submittedValues.firstName,
+    submittedValues.middleName,
+    submittedValues.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const comparisons = [
+    [submittedFullName, studentResponse.fullName],
+    [submittedValues.birthDate, studentResponse.birthDate],
+    [submittedValues.guardian, studentResponse.guardian],
+    [submittedValues.guardianPhoneNumber, studentResponse.guardianPhoneNumber],
+    [submittedValues.admissionType, studentResponse.admissionType],
+  ];
+
+  // Only compare fields that were actually submitted/returned - an
+  // empty/undefined value on either side isn't a meaningful mismatch,
+  // just missing data.
+  return comparisons.some(([submitted, stored]) => submitted && stored && submitted !== stored);
 }
 
 // CONNECTED: PATCH /api/student/{studentId}
@@ -369,6 +433,27 @@ export async function graduateStudent(studentId, remarks = "", leftAt = new Date
     return data;
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to graduate student"));
+  }
+}
+
+// CONNECTED: GET /api/student/{studentId}/history
+// New endpoint per the EduTrack backend-changes doc - read-only,
+// most-recent-first array of a student's section assignments (current
+// + past). No pagination, no request body. Same access rule as other
+// single-student endpoints: ADMIN, or the TEACHER who advises THIS
+// student - a teacher opening this for a student they don't advise can
+// get a 403, which just surfaces through getErrorMessage() below like
+// any other failure (no separate "not authorized" branch needed).
+// Intentionally NOT cached/deduped like getSections()/
+// getSectionsByAdviser() above - this is only fetched once per student
+// per ViewStudentModal open (see its own history-loaded guard), not on
+// every tab focus, so it doesn't need the same TTL treatment.
+export async function getStudentHistory(studentId) {
+  try {
+    const { data } = await studentApi.get(`/student/${studentId}/history`);
+    return data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to load student history"));
   }
 }
 

@@ -11,6 +11,7 @@ import {
   getSectionsByAdviser,
   getStudents,
   enrollStudent,
+  wasStudentReactivated,
 } from "../enrollmentService";
 import { useToasts, ToastContainer } from "../../../../components/ui/Toast";
 import { useAuth } from "../../../../Context/Authcontext";
@@ -26,7 +27,14 @@ function EnrollmentPage() {
 
   const [level, setLevel] = useState("");
   const [section, setSection] = useState("");
-  const [status, setStatus] = useState("");
+  // Defaults to "enrolled" rather than "" (all statuses). A backend
+  // listing bug used to mean dropped/transferred/graduated students
+  // often didn't show up in an unfiltered list anyway - now that it's
+  // fixed (see the EduTrack backend-changes doc), "" genuinely returns
+  // every status. Defaulting this page to currently-enrolled students
+  // keeps that same effective landing view; admins can still switch to
+  // "All Statuses" (or any specific one) via StudentFilters.
+  const [status, setStatus] = useState("enrolled");
 
   const [gradeLevels, setGradeLevels] = useState([]);
   const [sections, setSections] = useState([]);
@@ -218,8 +226,26 @@ function EnrollmentPage() {
   // CONNECTED: POST /api/student via enrollStudent() in enrollmentService.js
   async function handleSubmitNewStudent(values) {
     try {
-      await enrollStudent(values);
-      showToast("Student enrolled successfully.", "success");
+      const student = await enrollStudent(values);
+
+      // Per the EduTrack backend-changes doc, re-enrolling a dropped/
+      // transferred-out/graduated student (same LRN/RFID) now silently
+      // reactivates their old record instead of erroring - but only
+      // studentStatus + rfid get written back, so anything else office
+      // staff just typed (name, birthdate, guardian info, admission
+      // type) can silently NOT be what's now saved. There's no flag for
+      // this in the response, so wasStudentReactivated() compares
+      // submitted vs. returned values as a best-effort way to tell staff
+      // their edits didn't all stick, instead of showing the same plain
+      // "enrolled" toast either way.
+      if (wasStudentReactivated(values, student)) {
+        showToast(
+          `Welcome back, ${student.fullName}! An existing record was reactivated - some of the details you entered weren't saved. Edit the student if they need updating.`,
+          "success"
+        );
+      } else {
+        showToast("Student enrolled successfully.", "success");
+      }
       // Jump back to page 1 so the newly-enrolled student is actually
       // visible, instead of silently staying on whatever page the admin
       // was on. If already on page 1, setCurrentPage(1) is a no-op state

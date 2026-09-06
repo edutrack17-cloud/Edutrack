@@ -56,6 +56,14 @@ const enrollSchema = Yup.object({
         if (!value) return false;
         return calculateAge(value) >= 9;
       }
+    )
+    .test(
+      "max-age",
+      "Student must be under 19 years old to enroll",
+      (value) => {
+        if (!value) return false;
+        return calculateAge(value) < 19;
+      }
     ),
 
   guardian: Yup.string()

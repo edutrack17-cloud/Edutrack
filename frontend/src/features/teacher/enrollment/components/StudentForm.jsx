@@ -39,13 +39,29 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
     ? activeSections.filter((s) => s.gradeLevel === formik.values.level)
     : [];
 
-  // "Today or later" isn't allowed for a birthdate, so the latest
-  // selectable day is yesterday. <input type="date"> requires this
-  // exact "YYYY-MM-DD" text format for its max attribute.
+  // Latest selectable day. This used to just be "yesterday" (i.e. only
+  // blocking today/future), which meant the calendar happily browsed
+  // through the entire current year and most of the previous decade
+  // before reaching a birthdate that could actually pass the schema's
+  // min-age(9) test below - an admin picking a Grade 4 student's
+  // birthdate had to click "back" a dozen+ times past years that were
+  // never going to be valid anyway. Locking `max` to the youngest
+  // birthdate that still turns out to be exactly 9 today makes the
+  // picker's own upper bound match the validation rule, so it opens
+  // right around 2016/2017 instead of the current year.
   const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const maxBirthdate = yesterday.toISOString().split("T")[0];
+  const nineYearsAgo = new Date(today.getFullYear() - 9, today.getMonth(), today.getDate());
+  const maxBirthdate = nineYearsAgo.toISOString().split("T")[0];
+
+  // Earliest selectable day - a student already 19 or older shouldn't be
+  // pickable either (this is an elementary Grade 4-6 enrollment; the
+  // schema's own min-age(9) test above already covers the "too young"
+  // end - this is the "too old" end). One day after the date exactly 19
+  // years ago is the oldest birthdate that still keeps them under 19
+  // today; the date input's min attribute blocks/grays out everything
+  // earlier than that directly in the calendar itself.
+  const nineteenYearsAgo = new Date(today.getFullYear() - 19, today.getMonth(), today.getDate() + 1);
+  const minBirthdate = nineteenYearsAgo.toISOString().split("T")[0];
 
   function handleLevelChange(event) {
     formik.setFieldValue("level", event.target.value);
@@ -257,6 +273,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             labelClassName={inputLabelClass}
             inputClassName="[&::-webkit-calendar-picker-indicator]:opacity-40"
             max={maxBirthdate}
+            min={minBirthdate}
           />
 
         </div>
