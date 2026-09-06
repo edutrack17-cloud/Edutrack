@@ -11,6 +11,6 @@ import java.util.Optional;
 @Repository
 public interface SchoolYearRepository extends JpaRepository<SchoolYear, Long>, JpaSpecificationExecutor<SchoolYear> {
     Boolean existsBySchoolYearNameIgnoreCase(String schoolYearName);
-    Optional<SchoolYear> findBySchoolYearStatus(SchoolYearStatus schoolYearStatus);
     Boolean existsBySchoolYearStatusEquals(SchoolYearStatus schoolYearStatus);
+    Optional<SchoolYear> findBySchoolYearStatus(SchoolYearStatus status);
 }

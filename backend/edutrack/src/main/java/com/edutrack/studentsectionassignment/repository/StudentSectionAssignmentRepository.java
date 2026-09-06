@@ -29,5 +29,9 @@ public interface StudentSectionAssignmentRepository
 
     Boolean existsBySectionAndSection_SchoolYear_SchoolYearStatus(Section section, SchoolYearStatus schoolYearStatus);
 
+    List<StudentSectionAssignment> findByStudent_StudentIdOrderByAssignmentIdDesc(Long studentId);
+
+    long countBySectionAndLeftAtIsNull(Section section);
+
     Long student(Student student);
 }

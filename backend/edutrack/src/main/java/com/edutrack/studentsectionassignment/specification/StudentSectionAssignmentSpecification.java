@@ -5,6 +5,8 @@ import com.edutrack.student.enums.StudentStatus;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
@@ -12,58 +14,114 @@ import java.util.List;
 
 public class StudentSectionAssignmentSpecification {
 
-    //FILTER BY STUDENT STATUS
-    public static Specification<StudentSectionAssignment> hasStudentStatus(StudentStatus studentStatus){
+    // FILTER BY STUDENT STATUS
+    public static Specification<StudentSectionAssignment> hasStudentStatus(
+            StudentStatus studentStatus
+    ) {
         return (root, query, criteriaBuilder) -> {
-            if (studentStatus == null) return criteriaBuilder.conjunction();
+            if (studentStatus == null) {
+                return criteriaBuilder.conjunction();
+            }
 
-            return criteriaBuilder.equal(root.get("student").get("studentStatus"), studentStatus);
+            return criteriaBuilder.equal(
+                    root.get("student").get("studentStatus"),
+                    studentStatus
+            );
         };
     }
 
-    //FILTER BY GRADE LEVEL
-    public static Specification<StudentSectionAssignment> hasGradeLevel(GradeLevel gradeLevel){
+    // FILTER BY GRADE LEVEL
+    public static Specification<StudentSectionAssignment> hasGradeLevel(
+            GradeLevel gradeLevel
+    ) {
         return (root, query, criteriaBuilder) -> {
-            if (gradeLevel == null) return criteriaBuilder.conjunction();
+            if (gradeLevel == null) {
+                return criteriaBuilder.conjunction();
+            }
 
-            return criteriaBuilder.equal(root.get("section").get("gradeLevel"), gradeLevel);
+            return criteriaBuilder.equal(
+                    root.get("section").get("gradeLevel"),
+                    gradeLevel
+            );
         };
     }
 
-    //FILTER BY SECTION
-    public static Specification<StudentSectionAssignment> hasSection(String sectionName){
+    // FILTER BY SECTION - CASE INSENSITIVE
+    public static Specification<StudentSectionAssignment> hasSection(
+            String sectionName
+    ) {
         return (root, query, criteriaBuilder) -> {
-            if (sectionName == null || sectionName.isBlank()) return criteriaBuilder.conjunction();
+            if (sectionName == null || sectionName.isBlank()) {
+                return criteriaBuilder.conjunction();
+            }
 
-            return criteriaBuilder.equal(root.get("section").get("sectionName"), sectionName);
+            return criteriaBuilder.equal(
+                    criteriaBuilder.lower(
+                            root.get("section").get("sectionName")
+                    ),
+                    sectionName.trim().toLowerCase()
+            );
         };
     }
 
-    //FILTER BY LATEST ASSIGNMENT
-    public static Specification<StudentSectionAssignment> isCurrent(){
+    // FILTER BY CURRENT ASSIGNMENT
+    public static Specification<StudentSectionAssignment> isCurrent() {
         return (root, query, criteriaBuilder) ->
                 criteriaBuilder.isNull(root.get("leftAt"));
     }
 
-    //SEARCH NAME
-    public static Specification<StudentSectionAssignment> hasStudentName(String studentName){
+    // LATEST ASSIGNMENT PER STUDENT (active or historical)
+    public static Specification<StudentSectionAssignment> isLatestAssignment() {
         return (root, query, criteriaBuilder) -> {
-            if (studentName == null || studentName.isBlank()) return criteriaBuilder.conjunction();
-            
-            String[] studentNameParts = studentName.trim().toLowerCase().split("\\s");
+            Subquery<Long> subquery = query.subquery(Long.class);
+            Root<StudentSectionAssignment> subRoot = subquery.from(StudentSectionAssignment.class);
 
-            Expression<String> firstName = criteriaBuilder.lower(root.get("student").get("firstName"));
-            Expression<String> middleName = criteriaBuilder.lower(root.get("student").get("middleName"));
-            Expression<String> lastName = criteriaBuilder.lower(root.get("student").get("lastName"));
+            subquery.select(criteriaBuilder.max(subRoot.get("assignmentId")))
+                    .where(criteriaBuilder.equal(subRoot.get("student"), root.get("student")));
+
+            return criteriaBuilder.equal(root.get("assignmentId"), subquery);
+        };
+    }
+
+    // SEARCH NAME - CASE INSENSITIVE
+    public static Specification<StudentSectionAssignment> hasStudentName(
+            String studentName
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            if (studentName == null || studentName.isBlank()) {
+                return criteriaBuilder.conjunction();
+            }
+
+            String[] studentNameParts =
+                    studentName.trim().toLowerCase().split("\\s+");
+
+            Expression<String> firstName =
+                    criteriaBuilder.lower(
+                            root.get("student").get("firstName")
+                    );
+
+            Expression<String> middleName =
+                    criteriaBuilder.lower(
+                            root.get("student").get("middleName")
+                    );
+
+            Expression<String> lastName =
+                    criteriaBuilder.lower(
+                            root.get("student").get("lastName")
+                    );
 
             List<Predicate> studentNamePredicates = new ArrayList<>();
+
             for (String studentNamePart : studentNameParts) {
+
                 String pattern = "%" + studentNamePart + "%";
+
                 Predicate partMatches = criteriaBuilder.or(
                         criteriaBuilder.like(firstName, pattern),
                         criteriaBuilder.like(middleName, pattern),
                         criteriaBuilder.like(lastName, pattern)
                 );
+
                 studentNamePredicates.add(partMatches);
             }
 
@@ -73,10 +131,21 @@ public class StudentSectionAssignmentSpecification {
         };
     }
 
-    public static Specification<StudentSectionAssignment> hasAdviserId(Long adviserId){
+    // FILTER BY ADVISER
+    public static Specification<StudentSectionAssignment> hasAdviserId(
+            Long adviserId
+    ) {
         return (root, query, criteriaBuilder) -> {
-            if (adviserId == null) return criteriaBuilder.conjunction();
-            return criteriaBuilder.equal(root.get("section").get("user").get("userId"), adviserId);
+            if (adviserId == null) {
+                return criteriaBuilder.conjunction();
+            }
+
+            return criteriaBuilder.equal(
+                    root.get("section")
+                            .get("user")
+                            .get("userId"),
+                    adviserId
+            );
         };
     }
 }

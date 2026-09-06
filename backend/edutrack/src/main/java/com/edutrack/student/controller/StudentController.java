@@ -5,6 +5,7 @@ import com.edutrack.security.CustomUserDetails;
 import com.edutrack.student.dto.request.*;
 import com.edutrack.student.dto.response.StudentEditResponse;
 import com.edutrack.student.dto.response.StudentResponse;
+import com.edutrack.student.dto.response.StudentSectionAssignmentHistoryResponse;
 import com.edutrack.student.enums.StudentStatus;
 import com.edutrack.student.service.StudentService;
 import jakarta.validation.Valid;
@@ -33,6 +34,13 @@ public class StudentController {
         StudentResponse enrolledStudent = studentService.enrollStudent(studentRequest);
         return ResponseEntity
                 .ok(enrolledStudent);
+    }
+
+    //GET STUDENT HISTORY
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
+    @GetMapping("{studentId}/history")
+    public ResponseEntity<List<StudentSectionAssignmentHistoryResponse>> getStudentHistory(@PathVariable Long studentId){
+        return ResponseEntity.ok(studentService.getStudentHistory(studentId));
     }
 
     // READ

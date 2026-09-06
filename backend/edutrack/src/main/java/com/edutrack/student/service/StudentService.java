@@ -15,6 +15,7 @@ import com.edutrack.shared.util.NameUtil;
 import com.edutrack.student.dto.request.*;
 import com.edutrack.student.dto.response.StudentEditResponse;
 import com.edutrack.student.dto.response.StudentResponse;
+import com.edutrack.student.dto.response.StudentSectionAssignmentHistoryResponse;
 import com.edutrack.student.entity.Student;
 import com.edutrack.student.enums.StudentStatus;
 import com.edutrack.student.exception.*;
@@ -39,6 +40,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
@@ -90,24 +92,11 @@ public class StudentService {
     }
 
 
-    //ENROLL STUDENT
     @Transactional
     public StudentResponse enrollStudent(CreateStudentRequest studentRequest){
-       Section sectionToBeAssigned = getBySectionId(studentRequest.sectionId());
+        Section sectionToBeAssigned = getBySectionId(studentRequest.sectionId());
 
-       int age = Period.between(
-               studentRequest.birthDate(),
-               now
-       ).getYears();
-
-        if (studentRepository.existsByLrn(studentRequest.lrn())){
-            throw new StudentAlreadyExists(studentRequest.lrn());
-        }
-
-        if (studentRepository.existsByRfid(studentRequest.rfid())){
-            throw new RFIDAlreadyExists();
-        }
-
+        int age = Period.between(studentRequest.birthDate(), now).getYears();
         if (age < 9){
             throw new StudentUnderAge();
         }
@@ -120,28 +109,61 @@ public class StudentService {
             throw new InactiveSectionNotAllowed();
         }
 
-       //STUDENT CREATION
-       Student requestToEntity = studentMapper.toEntity(studentRequest);
-       Student savedStudent = studentRepository.save(requestToEntity);
+        if (studentRepository.existsByRfidAndStudentStatus(studentRequest.rfid(), StudentStatus.enrolled)){
+            throw new RFIDAlreadyExists();
+        }
 
-       //SECTION ASSIGNMENT
-       StudentSectionAssignment assignmentToCreate = new StudentSectionAssignment();
-       assignmentToCreate.setStudent(savedStudent);
-       assignmentToCreate.setSection(sectionToBeAssigned);
-       studentSectionAssignmentRepository.save(assignmentToCreate);
+        Optional<Student> existingStudent = studentRepository.findByLrn(studentRequest.lrn());
+        Student savedStudent;
 
-       //LOG CREATION
-       activityLogService.createLogRecord(
-               "STUDENT ENROLLED",
-                "enrolled student "
-                        + NameUtil.buildFullName(
-                                savedStudent.getFirstName(),
-                                savedStudent.getMiddleName(),
-                                savedStudent.getLastName()
-                ) + " to section " + sectionToBeAssigned.getSectionName()
-       );
+        if (existingStudent.isPresent()){
+            Student student = existingStudent.get();
 
-       return studentMapper.toStudentResponseDTO(savedStudent, sectionToBeAssigned);
+            if (student.getStudentStatus() == StudentStatus.enrolled){
+                throw new StudentAlreadyExists(studentRequest.lrn());
+            }
+
+            //RE-ENROLLMENT: reactivate the same student record
+            student.setStudentStatus(StudentStatus.enrolled);
+            student.setRfid(studentRequest.rfid());
+            savedStudent = studentRepository.save(student);
+        } else {
+            Student requestToEntity = studentMapper.toEntity(studentRequest);
+            savedStudent = studentRepository.save(requestToEntity);
+        }
+
+        StudentSectionAssignment assignmentToCreate = new StudentSectionAssignment();
+        assignmentToCreate.setStudent(savedStudent);
+        assignmentToCreate.setSection(sectionToBeAssigned);
+        studentSectionAssignmentRepository.save(assignmentToCreate);
+
+        activityLogService.createLogRecord(
+                existingStudent.isPresent() ? "STUDENT RE-ENROLLED" : "STUDENT ENROLLED",
+                (existingStudent.isPresent() ? "re-enrolled " : "enrolled student ")
+                        + NameUtil.buildFullName(savedStudent.getFirstName(), savedStudent.getMiddleName(), savedStudent.getLastName())
+                        + " to section " + sectionToBeAssigned.getSectionName()
+        );
+
+        return studentMapper.toStudentResponseDTO(savedStudent, sectionToBeAssigned);
+    }
+
+    //GET STUDENT HISTORY
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
+    public List<StudentSectionAssignmentHistoryResponse> getStudentHistory(Long studentId){
+        getByStudentId(studentId); // throws StudentNotFound if it doesn't exist
+
+        return studentSectionAssignmentRepository
+                .findByStudent_StudentIdOrderByAssignmentIdDesc(studentId)
+                .stream()
+                .map(a -> new StudentSectionAssignmentHistoryResponse(
+                        a.getSection().getSectionName(),
+                        a.getSection().getGradeLevel(),
+                        a.getAssignedAt(),
+                        a.getLeftAt(),
+                        a.getExitType(),
+                        a.getRemarks()
+                ))
+                .toList();
     }
 
     //READ
@@ -150,10 +172,10 @@ public class StudentService {
                                              String studentName, Pageable pageable, CustomUserDetails principal){
 
         Specification<StudentSectionAssignment> filters = Specification
-                .where(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
+                .where(StudentSectionAssignmentSpecification.isLatestAssignment())
+                .and(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
                 .and(StudentSectionAssignmentSpecification.hasSection(sectionName))
                 .and(StudentSectionAssignmentSpecification.hasStudentStatus(studentStatus))
-                .and(StudentSectionAssignmentSpecification.isCurrent())
                 .and(StudentSectionAssignmentSpecification.hasStudentName(studentName));
 
         if (principal.getUser().getUserRole() == UserRole.teacher){
