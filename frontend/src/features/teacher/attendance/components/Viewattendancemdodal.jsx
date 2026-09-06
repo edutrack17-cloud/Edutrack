@@ -2,12 +2,6 @@ import React from "react";
 import { X } from "lucide-react";
 import AttendanceStatus from "./AttendanceStatus";
 
-// Read-only "View" modal for the "done" row state - a completed
-// attendance record (present + timed out, or marked absent) with
-// nothing left to action. Pulled out of the kebab dropdown on purpose:
-// that dropdown is meant for quick single-tap actions (Present /
-// Absent / Mark Present / Time out), and cramming a multi-line recap in
-// there too made it feel crowded, especially on mobile.
 function ViewAttendanceModal({ isOpen, onClose, record }) {
   if (!isOpen || !record) return null;
 

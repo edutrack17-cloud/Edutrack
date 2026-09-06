@@ -17,11 +17,12 @@ function LoginForm() {
     formikHelpers.setStatus(undefined);
 
     try {
-      // authService.loginUser() already returns { token, user: { id, username, role } }
-      // normalized from the backend's LoginResponse - nothing left to map here.
-      const { token, user } = await loginUser(values);
+      // authService.loginUser() already writes accessToken/refreshToken
+      // to localStorage itself and returns { user: { id, username, role } }
+      // normalized from the backend's response - nothing left to map here.
+      const { user } = await loginUser(values);
 
-      login({ token, user });
+      login({ user });
 
       // Guards don't use the MainLayout/dashboard shell (no sidebar nav
       // items exist for them) - send them straight to their own screen.

@@ -8,9 +8,7 @@ import Usermanagementpagination from "./components/Usermanagementpagination";
 import Createusermodal from "./components/Createusermodal";
 import Editusermodal from "./components/Editusermodal";
 import Viewusermodal from "./components/Viewusermodal";
-// NOTE: adjust this path if Toast.jsx actually lives somewhere else in
-// your project (e.g. a shared/ folder) - it was sent alongside the
-// Usermanagement components but its real location wasn't specified.
+// NOTE: adjust path if Toast.jsx lives elsewhere in your project
 import { useToasts, ToastContainer } from "../../../components/ui/Toast";
 import {
   getUsers,
@@ -20,9 +18,7 @@ import {
 } from "./Usermanagementservice";
 
 function Usermanagementpage() {
-  // No more MOCK_USERS as a standing fallback - if the first real
-  // fetch fails, we now show an empty table + error instead of fake
-  // rows that look real (see loadUsers()'s catch block below).
+  // No mock fallback - a failed fetch shows an empty table + error (see loadUsers())
   const [users, setUsers] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const { toasts, showToast, dismissToast } = useToasts();
@@ -37,25 +33,18 @@ function Usermanagementpage() {
   const [editingUser, setEditingUser] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // Debounce the search box so we're not re-fetching the entire
-  // /teachers list on every keystroke.
+  // Debounce search to avoid refetching on every keystroke
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Jump back to page 1 whenever the filter/search actually changes -
-  // otherwise you can end up stuck on "Page 3 of 1".
+  // Reset to page 1 when filter/search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [status, debouncedSearch]);
 
-  // GET /api/teachers - the only list endpoint that exists. It only
-  // returns ACTIVE teacher accounts (no disabled accounts, no admins),
-  // so getUsers() still does the status/search filtering (and
-  // pagination) client-side (see Usermanagementservice.js). Role
-  // filtering was dropped from the UI entirely since this endpoint
-  // never returns anything but teachers.
+  // CONNECTED: GET /api/user/teachers - see getUsers() in Usermanagementservice.js
   const loadUsers = useCallback(async () => {
     try {
       setErrorMessage("");
@@ -70,13 +59,7 @@ function Usermanagementpage() {
     }
   }, [status, debouncedSearch, currentPage]);
 
-  // FIX: this previously ran with an empty dependency array, so it
-  // only ever fired once on mount. Changing the search box, the status
-  // filter, or the page number updated local state but never actually
-  // re-fetched/re-sliced anything - search and status only searched
-  // within whatever page 1 happened to load, and pagination did
-  // nothing at all. Depending on `loadUsers` (which itself depends on
-  // status/debouncedSearch/currentPage) fixes all three.
+  // Re-fetches whenever status, search, or page changes
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
@@ -84,11 +67,10 @@ function Usermanagementpage() {
   async function handleCreateSubmit(formData) {
     try {
       setErrorMessage("");
-      // POST /api/createTeacher - see createUser() in Usermanagementservice.js.
-      // No role is sent - createTeacher() always creates a teacher account.
+      // CONNECTED: POST /api/user/createTeacher - see createUser() in Usermanagementservice.js
       const created = await createUser(formData);
       showToast(`"${created.fullName}" was added as a teacher.`, "success");
-      await loadUsers(); // re-pull from GET /api/teachers so the new row is real, not guessed
+      await loadUsers(); // re-pull from GET /api/user/teachers so the new row is real, not guessed
       return true;
     } catch (error) {
       console.error("createUser failed:", error.message);
@@ -101,9 +83,7 @@ function Usermanagementpage() {
   async function handleEditSubmit(userId, formData) {
     try {
       setErrorMessage("");
-      // NOT AVAILABLE YET - updateUser() throws until the backend adds
-      // an update endpoint (see Usermanagementservice.js). This will
-      // surface that as a visible error/toast instead of failing silently.
+      // CONNECTED: PATCH /api/user/update/{userId} - see updateUser() in Usermanagementservice.js
       await updateUser(userId, formData);
       showToast("User updated successfully.", "success");
       await loadUsers();
@@ -120,8 +100,7 @@ function Usermanagementpage() {
     const nextStatus = user.status === "Active" ? "Disabled" : "Active";
     try {
       setErrorMessage("");
-      // NOT AVAILABLE YET - toggleUserStatus() throws until the backend
-      // adds a status endpoint (see Usermanagementservice.js).
+      // CONNECTED: PATCH /api/user/disable or /api/user/restore - see toggleUserStatus() in Usermanagementservice.js
       await toggleUserStatus(user.id, nextStatus.toLowerCase());
       showToast(`${user.username} is now ${nextStatus}.`, "success");
       await loadUsers();
@@ -132,13 +111,7 @@ function Usermanagementpage() {
     }
   }
 
-  // FIX: viewingUser was a plain snapshot of whatever the "users" array
-  // held at the moment "View" was clicked - if a section assignment (or
-  // any other user field) changed elsewhere after this page's last fetch,
-  // the modal kept showing that stale copy until a full page reload
-  // forced a fresh loadUsers(). Re-syncing viewingUser here means any
-  // loadUsers() refresh (see handleView below) also updates whatever's
-  // currently open in the modal, not just the background table.
+  // Keeps the open view modal in sync with fresher data from loadUsers()
   useEffect(() => {
     if (!viewingUser) return;
     const refreshed = users.find((u) => u.id === viewingUser.id);
@@ -146,9 +119,7 @@ function Usermanagementpage() {
   }, [users]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleView(user) {
-    // Show what we already have immediately (no loading flicker on the
-    // modal itself), then refresh in the background - see the useEffect
-    // above for how the modal picks up the fresher copy once it lands.
+    // Show cached data immediately, then refresh in background
     setViewingUser(user);
     loadUsers();
   }

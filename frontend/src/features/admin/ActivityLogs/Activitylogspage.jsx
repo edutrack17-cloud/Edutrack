@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import Activitylogtable from "./components/Activitylogtable";
-import Activitylogsearchinput from "./components/Activitylogsearchinput";
+import Activitylogheaderfilter from "./components/Activitylogheaderfilter";
 import Activitylogpagination from "./components/Activitylogpagination";
 import { getActivityLogs } from "./Activitylogservice";
 
@@ -11,14 +11,16 @@ function Activitylogspage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  // Exact value from Activitylogheaderfilter.jsx, sent as-is to the
+  // backend's `logHeader` param - no debounce needed since this is a
+  // dropdown pick, not free-typed text.
+  const [logHeader, setLogHeader] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   // Same cancel-in-flight-request pattern as Sectionlevelpage.jsx, so a
-  // stale response from an older search/page can't overwrite a newer one.
+  // stale response from an older filter/page can't overwrite a newer one.
   const abortControllerRef = useRef(null);
 
   async function loadLogs() {
@@ -31,7 +33,7 @@ function Activitylogspage() {
       setErrorMessage("");
 
       const response = await getActivityLogs({
-        search: debouncedSearch,
+        logHeader,
         page: currentPage - 1,
         size: PAGE_SIZE,
         signal: controller.signal,
@@ -55,30 +57,19 @@ function Activitylogspage() {
   }
 
   useEffect(() => {
-    const debounceId = setTimeout(() => {
-      setDebouncedSearch(search.trim().replace(/\s+/g, " "));
-      setCurrentPage(1);
-    }, 400);
-    return () => clearTimeout(debounceId);
-  }, [search]);
-
-  useEffect(() => {
     loadLogs();
-  }, [debouncedSearch, currentPage]);
+  }, [logHeader, currentPage]);
 
-  function handleSearchChange(event) {
-    setSearch(event.target.value);
+  function handleFilterChange(event) {
+    setLogHeader(event.target.value);
+    setCurrentPage(1);
   }
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <Activitylogsearchinput
-            value={search}
-            onChange={handleSearchChange}
-            placeholder="Search by user or action"
-          />
+          <Activitylogheaderfilter value={logHeader} onChange={handleFilterChange} />
         </div>
 
         {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}

@@ -4,14 +4,24 @@ import React from "react";
 // flexible for whatever action types eventually come from the backend
 // (not just section actions) instead of hardcoding one entry per exact
 // header string. Checked in order, first match wins.
+//
+// Colors kept in sync (manually) with ACTIVITY_LOG_FILTERS in
+// Activitylogheaderfilter.jsx, so a filter's dropdown color matches the
+// color its logs render with in the feed below.
 const ACTION_STYLES = [
   { match: "archived", label: "Archived", colorClass: "text-secondary" },
   { match: "dropped", label: "Dropped", colorClass: "text-secondary" },
+  { match: "absent", label: "Marked Absent", colorClass: "text-warning" },
   { match: "transferred", label: "Transferred", colorClass: "text-warning" },
+  { match: "transfer", label: "Section Transfer", colorClass: "text-warning" },
+  { match: "graduated", label: "Graduated", colorClass: "text-success" },
+  { match: "promoted", label: "Promoted", colorClass: "text-success" },
   { match: "activated", label: "Activated", colorClass: "text-success" },
   { match: "enrolled", label: "Enrolled", colorClass: "text-success" },
   { match: "created", label: "Added", colorClass: "text-success" },
   { match: "added", label: "Added", colorClass: "text-success" },
+  { match: "attendance", label: "Manual Attendance", colorClass: "text-primary" },
+  { match: "timeout", label: "Manual Timeout", colorClass: "text-primary" },
   { match: "updated", label: "Updated", colorClass: "text-primary" },
   { match: "started", label: "Started", colorClass: "text-primary" },
 ];

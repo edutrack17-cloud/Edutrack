@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { X, UserX, Loader2 } from "lucide-react";
 
-function ConfirmMarkAbsentModal({ isOpen, onClose, onConfirm, count = 0 }) {
+function ConfirmMarkAbsentModal({ isOpen, onClose, onConfirm, sectionName = "" }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   useEffect(() => {
     if (isOpen) setIsSubmitting(false);
   }, [isOpen]);
@@ -33,10 +33,9 @@ function ConfirmMarkAbsentModal({ isOpen, onClose, onConfirm, count = 0 }) {
     }
   }
 
-  const bodyText =
-    count > 0
-      ? `${count} student${count === 1 ? "" : "s"} still on school with no time-in today will be marked absent.`
-      : "Every student still on school with no time-in today will be marked absent.";
+  const bodyText = sectionName
+    ? `Students in ${sectionName} with no record today will be marked absent. Students already tapped in by the guard are not affected.`
+    : "Students in the selected section with no record today will be marked absent. Students already tapped in by the guard are not affected.";
 
   return (
     <div

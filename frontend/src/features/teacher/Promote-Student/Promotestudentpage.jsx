@@ -1,5 +1,4 @@
-// features/teacher/Promote-Student/PromoteStudentPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import PromoteStudentFilters from "./components/Promotestudentfilters";
 import SearchInput from "./components/Promotestudentsearchinput";
 import PromoteStudentTable from "./components/Promotestudenttable";
@@ -8,14 +7,15 @@ import PromoteStudentModal from "./components/Promotestudentmodal";
 import {
   getPromotableStudents,
   getCurrentSections,
+  getSectionsByAdviser,
   promoteStudents as promoteStudentsRequest,
   graduateStudents as graduateStudentsRequest,
 } from "./promotestudentservice";
+import { useAuth } from "../../../Context/Authcontext";
 
 const PAGE_SIZE = 10;
 
-// Fixed enum, no backend list endpoint - same pattern as Enrollment's
-// getGradeLevels().
+
 const GRADE_LEVELS = [
   { value: "Grade_4", label: "Grade 4" },
   { value: "Grade_5", label: "Grade 5" },
@@ -23,9 +23,12 @@ const GRADE_LEVELS = [
 ];
 
 function PromoteStudentPage() {
+  const { user, role } = useAuth();
+
   const [gradeLevel, setGradeLevel] = useState("");
   const [section, setSection] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -42,27 +45,89 @@ function PromoteStudentPage() {
 
   const canBulkSelect = Boolean(gradeLevel) && Boolean(section);
 
-  // Section filter options - CURRENT school year, since we're
-  // filtering already-enrolled students by their current section
-  // (not the section they'd be promoted into).
+  const [sectionsRefreshKey, setSectionsRefreshKey] = useState(0);
   useEffect(() => {
-    getCurrentSections(gradeLevel)
-      .then(setFilterSections)
-      .catch((error) => setSectionsError(error.message));
-  }, [gradeLevel]);
+    function handleRefetch() {
+      if (document.visibilityState === "visible") {
+        setSectionsRefreshKey((prev) => prev + 1);
+      }
+    }
+    window.addEventListener("focus", handleRefetch);
+    document.addEventListener("visibilitychange", handleRefetch);
+    return () => {
+      window.removeEventListener("focus", handleRefetch);
+      document.removeEventListener("visibilitychange", handleRefetch);
+    };
+  }, []);
 
-  // Only "enrolled" students can be promoted/graduated -
-  // getPromotableStudents() enforces studentStatus=enrolled server-side.
+  const [adviserSections, setAdviserSections] = useState([]);
+
+  // GET /api/section/{userId} - sections this teacher advises.
+  useEffect(() => {
+    if (role !== "teacher") return;
+    getSectionsByAdviser(user.id)
+      .then(setAdviserSections)
+      .catch((error) => setSectionsError(error.message));
+  }, [role, user?.id, sectionsRefreshKey]);
+
+  const gradeLevelOptions =
+    role === "teacher"
+      ? [...new Set(adviserSections.map((s) => s.gradeLevel))].map((value) => ({
+          value,
+          label: value.replace("_", " "),
+        }))
+      : GRADE_LEVELS;
+
+  // TEACHER: sections via getSectionsByAdviser (filtered client-side). ADMIN: GET /section/dropdown via getCurrentSections(gradeLevel).
+  useEffect(() => {
+    const loadFilterSections =
+      role === "teacher"
+        ? Promise.resolve(
+            gradeLevel ? adviserSections.filter((s) => s.gradeLevel === gradeLevel) : adviserSections
+          )
+        : getCurrentSections(gradeLevel);
+
+    loadFilterSections
+      .then((sections) => {
+        setFilterSections(sections);
+        setSection((prev) => (prev && !sections.some((s) => s.name === prev) ? "" : prev));
+      })
+      .catch((error) => setSectionsError(error.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gradeLevel, role, user?.id, sectionsRefreshKey, adviserSections]);
+
+  useEffect(() => {
+    const debounceId = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setSelectedIds([]);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(debounceId);
+  }, [search]);
+
+  const abortControllerRef = useRef(null);
+
+  // getPromotableStudents() -> GET /api/student, only returns studentStatus=enrolled (enforced server-side).
+  // Backend only supports `studentName` as a search param (no lrn/combined search), so we pass it straight
+  // through and let the server handle pagination even while searching.
   async function loadStudents() {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setIsLoading(true);
       setErrorMessage("");
+
       const response = await getPromotableStudents({
         gradeLevel,
         section,
+        studentName: debouncedSearch || undefined,
         page: currentPage - 1,
         size: PAGE_SIZE,
+        signal: controller.signal,
       });
+
       const newTotalPages = response.totalPages || 1;
       setTotalPages(newTotalPages);
 
@@ -73,26 +138,18 @@ function PromoteStudentPage() {
 
       setStudents(response.content ?? []);
     } catch (error) {
+      if (error.code === "ERR_CANCELED") return;
       setErrorMessage(error.message);
     } finally {
-      setIsLoading(false);
+      if (abortControllerRef.current === controller) setIsLoading(false);
     }
   }
 
   useEffect(() => {
     loadStudents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gradeLevel, section, currentPage]);
+  }, [gradeLevel, section, currentPage, debouncedSearch]);
 
-  // Client-side only, over the current page - no search param on
-  // GET /api/student yet, same limitation as Enrollment.
-  const visibleStudents = search
-    ? students.filter(
-        (s) =>
-          s.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-          s.lrn?.includes(search)
-      )
-    : students;
+  const visibleStudents = students;
 
   function handleGradeLevelChange(event) {
     setGradeLevel(event.target.value);
@@ -107,32 +164,17 @@ function PromoteStudentPage() {
     setCurrentPage(1);
   }
 
-  // Selection is per-page only (see the NOTE in handleToggleSelectAll
-  // below) - "students" state only ever holds the CURRENTLY loaded
-  // page. Without resetting selectedIds here, switching pages after
-  // selecting some students would silently drop those selections from
-  // the eventual promote request (handleBulkPromoteClick filters
-  // against "students", which no longer contains the old page's rows),
-  // while the "Promote Selected (N)" button count kept showing the old,
-  // now-inaccurate total. Clearing on page change makes the visible
-  // count and the actual promoted set always match.
   function handlePageChange(newPage) {
     setSelectedIds([]);
     setCurrentPage(newPage);
   }
 
-  // Works the same whether it's called once (single student clicked)
-  // or many times (bulk) - "Promote Selected (1)" is a valid single
-  // promote, no separate code path needed.
   function handleToggleSelect(studentId) {
     setSelectedIds((prev) =>
       prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
     );
   }
 
-  // NOTE: only selects/deselects students on the CURRENT page - same
-  // pagination limitation as everywhere else in the app (no full
-  // dataset loaded client-side).
   function handleToggleSelectAll() {
     const allIds = visibleStudents.map((s) => s.studentId);
     const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.includes(id));
@@ -144,8 +186,7 @@ function PromoteStudentPage() {
     setPromotingStudents(selected);
   }
 
-  // Branches between the bulk-promote endpoint and the looped graduate
-  // endpoint, since BulkPromotionRequest can't represent graduation at all.
+  // PATCH /student/grade-level/promote (bulk) or looped PATCH /student/{id}/student-status/graduate.
   async function handleConfirmPromote(studentIds, result) {
     try {
       setIsSubmitting(true);
@@ -159,9 +200,6 @@ function PromoteStudentPage() {
 
       setSelectedIds((prev) => prev.filter((id) => !studentIds.includes(id)));
       setPromotingStudents(null);
-      // Re-fetch instead of trusting local removal - this list only
-      // shows "enrolled" students, so promoted/graduated ones should
-      // now be gone from the real result set.
       await loadStudents();
     } catch (error) {
       setErrorMessage(error.message);
@@ -184,7 +222,7 @@ function PromoteStudentPage() {
           canBulkSelect={canBulkSelect}
           allSelected={allFilteredSelected}
           onToggleSelectAll={handleToggleSelectAll}
-          gradeLevels={GRADE_LEVELS}
+          gradeLevels={gradeLevelOptions}
           sections={filterSections}
         />
 

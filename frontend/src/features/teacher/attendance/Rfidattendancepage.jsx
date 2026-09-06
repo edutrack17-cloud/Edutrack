@@ -1,23 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { markAttendancePresent, timeOutAttendance, fetchTodaysActivity, markRemainingAsAbsent } from "./Attendanceservice";
-import AttendanceStatus from "./components/AttendanceStatus";
+import {
+  markAttendancePresent,
+  timeOutAttendance,
+  closeAttendanceForSection,
+  fetchStudentRecords,
+  markPresentManual,
+  manualTimeOut,
+} from "./Attendanceservice";
+import AttendaceFilters from "./components/AttendaceFilters";
+import AttendanceSearchInput from "./components/AttendanceSearchInput";
+import AttendanceTable from "./components/AttendanceTable";
 import Pagination from "./components/Pagination";
+import ManualTimeModal from "./components/Manualtimemodal";
 import ConfirmMarkAbsentModal from "./components/ConfirmMarkAbsentModal";
-
-const ACTIVITY_PAGE_SIZE = 5;
+import { UserX, Loader2 } from "lucide-react";
+import { useAuth } from "../../../Context/Authcontext";
 
 const SCHOOL_NAME = "Cecilio M. Saliba Elementary School";
-
-const thClass =
-  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
-const tdClass =
-  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
-
-// Dev-only, just to give the "Simulate RFID Tap" button something to
-// tap with. NOT the source of truth for the roster - real rfids now
-// live on Student rows in the actual DB. Remove once a real reader is
-// wired up.
-const DEV_TEST_RFIDS = ["090941037", "090941038", "090941040", "090941041", "090941042"];
 
 function formatClockTime(date) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
@@ -41,9 +40,6 @@ function formatDateLong(date) {
   });
 }
 
-// "HH:mm" (24hr, already what Attendanceservice.js's mapAttendanceRecord
-// hands back for timeIn/timeOut) -> "9:25 PM" for display on the kiosk
-// cards.
 function formatDisplayTime(hhmm) {
   if (!hhmm) return "";
   const [hoursStr, minutesStr] = hhmm.split(":");
@@ -61,30 +57,16 @@ function LiveClock() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-2 sm:mt-6">
-      <p className="text-sm font-semibold">{formatDateLong(now)}</p>
+    <div className="flex flex-col items-center gap-2">
+      <p className="whitespace-nowrap text-base font-semibold tracking-tight sm:text-lg">{formatDateLong(now)}</p>
       <p className="text-3xl font-bold tracking-tight">{formatClockTimeWithSeconds(now)}</p>
     </div>
   );
 }
 
-// "Attendance Screen" tab — this is the TEACHER'S scanner, not the
-// guard's. Per AttendanceController.java / AttendanceService.java:
-// the guard's tap (POST /api/attendance) is what CREATES a record; a
-// tap here only marks an existing guard tap as PRESENT, or - once
-// present -
-// records the time out. It can't create a brand-new record on its
-// own, which is why "no-record" is a real, expected outcome below
-// (student hasn't been tapped in by the guard yet).
-//
-// Add / Edit / Manual-time actions used to live on this page, but
-// those are now fully covered by the Student Record tab's kebab menu
-// (Present / Absent / Confirm / Time out / View - see
-// AttendanceTable.jsx's ActionKebab + getRowActionState()), so this
-// page stays a plain tap-in/tap-out display with no forms of its own.
 function RFIDAttendancePage() {
-  const [todaysRecords, setTodaysRecords] = useState([]);
-  const [activityPage, setActivityPage] = useState(1);
+  const { user, role } = useAuth();
+
   const [lastScan, setLastScan] = useState(null);
   const [scanBuffer, setScanBuffer] = useState("");
   const [isMarkingRemainingAbsent, setIsMarkingRemainingAbsent] = useState(false);
@@ -92,45 +74,194 @@ function RFIDAttendancePage() {
 
   const hiddenInputRef = useRef(null);
 
-  // BUG FIX / HARDWARE QUIRK: some cheap USB HID RFID readers fire the
-  // UID + Enter keystroke sequence TWICE for a single physical tap
-  // (bounce), or a student can hold their card on the reader a beat
-  // too long and trigger a second read. `lastTapRef` records the last
-  // (rfid, timestamp) actually processed; any tap of the SAME card
-  // within TAP_COOLDOWN_MS of that is treated as a duplicate and
-  // ignored outright.
   const TAP_COOLDOWN_MS = 3000;
   const lastTapRef = useRef({ rfid: null, atMs: 0 });
 
-  // No manual-search input and no modals live on this page anymore
-  // (that fallback is fully covered by the Student Record tab's kebab
-  // menu - Present/Absent/Confirm), so nothing on screen ever competes
-  // with the hidden input for focus. refocus() can just always run.
+  const [records, setRecords] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
+  const [search, setSearch] = useState("");
+  // Debounced mirror of `search`, same pattern as Sectionlevelpage.jsx's
+  // own search box: typing updates `search` immediately (so the input
+  // feels responsive and AttendanceTable's client-side name/LRN filter
+  // reacts instantly), but loadRecords below only refetches once typing
+  // pauses for 400ms, matching debouncedSearch there.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [level, setLevel] = useState("");
+  const [section, setSection] = useState("");
+  const [status, setStatus] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const [pendingAssignmentId, setPendingAssignmentId] = useState(null);
+
+  const [presentTarget, setPresentTarget] = useState(null);
+
+  const todayLabel = new Date().toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
   useEffect(() => {
-    function refocus() {
-      hiddenInputRef.current?.focus();
+    function refocus(event) {
+      const clickedField = event.target?.closest?.("input, textarea");
+      if (clickedField && clickedField !== hiddenInputRef.current) return;
+      // preventScroll: true - without it, mobile browsers scroll the
+      // whole page to bring this focused element into view even though
+      // it's an invisible 0x0 field (h-0 w-0 opacity-0) sitting near the
+      // top of the DOM. That's what caused the page to visibly "jump up"
+      // every time something else (like a filter dropdown button) was
+      // tapped and this ran to reclaim focus for the scanner.
+      hiddenInputRef.current?.focus({ preventScroll: true });
     }
-    refocus();
+    hiddenInputRef.current?.focus({ preventScroll: true });
     document.addEventListener("click", refocus);
     return () => document.removeEventListener("click", refocus);
   }, []);
 
+  // Same 400ms debounce as Sectionlevelpage.jsx's search box - waits for
+  // typing to pause before it's allowed to drive an actual refetch,
+  // instead of firing a request per keystroke.
+  //
+  // FIX: setCurrentPage(1) used to live in its own useEffect keyed on
+  // [level, section, status, debouncedSearch]. That effect and the fetch
+  // effect below both list debouncedSearch (and level/section) as
+  // dependencies, so when a filter changed while NOT already on page 1,
+  // BOTH effects fired in the same pass: the fetch effect ran once
+  // immediately with the OLD page number + NEW filters (wasted/wrong
+  // request), then setCurrentPage(1) landed and re-triggered the fetch
+  // effect a second time with the corrected page - two GET /api/student
+  // calls for one filter change, eating into the shared 10 req/min
+  // bucket. Setting the page here, batched with setDebouncedSearch in
+  // the same tick, means the fetch effect below sees both the new
+  // search term AND page=1 together in a single render - one fetch.
   useEffect(() => {
-    loadTodaysActivity();
-  }, []);
+    const debounceId = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(debounceId);
+  }, [search]);
 
-  // TODO: BACKEND CONNECTION - still mocked. AttendanceController.java
-  // has no GET endpoint yet for "today's activity" (a list of
-  // present/timed-out records for the day). fetchTodaysActivity()
-  // in Attendanceservice.js remains a mock until something like
-  // GET /api/attendance?date=today exists. Everything ABOVE this
-  // (confirm / time-out on tap) is real - only this list is still
-  // fake.
-  async function loadTodaysActivity() {
-    const records = await fetchTodaysActivity();
-    setTodaysRecords(records);
+  useEffect(() => {
+    let ignore = false;
+    // FIX: the AbortController this used to have only cancels the
+    // request on the client - it doesn't reliably stop the backend from
+    // having already received and counted the request against the
+    // shared rate limit before the abort reaches it, especially against
+    // a fast local backend. That mattered here specifically because
+    // React 18 StrictMode double-invokes this effect on every mount in
+    // dev (mount -> cleanup -> mount), so every single time this page
+    // mounted - including clicking back into it from the sidebar - two
+    // real GET /api/student requests went out with identical params,
+    // both counted by RateLimitFilter, even though the first was
+    // "aborted." fetchStudentRecords now de-dupes identical in-flight
+    // calls at the source (see Attendanceservice.js), so the duplicate
+    // never reaches authFetch at all. `ignore` stays, since it still
+    // protects against a *different* case: params changing again before
+    // an older, genuinely different request has resolved.
+    async function loadRecords() {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        // GET /api/student
+        // debouncedSearch is sent through as `studentName` (see
+        // fetchStudentRecords in Attendanceservice.js) - this was never
+        // wired in before, so typing a search term only ever re-filtered
+        // whichever ~20 rows happened to already be loaded for the
+        // current page, instead of actually searching the roster. GET
+        // /api/student still has no LRN query param, so an LRN-only
+        // search term won't be found server-side either way -
+        // AttendanceTable's client-side name/LRN filter (fed by the raw,
+        // non-debounced `search`) stays layered on top of this and is
+        // the only thing that makes LRN search work at all.
+        const { records: fetched, totalPages: fetchedTotalPages } = await fetchStudentRecords({
+          page: currentPage,
+          level,
+          section,
+          search: debouncedSearch,
+        });
+        if (!ignore) {
+          setRecords(fetched);
+          setTotalPages(fetchedTotalPages);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setLoadError(error.message);
+          setRecords([]);
+        }
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
+    }
+
+    loadRecords();
+    return () => {
+      ignore = true;
+    };
+  }, [currentPage, level, section, debouncedSearch]);
+
+  // GET /api/student never returns today's attendance (fetchStudentRecords
+  // always sets todayAttendance: null - see the comment there), so a full
+  // reloadRecords() after a tap doesn't refresh anything real; it just
+  // wipes every row's attendance status back to null, including students
+  // who were already marked present/timed-out earlier in the session.
+  // markAttendancePresent()/timeOutAttendance() already return the actual
+  // updated attendance record - that response IS the ground truth for
+  // this student, so patch it directly into the matching row (matched by
+  // rfid, which we already have from the tap itself) instead of
+  // re-fetching a roster that can't tell us anything about attendance.
+  function applyAttendanceUpdate(rfid, attendance) {
+    setRecords((prev) =>
+      prev.map((r) =>
+        r.rfid === rfid
+          ? {
+              ...r,
+              todayAttendance: {
+                id: attendance.id,
+                status: attendance.status,
+                timeIn: attendance.timeIn,
+                timeOut: attendance.timeOut,
+              },
+            }
+          : r
+      )
+    );
   }
-  
+
+  // Same idea as applyAttendanceUpdate above, for the bulk "Mark Absent"
+  // response - but AttendanceResponse (see AttendanceMapper.java on the
+  // backend) never actually carries a studentId through, only
+  // studentName, so matching by id always silently failed (every mapped
+  // record's studentId came back undefined). Matching by name instead
+  // actually works with what the backend returns today. This can misfire
+  // if two students in the same section share the exact same full name,
+  // but that's the trade-off available without a backend change - if
+  // that's ever added, switch this back to matching by id.
+  function applyBulkAttendanceUpdate(attendanceRecords) {
+    const byStudentName = new Map(
+      attendanceRecords.map((attendance) => [attendance.name, attendance])
+    );
+    setRecords((prev) =>
+      prev.map((r) => {
+        const attendance = byStudentName.get(r.name);
+        if (!attendance) return r;
+        return {
+          ...r,
+          todayAttendance: {
+            id: attendance.id,
+            status: attendance.status,
+            timeIn: attendance.timeIn,
+            timeOut: attendance.timeOut,
+          },
+        };
+      })
+    );
+  }
+
   async function recordTap(rfid) {
     const nowMs = Date.now();
     if (
@@ -142,21 +273,21 @@ function RFIDAttendancePage() {
     lastTapRef.current = { rfid, atMs: nowMs };
 
     try {
+      // PATCH /api/attendance/present
       const markedPresent = await markAttendancePresent(rfid);
       setLastScan({ ...markedPresent, action: "present" });
+      applyAttendanceUpdate(rfid, markedPresent);
     } catch (presentError) {
       if (presentError.status === 404) {
         setLastScan({ action: "no-record" });
       } else {
         try {
+          // PATCH /api/attendance/time-out
           const timedOut = await timeOutAttendance(rfid);
           setLastScan({ ...timedOut, action: "timed-out" });
+          applyAttendanceUpdate(rfid, timedOut);
         } catch (timeOutError) {
           if (timeOutError.status === 400) {
-            // AlreadyTimedOut. Note: this error response doesn't carry
-            // the original record, so the exact timeIn/timeOut can't
-            // be redisplayed here without a follow-up lookup - which
-            // doesn't exist yet either (see KNOWN GAP above).
             setLastScan({ action: "already-done" });
           } else {
             setLastScan({ action: "no-record" });
@@ -164,30 +295,24 @@ function RFIDAttendancePage() {
         }
       }
     }
-
-    loadTodaysActivity();
+    // No reloadRecords() here anymore - a failed tap (404/"already-done")
+    // changed nothing server-side, and a successful one is already
+    // reflected precisely above. If this rfid isn't on the currently
+    // filtered/paged view, there's nothing on-screen that needs updating.
   }
 
-  // "Mark Remaining as Absent" button - for the teacher to click once
-  // they're done checking attendance for the period. Anyone still
-  // "on school" at that point (guard tapped them in, but they never
-  // got the present tap on this scanner - no time-in ever went
-  // through) gets swept to absent in one shot, instead of sitting
-  // unresolved forever.
-  //
-  // Confirmation now goes through ConfirmMarkAbsentModal (same
-  // pattern as the Section module's ConfirmSectionStatusModal)
-  // instead of window.confirm() - this just opens the dialog.
   function handleMarkRemainingAbsent() {
     setIsConfirmAbsentOpen(true);
   }
 
-  // Runs only after the modal is confirmed.
   async function confirmMarkRemainingAbsent() {
     setIsMarkingRemainingAbsent(true);
     try {
-      await markRemainingAsAbsent();
-      await loadTodaysActivity();
+      // POST /api/attendance/close-attendance?sectionName=
+      const absentRecords = await closeAttendanceForSection(section);
+      applyBulkAttendanceUpdate(absentRecords);
+    } catch (error) {
+      setLoadError(error.message);
     } finally {
       setIsMarkingRemainingAbsent(false);
       setIsConfirmAbsentOpen(false);
@@ -205,28 +330,60 @@ function RFIDAttendancePage() {
     }
   }
 
-  // Dev-only helper so the flow can be tested without a physical
-  // reader connected. Remove once real hardware is wired up.
-  function simulateTap() {
-    const rfid = DEV_TEST_RFIDS[Math.floor(Math.random() * DEV_TEST_RFIDS.length)];
-    recordTap(rfid);
+  function handlePresentClick(record) {
+    setPresentTarget(record);
   }
 
-  // Client-side paging only - fetchTodaysActivity() has no real
-  // page param yet (see TODO below), so this just slices whatever
-  // the mock returns. Same Pagination.jsx component/behavior as the
-  // Student Record tab for a consistent feel.
-  const totalActivityPages = Math.max(1, Math.ceil(todaysRecords.length / ACTIVITY_PAGE_SIZE));
-  const clampedActivityPage = Math.min(activityPage, totalActivityPages);
-  const pagedRecords = todaysRecords.slice(
-    (clampedActivityPage - 1) * ACTIVITY_PAGE_SIZE,
-    clampedActivityPage * ACTIVITY_PAGE_SIZE
-  );
+  async function handleTimeOutClick(record) {
+    setPendingAssignmentId(record.assignmentId);
+    try {
+      // PATCH /api/attendance/manual-timeout/{studentId}
+      const updated = await manualTimeOut(record.studentId);
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.assignmentId === record.assignmentId
+            ? { ...r, todayAttendance: { ...r.todayAttendance, timeOut: updated.timeOut } }
+            : r
+        )
+      );
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setPendingAssignmentId(null);
+    }
+  }
+
+  async function handlePresentSubmit(_attendanceId, _mode, time) {
+    if (!presentTarget) return;
+    setPendingAssignmentId(presentTarget.assignmentId);
+    try {
+      // POST /api/attendance/manual/{studentId}
+      const updated = await markPresentManual(presentTarget.studentId, time);
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.assignmentId === presentTarget.assignmentId
+            ? {
+                ...r,
+                todayAttendance: {
+                  id: updated.id,
+                  status: updated.status,
+                  timeIn: updated.timeIn,
+                  timeOut: updated.timeOut,
+                },
+              }
+            : r
+        )
+      );
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setPendingAssignmentId(null);
+      setPresentTarget(null);
+    }
+  }
 
   return (
-    <div className="font-primary relative flex min-h-[calc(85vh-5rem)] flex-col gap-4 lg:flex-row lg:gap-6">
-      {/* Catches RFID reader keystrokes (UID + Enter) no matter what's
-          on screen. Visually hidden, always focused. */}
+    <div className="font-primary relative flex min-h-[calc(85vh-5rem)] flex-col gap-4 md:flex-row md:gap-6">
       <input
         ref={hiddenInputRef}
         type="text"
@@ -239,17 +396,33 @@ function RFIDAttendancePage() {
         autoFocus
       />
 
-      <div className="flex w-full flex-col justify-between text-center bg-primary p-4 text-white rounded-2xl shadow-md lg:w-70 lg:shrink-0">
+      <div
+        className="w-full text-white bg-primary rounded-2xl shadow-md p-4 md:w-70 md:shrink-0"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "24px",
+          minHeight: "70vh",
+          textAlign: "center",
+        }}
+      >
         <LiveClock />
 
-        <div className="flex min-h-52 flex-col items-center justify-center rounded-lg bg-white border border-gray shadow-sm px-4 py-8 text-center text-gray-800">
+        <div
+          className="w-full bg-white border border-gray shadow-sm rounded-lg text-gray-800 px-4 py-8"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "208px",
+            textAlign: "center",
+          }}
+        >
           {lastScan ? (
             <>
-              {/* Only "present" and "timed-out" come back from a real
-                  AttendanceResponse (name + gradeAndSection combined -
-                  see AttendanceMapper.java), so those two show the
-                  student's name. "no-record" / "already-done" have no
-                  record to show a name from (see KNOWN GAP above). */}
               {lastScan.name && (
                 <>
                   <p className="text-lg font-bold text-primary">{lastScan.name}</p>
@@ -298,117 +471,113 @@ function RFIDAttendancePage() {
         <div>
           <p className="text-sm font-semibold">{SCHOOL_NAME}</p>
           <p className="text-xs text-white/70">Attendance Management System</p>
-
-          <button
-            type="button"
-            onClick={simulateTap}
-            className="mt-4 w-full cursor-pointer rounded-lg border border-white/40 py-2 text-xs font-semibold text-white/80 transition-colors hover:border-white hover:text-white"
-          >
-            Simulate RFID Tap (dev only)
-          </button>
         </div>
       </div>
 
-      {/* TODO: BACKEND CONNECTION - this feed is still mocked (fetchTodaysActivity() in Attendanceservice.js); shape still assumes the old per-student MOCK_STUDENTS record since there's no real list endpoint yet. */}
       <div className="flex flex-1 flex-col overflow-y-auto rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-gray-700">Today's Activity</p>
-          <button
-            type="button"
-            onClick={handleMarkRemainingAbsent}
-            disabled={
-              isMarkingRemainingAbsent ||
-              !todaysRecords.some((r) => r.todayAttendance?.status === "On School")
-            }
-            className="cursor-pointer rounded-md border border-danger px-3 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isMarkingRemainingAbsent ? "Marking..." : "Mark Remaining as Absent"}
-          </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <AttendaceFilters
+            level={level}
+            section={section}
+            status={status}
+            // level/section changes hit the server (GET /api/student), so
+            // the page reset is batched here, in the same handler, so it
+            // lands in the same render as the filter change - see the
+            // comment on the debounce effect above for why that matters.
+            onLevelChange={(e) => {
+              setLevel(e.target.value);
+              setCurrentPage(1);
+            }}
+            onSectionChange={(e) => {
+              setSection(e.target.value);
+              setCurrentPage(1);
+            }}
+            // status is a client-side-only filter (AttendanceTable filters
+            // the already-loaded page by it) - it never appears in
+            // fetchStudentRecords' params, so it doesn't need a page reset.
+            onStatusChange={(e) => setStatus(e.target.value)}
+            role={role}
+            userId={user?.id}
+          />
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <AttendanceSearchInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search LRN or Name"
+            />
+
+            <button
+              type="button"
+              onClick={handleMarkRemainingAbsent}
+              disabled={isMarkingRemainingAbsent || !section}
+              title={
+                !section
+                  ? "Select a section first"
+                  : "Marks every enrolled student in this section with no attendance record at all today as absent."
+              }
+              className="flex h-9 w-fit shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-secondary px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+            >
+              {isMarkingRemainingAbsent ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <UserX size={14} />
+              )}
+              {isMarkingRemainingAbsent ? "Marking..." : "Mark Absent"}
+            </button>
+          </div>
         </div>
 
-        {todaysRecords.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-center">
-            <p className="text-sm text-gray-500">No taps recorded yet today.</p>
-          </div>
-        ) : (
-          <div className="mt-6 w-full overflow-x-auto rounded-xl bg-white shadow-md">
-            <table className="w-full min-w-125 table-fixed border-collapse">
-              <colgroup>
-                <col className="w-[28%]" />
-                <col className="w-[14%]" />
-                <col className="w-[16%]" />
-                <col className="w-[17%]" />
-                <col className="w-[13%]" />
-                <col className="w-[12%]" />
-              </colgroup>
-
-              <thead className="bg-primary">
-                <tr>
-                  <th className={thClass}>Name</th>
-                  <th className={thClass}>Level</th>
-                  <th className={thClass}>Section</th>
-                  <th className={thClass}>Status</th>
-                  <th className={thClass}>Time In</th>
-                  <th className={thClass}>Time Out</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {pagedRecords.map((record) => (
-                  <tr
-                    key={record.assignmentId}
-                    className="border-b border-gray-200 transition hover:bg-gray-50"
-                  >
-                    <td className={tdClass} title={record.name}>
-                      {record.name}
-                      {record.todayAttendance?.status === "On School" && (
-                        <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-danger">
-                          Not Present Yet
-                        </span>
-                      )}
-                    </td>
-                    <td className={tdClass}>{record.gradeLevel}</td>
-                    <td className={tdClass}>{record.section}</td>
-                    <td className={tdClass}>
-                      {record.todayAttendance?.status ? (
-                        <AttendanceStatus status={record.todayAttendance.status} />
-                      ) : (
-                        <span className="text-gray-400"></span>
-                      )}
-                    </td>
-                    <td className={tdClass}>
-                      {record.todayAttendance?.timeIn
-                        ? formatDisplayTime(record.todayAttendance.timeIn)
-                        : ""}
-                    </td>
-                    <td className={tdClass}>
-                      {record.todayAttendance?.timeOut
-                        ? formatDisplayTime(record.todayAttendance.timeOut)
-                        : ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {loadError && (
+          <p className="mt-3 text-sm text-red-500">Failed to load: {loadError}</p>
         )}
 
-        {todaysRecords.length > 0 && (
-          <div className="mt-3">
+        {isLoading ? (
+          <p className="py-6 text-center text-sm text-gray-500">Loading students...</p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-3">
+            <AttendanceTable
+              records={records}
+              searchTerm={search}
+              level={level}
+              section={section}
+              status={status}
+              pendingAssignmentId={pendingAssignmentId}
+              onPresentClick={handlePresentClick}
+              onTimeOutClick={handleTimeOutClick}
+            />
             <Pagination
-              currentPage={clampedActivityPage}
-              totalPages={totalActivityPages}
-              onPageChange={setActivityPage}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
             />
           </div>
         )}
       </div>
 
+      <ManualTimeModal
+        isOpen={presentTarget !== null}
+        mode="in"
+        attendance={
+          presentTarget && {
+            id: null,
+            name: presentTarget.name,
+            gradeLevel: presentTarget.gradeLevel,
+            section: presentTarget.section,
+            date: todayLabel,
+            timeIn: null,
+            timeOut: null,
+          }
+        }
+        onClose={() => setPresentTarget(null)}
+        onSubmit={handlePresentSubmit}
+      />
+
       <ConfirmMarkAbsentModal
         isOpen={isConfirmAbsentOpen}
         onClose={() => setIsConfirmAbsentOpen(false)}
         onConfirm={confirmMarkRemainingAbsent}
-        count={todaysRecords.filter((r) => r.todayAttendance?.status === "On School").length}
+        sectionName={section}
       />
     </div>
   );

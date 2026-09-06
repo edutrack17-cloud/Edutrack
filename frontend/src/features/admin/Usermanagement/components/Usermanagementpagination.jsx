@@ -1,10 +1,7 @@
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-// Same pagination chrome as Sectionlevelpagination.jsx (Section & Level
-// page): rounded-lg primary bar with white prev/next buttons carrying
-// primary-colored icons, instead of white-icon-on-primary - so both
-// admin list pages look consistent.
+// Same pagination chrome as Sectionlevelpagination.jsx, for visual consistency across admin list pages
 function Usermanagementpagination({ currentPage, totalPages, onPageChange }) {
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= totalPages;

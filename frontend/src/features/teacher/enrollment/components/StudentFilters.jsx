@@ -16,7 +16,7 @@ const LEVEL_ALL = { value: "", label: "Grade Level", textClass: "text-gray-700" 
 const SECTION_ALL = { value: "", label: "Section", textClass: "text-gray-700" };
 
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
 const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
 
 function useClickOutside(isOpen, ref, onClose) {

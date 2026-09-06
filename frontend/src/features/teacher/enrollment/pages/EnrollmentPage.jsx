@@ -1,25 +1,28 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import StudentFilters from "../components/StudentFilters";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import StudentTable from "../components/StudentTable";
 import EnrollStudentModal from "../components/EnrollStudentModal";
-import { getGradeLevels, getSections, getStudents, enrollStudent } from "../enrollmentService";
-// NOTE: adjust this path if Toast.jsx actually lives somewhere else in
-// your project - same shared component already used by Usermanagementpage.jsx
-// and Sectionlevelpage.jsx. Path depth here assumes EnrollmentPage.jsx sits
-// one folder deeper (pages/) than those two - double check against your
-// actual tree.
+import {
+  getGradeLevels,
+  getSections,
+  getSectionsByAdviser,
+  getStudents,
+  enrollStudent,
+} from "../enrollmentService";
 import { useToasts, ToastContainer } from "../../../../components/ui/Toast";
+import { useAuth } from "../../../../Context/Authcontext";
 
 const PAGE_SIZE = 10;
 
 function EnrollmentPage() {
+  const { user, role, isInitializing } = useAuth();
+
   const [search, setSearch] = useState("");
 
   const { toasts, showToast, dismissToast } = useToasts();
-
 
   const [level, setLevel] = useState("");
   const [section, setSection] = useState("");
@@ -38,30 +41,95 @@ function EnrollmentPage() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  // FIX: sections used to only be fetched once on mount (see the
+  // loadSections() effect below), so a section an admin adds/archives
+  // while a teacher already has this page open (e.g. in a background
+  // tab) never showed up in the Level/Section filters, the Add Student
+  // modal, or the Edit Student modal - the Add/Edit modals DO call
+  // onRefreshSections() on open, but that was refreshing this same
+  // stale-until-refocus "sections" state, so it didn't actually help
+  // unless the whole page was reloaded (F5). Same fix pattern as
+  // AttendaceFilters.jsx in the Attendance page: bump a refresh key
+  // whenever the tab regains focus/visibility, and re-run
+  // loadSections() when that key changes.
+  const [sectionsRefreshKey, setSectionsRefreshKey] = useState(0);
+  useEffect(() => {
+    function handleRefetch() {
+      if (document.visibilityState === "visible") {
+        setSectionsRefreshKey((prev) => prev + 1);
+      }
+    }
+    window.addEventListener("focus", handleRefetch);
+    document.addEventListener("visibilitychange", handleRefetch);
+    return () => {
+      window.removeEventListener("focus", handleRefetch);
+      document.removeEventListener("visibilitychange", handleRefetch);
+    };
+  }, []);
+
   // Pulled into its own function (instead of an inline effect) so it can
   // be re-run on demand - see handleAddStudent below - and not just once
   // on page load. Without that, a section archived/restored on the
   // Section Management page wouldn't be reflected here (in either the
   // Section filter or the Add Student modal's Section dropdown) until a
   // full page reload.
-  async function loadSections() {
+  //
+  // TEACHER vs ADMIN scoping: per backend dev, a logged-in TEACHER should
+  // only ever see the section(s) where THEY are the adviser - via
+  // GET /api/section/{userId} (SectionController.readSectionByAdviser /
+  // getSectionsByAdviser() here) - never the full section list. ADMIN
+  // keeps seeing every active section (GET /api/section/dropdown via
+  // getSections()). Same split PromoteStudentPage.jsx already uses for
+  // its filter-section fetch.
+  const loadSections = useCallback(async () => {
     try {
-      const data = await getSections();
+      const data =
+        role === "teacher"
+          ? await getSectionsByAdviser(user?.id)
+          : await getSections();
       setSections(data);
       setSectionsError("");
     } catch (error) {
       setSectionsError(error.message);
     }
-  }
+  }, [role, user?.id]);
 
-  // Grade levels are a fixed enum (no backend list endpoint needed),
-  // but the full section list (unfiltered by level) needs a real
-  // fetch - used by both the Section filter dropdown and the Add
-  // Student modal's Section dropdown.
+  // ADMIN: Grade Level is a fixed 3-value enum with no backend list
+  // endpoint - hardcoded via getGradeLevels(), same as before.
+  //
+  // TEACHER: readSectionByAdviser has no gradeLevel param and can't be
+  // asked to return "just the enum" - so instead of showing all 3 grade
+  // levels (which would let a teacher pick a level they have no section
+  // in at all), the Level filter is derived from whatever section(s)
+  // loadSections() actually returned for them.
+  //
+  // isInitializing guards against AuthContext's own rehydrate-on-refresh
+  // effect: on first mount after an F5, user/role are still null for one
+  // render before localStorage is read back in. Without this guard,
+  // loadSections() would run once against role === null (falling into
+  // the ADMIN/getSections() branch) and then again once role actually
+  // resolves to "teacher" - a redundant fetch and a brief flash of the
+  // wrong (unscoped) section list.
+  //
+  // sectionsRefreshKey re-runs this same effect whenever the tab
+  // regains focus/visibility (see the listener above) - this is what
+  // picks up a section an admin just added/archived elsewhere.
   useEffect(() => {
-    getGradeLevels().then(setGradeLevels);
+    if (isInitializing) return;
+
+    if (role !== "teacher") {
+      getGradeLevels().then(setGradeLevels);
+    }
     loadSections();
-  }, []);
+  }, [role, isInitializing, sectionsRefreshKey, loadSections]);
+
+  useEffect(() => {
+    if (role !== "teacher") return;
+    const uniqueLevels = [...new Set(sections.map((s) => s.gradeLevel))];
+    setGradeLevels(
+      uniqueLevels.map((value) => ({ value, label: value.replace("_", " ") }))
+    );
+  }, [role, sections]);
 
   // GET /api/student - re-fetches whenever a filter or the page
   // changes. NOTE: "search" is intentionally NOT sent to the backend -
@@ -103,9 +171,10 @@ function EnrollmentPage() {
   }
 
   useEffect(() => {
+    if (isInitializing) return;
     loadStudents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, section, status, currentPage]);
+  }, [level, section, status, currentPage, isInitializing]);
 
   // Client-side only, over whatever's on the current page - see the
   // note on loadStudents() above for why this can't search server-side

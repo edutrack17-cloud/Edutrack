@@ -7,24 +7,14 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
 
   function goToPrevious() {
     if (!isFirstPage) {
-      // TODO:
-      // AttendancePage should request the previous page.
-      //
-      // Example:
-      // GET /api/attendance?page=${currentPage - 1}
-
+      // GET /api/student (page - 1)
       onPageChange(currentPage - 1);
     }
   }
 
   function goToNext() {
     if (!isLastPage) {
-      // TODO:
-      // AttendancePage should request the next page.
-      //
-      // Example:
-      // GET /api/attendance?page=${currentPage + 1}
-
+      // GET /api/student (page + 1)
       onPageChange(currentPage + 1);
     }
   }

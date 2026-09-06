@@ -1,11 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-// Same dropdown chrome as Sectionlevelfilters.jsx (Section & Level page):
-// colored status text, a check icon on the selected option, and an
-// animated chevron - so both admin list pages look and behave the same.
-// Status colors match Usermanagementtable's getStatusClass() (Active =
-// success, Disabled = danger) so the filter and the table agree visually.
+// Same dropdown chrome as Sectionlevelfilters.jsx; colors match Usermanagementtable's getStatusClass()
 const STATUS_OPTIONS = [
   { value: "", label: "Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
   { value: "Active", label: "Active", textClass: "text-success", selectedBgClass: "bg-success/10" },
@@ -43,9 +39,7 @@ function Usermanagementfilters({ status, onStatusChange }) {
 
   const selected = STATUS_OPTIONS.find((option) => option.value === status) || STATUS_OPTIONS[0];
 
-  // Keeps the same event-shaped callback contract the page already uses
-  // (`onStatusChange={(event) => setStatus(event.target.value)}`), so
-  // Usermanagementpage.jsx doesn't need to change.
+  // Keeps the event-shaped callback contract the page already uses
   function handleSelect(nextValue) {
     onStatusChange({ target: { value: nextValue } });
     setIsOpen(false);

@@ -6,8 +6,60 @@ const schoolYearApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-schoolYearApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+// --- Client-side rate-limit throttle ------------------------------------
+// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
+// 1 minute) = 1 token added every 6s. Same idiom as every other *Api
+// instance in this app, sharing the same backend bucket (keyed
+// "user:" + userId) with Section Level, Activity Log, etc. whenever
+// this admin has more than one of those pages open under the same
+// login.
+const RATE_LIMIT_CAPACITY = 10;
+const RATE_LIMIT_REFILL_MS = 6000;
+
+let availableTokens = RATE_LIMIT_CAPACITY;
+let lastRefillAt = Date.now();
+const throttleQueue = [];
+
+function refillTokens() {
+  const elapsed = Date.now() - lastRefillAt;
+  if (elapsed <= 0) return;
+  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
+  if (tokensToAdd > 0) {
+    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
+    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
+  }
+}
+
+function processThrottleQueue() {
+  refillTokens();
+  while (availableTokens > 0 && throttleQueue.length > 0) {
+    availableTokens -= 1;
+    throttleQueue.shift()();
+  }
+  if (throttleQueue.length > 0) {
+    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+  }
+}
+
+// Awaited by the request interceptor below before every call.
+function acquireRequestSlot() {
+  refillTokens();
+  if (availableTokens > 0 && throttleQueue.length === 0) {
+    availableTokens -= 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    throttleQueue.push(resolve);
+    if (throttleQueue.length === 1) {
+      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+    }
+  });
+}
+
+schoolYearApi.interceptors.request.use(async (config) => {
+  await acquireRequestSlot();
+
+  const token = localStorage.getItem("accessToken");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -16,12 +68,28 @@ schoolYearApi.interceptors.request.use((config) => {
 
 schoolYearApi.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       window.location.href = "/login";
+      return Promise.reject(error);
     }
+
+    // Our local bucket should keep this tab under the backend's limit
+    // on its own, so reaching a real 429 means something else is also
+    // spending from this admin's shared bucket right now. Resync the
+    // local bucket to empty and retry this one request once after a
+    // full refill interval.
+    if (error.response?.status === 429 && !error.config?._rateLimitRetried) {
+      availableTokens = 0;
+      lastRefillAt = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
+      error.config._rateLimitRetried = true;
+      return schoolYearApi(error.config);
+    }
+
     return Promise.reject(error);
   }
 );

@@ -7,10 +7,7 @@ import { editUserSchema } from "../UsermanagementSchema";
 
 function Editusermodal({ isOpen, onClose, onSubmit, user }) {
   const formik = useFormik({
-    // "enableReinitialize" makes formik pick up a NEW "user" prop each
-    // time this modal is opened for a different row - same reason
-    // EditStudentModal.jsx uses it. Without this, editing User A then
-    // User B would keep showing User A's data.
+    // enableReinitialize re-syncs form values when switching between rows (see EditStudentModal.jsx)
     enableReinitialize: true,
     initialValues: {
       username: user?.username ?? "",
@@ -20,13 +17,7 @@ function Editusermodal({ isOpen, onClose, onSubmit, user }) {
     },
     validationSchema: editUserSchema,
     onSubmit: async (values, helpers) => {
-      // TODO: BACKEND CONNECTION - see updateUser() in Usermanagementservice.js
-      // PUT /api/users/{user.id}
-      // `onSubmit` (from Usermanagementpage) resolves to true/false, so
-      // this only closes once the update actually succeeds - previously
-      // it closed immediately regardless, which currently always looks
-      // like a silent success even though updateUser() always throws
-      // (no backend endpoint yet).
+      // CONNECTED: PATCH /api/user/update/{userId} - see updateUser() in Usermanagementservice.js
       const success = await onSubmit?.(user?.id, values);
       if (success) {
         onClose();
@@ -117,11 +108,7 @@ function Editusermodal({ isOpen, onClose, onSubmit, user }) {
             </div>
           </div>
 
-          {/* TODO: if a password-reset action is needed, add it as its
-              own explicit button here (e.g. "Send password reset" or a
-              separate confirm step) rather than a plain text field, so
-              a password can't be silently overwritten via an ordinary
-              edit. Ties to a future PATCH /api/users/{id}/password. */}
+          {/* TODO: add password reset as its own explicit action, not a plain field */}
         </div>
 
         <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">

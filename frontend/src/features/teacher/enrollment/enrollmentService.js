@@ -14,8 +14,69 @@ const studentApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-studentApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+// --- Client-side rate-limit throttle ------------------------------------
+// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
+// 1 minute) = 1 token added every 6s. Same throttle idea as
+// Attendanceservice.js - and the same actual backend bucket, since it's
+// keyed per logged-in user and this page shares that login with the
+// Attendance page. Every call through studentApi (roster paging/
+// filters, section dropdowns, enroll/edit/status changes) draws from
+// this local bucket first via the request interceptor below, instead
+// of firing immediately and letting the backend answer some with 429.
+const RATE_LIMIT_CAPACITY = 10;
+const RATE_LIMIT_REFILL_MS = 6000;
+
+let availableTokens = RATE_LIMIT_CAPACITY;
+let lastRefillAt = Date.now();
+const throttleQueue = [];
+
+function refillTokens() {
+  const elapsed = Date.now() - lastRefillAt;
+  if (elapsed <= 0) return;
+  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
+  if (tokensToAdd > 0) {
+    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
+    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
+  }
+}
+
+function processThrottleQueue() {
+  refillTokens();
+  while (availableTokens > 0 && throttleQueue.length > 0) {
+    availableTokens -= 1;
+    throttleQueue.shift()();
+  }
+  if (throttleQueue.length > 0) {
+    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+  }
+}
+
+// Awaited by the request interceptor below before every call. Under the
+// limit, resolves immediately; over it, queues (in call order) and
+// resolves as tokens refill - so a burst of filter changes/modal opens
+// gets spaced out instead of racing the backend's bucket and losing.
+function acquireRequestSlot() {
+  refillTokens();
+  if (availableTokens > 0 && throttleQueue.length === 0) {
+    availableTokens -= 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    throttleQueue.push(resolve);
+    if (throttleQueue.length === 1) {
+      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+    }
+  });
+}
+
+// authService.js stores the access token under localStorage key
+// "accessToken" (this used to read the stale "token" key left over from
+// before that refactor, which meant no Authorization header was ever
+// sent - fixed here).
+studentApi.interceptors.request.use(async (config) => {
+  await acquireRequestSlot();
+
+  const token = localStorage.getItem("accessToken");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -24,12 +85,31 @@ studentApi.interceptors.request.use((config) => {
 
 studentApi.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       window.location.href = "/login";
+      return Promise.reject(error);
     }
+
+    if (error.response?.status === 429 && !error.config?._rateLimitRetried) {
+      // Our local bucket should keep this tab under the backend's
+      // limit on its own, so reaching this means something else is
+      // also spending from this user's shared bucket right now
+      // (another tab, another device signed in as the same account -
+      // including the Attendance page, if that's open elsewhere under
+      // the same login). Resync the local bucket to empty and retry
+      // this one request once after a full refill interval, instead of
+      // surfacing a raw 429 straight to whichever screen triggered it.
+      availableTokens = 0;
+      lastRefillAt = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
+      error.config._rateLimitRetried = true;
+      return studentApi(error.config);
+    }
+
     return Promise.reject(error);
   }
 );
@@ -69,6 +149,36 @@ export async function getGradeLevels() {
   ];
 }
 
+// Both getSections() and getSectionsByAdviser() below used to hit the
+// network on every single call - unlike Attendanceservice.js's
+// fetchSectionsByAdviser, which already caches. Here, EnrollmentPage's
+// window-focus/visibilitychange listener AND every Add/Edit Student
+// modal open (onRefreshSections) all call straight into these, so a
+// normal editing session (switch tabs a couple times, open Edit on a
+// few rows) could rack up several fresh GET /api/section/... calls -
+// on the same shared per-user rate-limit bucket used by GET /api/student
+// and every status-change PATCH. 30s TTL + in-flight dedupe (same idiom
+// as the Attendance fix) removes that as an avoidable source of 429s.
+function mapSectionDropdown(data) {
+  return data.map((section) => ({
+    id: section.sectionId,
+    name: section.sectionName,
+    gradeLevel: section.gradeLevel,
+    status: section.sectionStatus,
+  }));
+}
+
+const sectionsCache = new Map(); // key: gradeLevel ("" = all) -> { data, expiresAt }
+const sectionsInFlight = new Map();
+const sectionsByAdviserCache = new Map(); // key: userId -> { data, expiresAt }
+const sectionsByAdviserInFlight = new Map();
+const SECTIONS_CACHE_TTL_MS = 30_000;
+
+export function invalidateEnrollmentSectionsCache() {
+  sectionsCache.clear();
+  sectionsByAdviserCache.clear();
+}
+
 // CONNECTED: GET /api/section/dropdown?gradeLevel={gradeLevel}
 // gradeLevel is optional - omit it to get every section. Maps
 // SectionResponse's fields down to { id, name, gradeLevel, status } -
@@ -82,20 +192,77 @@ export async function getGradeLevels() {
 // choice. StudentFilters still gets the unfiltered list, since filtering
 // the STUDENT TABLE by an archived section is still a valid, useful
 // query (e.g. seeing who used to be in a since-archived section).
+//
+// ADMIN ONLY in practice - see getSectionsByAdviser() below for what
+// TEACHER should use instead (this endpoint has no adviser scoping at
+// all, so a teacher would otherwise see every section in the school).
 export async function getSections(gradeLevel) {
-  const params = {};
-  if (gradeLevel) params.gradeLevel = gradeLevel;
+  const cacheKey = gradeLevel || "";
 
+  const cached = sectionsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  if (sectionsInFlight.has(cacheKey)) return sectionsInFlight.get(cacheKey);
+
+  const request = (async () => {
+    const params = {};
+    if (gradeLevel) params.gradeLevel = gradeLevel;
+
+    try {
+      const { data } = await studentApi.get("/section/dropdown", { params });
+      const mapped = mapSectionDropdown(data);
+      sectionsCache.set(cacheKey, { data: mapped, expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS });
+      return mapped;
+    } catch (error) {
+      throw new Error(getErrorMessage(error, "Failed to load sections"));
+    }
+  })();
+
+  sectionsInFlight.set(cacheKey, request);
   try {
-    const { data } = await studentApi.get("/section/dropdown", { params });
-    return data.map((section) => ({
-      id: section.sectionId,
-      name: section.sectionName,
-      gradeLevel: section.gradeLevel,
-      status: section.sectionStatus,
-    }));
-  } catch (error) {
-    throw new Error(getErrorMessage(error, "Failed to load sections"));
+    return await request;
+  } finally {
+    sectionsInFlight.delete(cacheKey);
+  }
+}
+
+// CONNECTED: GET /api/section/{userId} (SectionController.readSectionByAdviser)
+// Per backend dev: a logged-in TEACHER should only ever see the
+// section(s) where THEY are the assigned adviser, not the full section
+// list getSections() above returns. Use this instead of getSections()
+// whenever the caller is a teacher (see EnrollmentPage.jsx's
+// loadSections(), which branches on role) - same split
+// PromoteStudentPage.jsx already applies via getSectionsByAdviser() in
+// promotestudentservice.js.
+//
+// Note: readSectionByAdviser throws AdvisorySectionNotFound (empty
+// result) if the teacher has no section assigned yet - that surfaces
+// here as a thrown Error too, same as any other failure, so callers
+// don't need a separate "not found" branch. A thrown/rejected result is
+// never cached, so a teacher who gets this once isn't stuck seeing it
+// for the next 30s once a section actually gets assigned.
+export async function getSectionsByAdviser(userId) {
+  const cached = sectionsByAdviserCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  if (sectionsByAdviserInFlight.has(userId)) return sectionsByAdviserInFlight.get(userId);
+
+  const request = (async () => {
+    try {
+      const { data } = await studentApi.get(`/section/${userId}`);
+      const mapped = mapSectionDropdown(data);
+      sectionsByAdviserCache.set(userId, { data: mapped, expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS });
+      return mapped;
+    } catch (error) {
+      throw new Error(getErrorMessage(error, "Failed to load your assigned section"));
+    }
+  })();
+
+  sectionsByAdviserInFlight.set(userId, request);
+  try {
+    return await request;
+  } finally {
+    sectionsByAdviserInFlight.delete(userId);
   }
 }
 

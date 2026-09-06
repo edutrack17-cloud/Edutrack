@@ -2,9 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { useFormik } from "formik";
 import { X, Clock, ChevronDown } from "lucide-react";
 
-// Rounds "now" down to the nearest step so it always lines up with one
-// of the dropdown's own options. With 1-minute steps this is just the
-// current minute (e.g. 10:07 -> "10:07").
 function getCurrentTimeRounded(stepMinutes = 1) {
   const now = new Date();
   const totalMinutes = now.getHours() * 60 + now.getMinutes();
@@ -14,10 +11,6 @@ function getCurrentTimeRounded(stepMinutes = 1) {
   return `${hours}:${minutes}`;
 }
 
-// Builds every "HH:mm" (24h, for the value) / "h:mm AM" (12h, for the
-// label) pair across a full day, one minute apart. totalMinutes is
-// kept alongside each option so TimeDropdown can gray out (and block
-// picking) anything later than right now.
 function buildTimeOptions(stepMinutes = 1) {
   const options = [];
   for (let totalMinutes = 0; totalMinutes < 24 * 60; totalMinutes += stepMinutes) {
@@ -36,24 +29,11 @@ function buildTimeOptions(stepMinutes = 1) {
 
 const TIME_OPTIONS = buildTimeOptions(1);
 
-// Replaces a native <select> on purpose: the browser decides on its
-// own whether a native select's list opens above or below the field
-// (it flips upward whenever it judges there isn't enough room below),
-// which is exactly why the time list was appearing above the field
-// instead of under it. This version is a plain absolutely-positioned
-// list anchored to the bottom of its trigger, so it always opens
-// downward, the same pattern as the Level/Section/Status dropdowns in
-// AttendaceFilters.jsx.
 function TimeDropdown({ value, onChange, onBlur, hasError }) {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef(null);
   const selectedRef = useRef(null);
 
-  // Times later than the current clock time can't be picked - a
-  // Time In / Time Out records something that already happened, so a
-  // future clock time can never be valid. Past and current-minute
-  // times stay selectable, since the actual tap/arrival could well
-  // have been earlier today.
   const nowTotalMinutes = (() => {
     const now = new Date();
     return now.getHours() * 60 + now.getMinutes();
@@ -83,8 +63,6 @@ function TimeDropdown({ value, onChange, onBlur, hasError }) {
     };
   }, [isOpen, onBlur]);
 
-  // Land on the current time (or whatever's already selected) instead
-  // of the top of a 288-option list whenever the dropdown opens.
   useEffect(() => {
     if (isOpen) {
       selectedRef.current?.scrollIntoView({ block: "center" });
@@ -151,11 +129,6 @@ function TimeDropdown({ value, onChange, onBlur, hasError }) {
   );
 }
 
-// mode: "in" | "out"
-// Single reusable modal for both manual actions from the kebab menu.
-// Kept separate from EditAttendanceModal on purpose - this is the
-// "no RFID, log it right now" path (one field, fast), while Edit
-// Attendance is the "go back and correct a record" path (all fields).
 function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
   const isTimeIn = mode === "in";
 
@@ -179,25 +152,8 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
     },
 
     onSubmit: (values) => {
-      // TODO: BACKEND CONNECTION
-      //
-      // Manual attendance logging (no RFID scan available).
-      //
-      // Time In:
-      // CONNECT: POST /api/attendance/time-in
-      // Body: { assignmentId, timeIn }
-      //
-      // Time Out:
-      // CONNECT: PUT /api/attendance/{attendanceId}/time-out
-      // Body: { timeOut }
-      //
-      // Either way, this is a manual entry made by a teacher/admin,
-      // so the backend should probably set is_confirmed = true on
-      // the resulting row (nothing left to confirm - a person just
-      // picked it directly).
-
+      // Time In -> POST /api/attendance/manual/{studentId}, Time Out -> PATCH /api/attendance/manual-timeout/{studentId}
       onSubmit?.(attendance?.id, mode, values.time);
-
       onClose();
     },
   });
@@ -233,8 +189,6 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
         </div>
 
         <div className="flex flex-col gap-5 px-6 py-6">
-          {/* Who/what this is for, plus the date - read-only context,
-              a manual entry always belongs to today. */}
           <div className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3">
             <Clock size={18} className={accentColorClass} />
             <div>
@@ -248,7 +202,6 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
             </div>
           </div>
 
-          {/* Time dropdown, as the last input before the submit buttons. */}
           <div>
             <label htmlFor="time" className="mb-1 block text-sm font-semibold text-gray-700">
               {isTimeIn ? "Time In" : "Time Out"}

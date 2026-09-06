@@ -1,9 +1,7 @@
 import React from "react";
 import { X } from "lucide-react";
 
-// Same InfoField treatment as ViewStudentModal.jsx (gray-700 label,
-// gray-500 value, em-dash fallback) so the two "view" modals read as
-// the same component family.
+// Same InfoField treatment as ViewStudentModal.jsx, so both "view" modals read as one component family
 function InfoField({ label, value }) {
   return (
     <div>
@@ -13,9 +11,7 @@ function InfoField({ label, value }) {
   );
 }
 
-// Backend's GradeLevel enum comes back as "Grade_4" / "Grade_5" / "Grade_6" -
-// display it as "Grade 4" instead of the raw enum name. Same helper as
-// formatGradeLevel() in StudentTable.jsx.
+// Backend's GradeLevel enum ("Grade_4") is displayed as "Grade 4" - same helper as StudentTable.jsx
 function formatGradeLevel(gradeLevel) {
   if (!gradeLevel) return "";
   return gradeLevel.replace("_", " ");
@@ -53,12 +49,7 @@ function Viewusermodal({ isOpen, onClose, user }) {
             <h3 className="mb-4 text-sm font-bold tracking-wide text-primary uppercase">
               Account Information
             </h3>
-            {/* Assigned Section (Teacher only) lives in THIS same grid,
-                right after Status, instead of its own separate section -
-                that's what pairs it up into a clean 2-per-row layout
-                (Username|Role, then Status|Assigned Section) matching
-                ViewStudentModal's rhythm, instead of Status sitting
-                alone on its own row. */}
+            {/* Assigned Section (Teacher only) pairs with Status for a clean 2-per-row layout */}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
               <div className="sm:col-span-2">
                 <InfoField label="Full Name" value={fullName} />

@@ -18,13 +18,7 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
     initialValues: EMPTY_FORM,
     validationSchema: createUserSchema,
     onSubmit: async (values, helpers) => {
-      // POST /api/createTeacher - see createUser() in Usermanagementservice.js
-      // `onSubmit` (from Usermanagementpage) now resolves to true/false
-      // instead of swallowing the error itself, so we only clear the
-      // form and close the modal once the request actually succeeded.
-      // Previously this closed/reset unconditionally, so a failed
-      // request (e.g. duplicate username) looked like a success and
-      // silently threw away whatever the admin had typed.
+      // CONNECTED: POST /api/user/createTeacher - see createUser() in Usermanagementservice.js
       const success = await onSubmit?.(values);
       if (success) {
         helpers.resetForm();

@@ -6,115 +6,179 @@ const activityLogApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// --- Client-side rate-limit throttle ------------------------------------
+// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
+// 1 minute) = 1 token added every 6s. Same idiom as enrollmentService.js's
+// studentApi and Attendanceservice.js's attendanceApi - and the same
+// actual backend bucket, since it's keyed per logged-in user
+// ("user:" + userId in RateLimitFilter), so an admin browsing the
+// Activity Log while another admin/teacher page is open under the same
+// login draws from the same 10 req/6s allowance.
+const RATE_LIMIT_CAPACITY = 10;
+const RATE_LIMIT_REFILL_MS = 6000;
+
+let availableTokens = RATE_LIMIT_CAPACITY;
+let lastRefillAt = Date.now();
+const throttleQueue = [];
+
+function refillTokens() {
+  const elapsed = Date.now() - lastRefillAt;
+  if (elapsed <= 0) return;
+  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
+  if (tokensToAdd > 0) {
+    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
+    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
+  }
+}
+
+function processThrottleQueue() {
+  refillTokens();
+  while (availableTokens > 0 && throttleQueue.length > 0) {
+    availableTokens -= 1;
+    throttleQueue.shift()();
+  }
+  if (throttleQueue.length > 0) {
+    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+  }
+}
+
+// Awaited by the request interceptor below before every call.
+function acquireRequestSlot() {
+  refillTokens();
+  if (availableTokens > 0 && throttleQueue.length === 0) {
+    availableTokens -= 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    throttleQueue.push(resolve);
+    if (throttleQueue.length === 1) {
+      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+    }
+  });
+}
+
+// Same auth wiring as sectionApi in Sectionlevelservice.js. Without this,
+// every request here goes out with no Authorization header, and
+// SecurityConfig's `.anyRequest().authenticated()` rejects it with a 401
+// before @PreAuthorize("hasRole('ADMIN')") on the controller ever runs.
+activityLogApi.interceptors.request.use(async (config) => {
+  await acquireRequestSlot();
+
+  const token = localStorage.getItem("accessToken");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// IMPORTANT: GlobalExceptionHandler.handleAuthorizationDenied() maps a
+// failed @PreAuthorize("hasRole('ADMIN')") check (AuthorizationDeniedException,
+// the default exception thrown by @EnableMethodSecurity in Spring Security 6)
+// to 401 - NOT 403 - with message "You're not allowed to access this
+// feature". That means a fully logged-in, non-admin user (e.g. a Teacher)
+// gets the exact same status code as an expired/invalid/missing token.
+// A blanket "401 -> clear session & redirect to login" would force-logout
+// that valid session over a permissions issue, not an auth one. Excluding
+// this specific message is a stopgap based on the one response shape we've
+// actually confirmed (GlobalExceptionHandler) - JwtAuthenticationEntryPoint,
+// which is what actually fires for a real expired/invalid token, is a
+// separate filter-level component we haven't seen, so its response shape
+// isn't confirmed to differ from this. Worth asking backend to either
+// share that file, or better, add a distinct field (e.g. an error code)
+// so this doesn't have to rely on matching an exact message string.
+const AUTHZ_DENIED_MESSAGE = "You're not allowed to access this feature";
+
+activityLogApi.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error.response?.status;
+    const message = error.response?.data?.message;
+
+    if (status === 401 && message !== AUTHZ_DENIED_MESSAGE) {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
+      window.location.href = "/login"; // adjust to your actual login route
+      return Promise.reject(error);
+    }
+
+    // Our local bucket should keep this tab under the backend's limit
+    // on its own, so reaching a real 429 means something else is also
+    // spending from this admin's shared bucket right now (another tab
+    // or page open under the same login). Resync the local bucket to
+    // empty and retry this one request once after a full refill
+    // interval, instead of surfacing a raw 429 straight to the Activity
+    // Log table. This check runs regardless of the 401/AUTHZ branch
+    // above since the two status codes are mutually exclusive.
+    if (status === 429 && !error.config?._rateLimitRetried) {
+      availableTokens = 0;
+      lastRefillAt = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
+      error.config._rateLimitRetried = true;
+      return activityLogApi(error.config);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 function getErrorMessage(error, fallback) {
   return error?.response?.data?.message || fallback;
 }
 
-// TODO - BACKEND NOT BUILT YET: ActivityLog.java (entity) exists, but
-// there's no repository/service/controller for it yet, so there is no
-// real endpoint to hit. Everything below is wired up and ready to go the
-// moment one exists - just confirm the path and response shape match once
-// the controller lands, and delete this TODO block.
-//
-// CONNECT: GET /api/activity-logs?page&size&search  (expected: paginated,
-// newest first - a Spring Data Page<ActivityLogResponse> shape, matching
-// how /section and /school-year already respond elsewhere in this app)
-//
-// Each raw item is expected to come back shaped like the ActivityLog
-// entity itself: { logId, logHeader, logDescription, createdAt, user: {...} }.
-// mapLogEntry() below reshapes that into what Activitylogtable.jsx reads
-// (logId, logHeader, logDescription, performedBy, createdAt) - adjust the
-// `user.fullName` lookup if the nested user object's field name differs
-// (see getTeachers() in Sectionlevelservice.js, which assumes the same
-// `fullName` field on User).
+// Reshapes the raw ActivityLogResponse coming back from
+// GET /api/activity-log (logId, logHeader, logDescription, createdAt,
+// userFullName) into what Activitylogtable.jsx reads (logId, logHeader,
+// logDescription, performedBy, createdAt). Note: unlike the old mock shape,
+// the real response has a flat `userFullName` string - there's no nested
+// `user` object, since ActivityLogMapper builds the full name server-side.
 function mapLogEntry(entry) {
   return {
     logId: entry.logId,
     logHeader: entry.logHeader,
     logDescription: entry.logDescription,
-    performedBy: entry.user?.fullName || entry.user?.username || null,
+    performedBy: entry.userFullName || null,
     createdAt: entry.createdAt,
   };
 }
 
-// MOCK DATA - remove this block once GET /api/activity-logs is live.
-// Shaped the same way the real endpoint is expected to respond (see the
-// TODO above mapLogEntry), so getActivityLogs() below can treat mock and
-// real data identically and nothing else in this feature has to change
-// when the backend catches up.
-const MOCK_LOGS = [
-  { logId: 1, logHeader: "Section Created", logDescription: "Section 4-Rizal was added.", user: { fullName: "Juan Dela Cruz" }, createdAt: "2026-08-22T09:14:00" },
-  { logId: 2, logHeader: "Section Updated", logDescription: "Section 5-Bonifacio was updated.", user: { fullName: "Maria Santos" }, createdAt: "2026-08-21T15:32:00" },
-  { logId: 3, logHeader: "Section Archived", logDescription: "Section 6-Mabini was archived.", user: { fullName: "Juan Dela Cruz" }, createdAt: "2026-08-21T10:05:00" },
-  { logId: 4, logHeader: "Section Activated", logDescription: "Section 4-Aguinaldo was activated.", user: { fullName: "Ana Reyes" }, createdAt: "2026-08-20T14:48:00" },
-  { logId: 5, logHeader: "New School Year Started", logDescription: "12 section(s) carried over from the current school year.", user: { fullName: "Maria Santos" }, createdAt: "2026-08-19T08:00:00" },
-  { logId: 6, logHeader: "Section Created", logDescription: "Section 5-Luna was added.", user: { fullName: "Ana Reyes" }, createdAt: "2026-08-18T11:22:00" },
-  { logId: 7, logHeader: "Section Updated", logDescription: "Section 6-Del Pilar's adviser was changed.", user: { fullName: "Juan Dela Cruz" }, createdAt: "2026-08-17T16:40:00" },
-  { logId: 8, logHeader: "Section Archived", logDescription: "Section 4-Silang was archived.", user: { fullName: "Ana Reyes" }, createdAt: "2026-08-16T13:15:00" },
-  { logId: 9, logHeader: "Section Created", logDescription: "Section 6-Jacinto was added.", user: { fullName: "Maria Santos" }, createdAt: "2026-08-15T09:50:00" },
-  { logId: 10, logHeader: "Section Activated", logDescription: "Section 5-Rizal was activated.", user: { fullName: "Juan Dela Cruz" }, createdAt: "2026-08-14T10:30:00" },
-  { logId: 11, logHeader: "Section Created", logDescription: "Section 4-Recto was added.", user: { fullName: "Ana Reyes" }, createdAt: "2026-08-13T09:00:00" },
-];
-
-function getMockActivityLogs({ search, page, size }) {
-  const query = (search || "").trim().toLowerCase();
-
-  const filtered = query
-    ? MOCK_LOGS.filter(
-        (log) =>
-          log.logHeader.toLowerCase().includes(query) ||
-          log.logDescription.toLowerCase().includes(query) ||
-          (log.user?.fullName || "").toLowerCase().includes(query)
-      )
-    : MOCK_LOGS;
-
-  const sorted = [...filtered].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  const totalPages = Math.max(1, Math.ceil(sorted.length / size));
-  const start = page * size;
-  const content = sorted.slice(start, start + size).map(mapLogEntry);
-
-  return { content, totalPages };
-}
-
-export async function getActivityLogs({ search, page = 0, size = 10, signal } = {}) {
-  const params = {};
-  if (search) params.search = search;
-  params.page = page;
-  params.size = size;
+// GET /api/activity-log?page&size&sort&logHeader
+// - path is singular "activity-log" to match @RequestMapping("api/activity-log")
+//   on ActivityLogController - NOT "activity-logs".
+// - `logHeader` (not `search`) is the only filter param the backend accepts;
+//   ActivityLogSpecification.hasHeader() does an exact match against it, so
+//   this is meant to be fed exact values (see Activitylogheaderfilter.jsx),
+//   not arbitrary free text.
+// - `sort=createdAt,desc` is passed explicitly because Pageable has no
+//   default ordering - without it, "newest first" isn't guaranteed.
+// - Requires an ADMIN-role session (@PreAuthorize("hasRole('ADMIN')") on the
+//   controller), so this must be called from an authenticated admin route.
+export async function getActivityLogs({ logHeader, page = 0, size = 10, signal } = {}) {
+  const params = { page, size, sort: "createdAt,desc" };
+  if (logHeader) params.logHeader = logHeader;
 
   try {
-    const { data } = await activityLogApi.get("/activity-logs", { params, signal });
+    const { data } = await activityLogApi.get("/activity-log", { params, signal });
     return {
       content: (data.content || []).map(mapLogEntry),
-      totalPages: data.totalPages || 1,
+      totalPages: data.totalPages ?? 1,
     };
   } catch (error) {
     if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
-    // MOCK FALLBACK: the endpoint doesn't exist yet (404/network error),
-    // so serve mock data instead of surfacing an error banner on the page.
-    // Once the real endpoint is live this catch block should go back to
-    // just throwing - delete this fallback along with MOCK_LOGS above.
-    console.warn("getActivityLogs(): endpoint not available yet, using mock data -", getErrorMessage(error, "unknown error"));
-    return getMockActivityLogs({ search, page, size });
+    throw new Error(getErrorMessage(error, "Failed to load activity logs."));
   }
 }
 
-// TODO - BACKEND NOT BUILT YET: same as above, no controller to POST to yet.
-//
-// CONNECT: POST /api/activity-logs  body: { logHeader, logDescription }
-// userId is NOT sent from the client - ActivityLog.java's `user` field
-// should be set server-side from the authenticated session, the same way
-// createdAt already defaults itself on the entity.
-//
-// Deliberately fire-and-forget: logging an action should never be able to
-// break the action itself, so until the endpoint exists (and even after,
-// if it ever errors) this just warns to the console instead of throwing -
-// same pattern as getTeachers() in Sectionlevelservice.js. Every call site
-// in Sectionlevelpage.jsx already calls this without awaiting it, so no
-// caller needs to change once the endpoint is live.
+// POST /api/activity-log  body: { logHeader, logDescription }
+// HEADS UP FOR BACKEND: ActivityLogController.java only exposes a
+// @GetMapping right now - there's no @PostMapping wired to
+// activityLogService.createLogRecord(logHeader, logDescription) yet, so
+// this call will 404 until that's added on their end. Left as
+// fire-and-forget (same as before) so a failed log write can never break
+// the action that triggered it.
 export async function logActivity(logHeader, logDescription) {
   try {
-    await activityLogApi.post("/activity-logs", {
+    await activityLogApi.post("/activity-log", {
       logHeader,
       logDescription,
     });

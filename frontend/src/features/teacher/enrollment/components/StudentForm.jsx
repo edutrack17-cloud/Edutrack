@@ -3,16 +3,10 @@ import { ChevronDown, Rss } from "lucide-react";
 import Input from "../../../../components/ui/Input";
 
 
-// Matches GradeLevel.java (Grade_4, Grade_5, Grade_6) - SectionResponse.gradeLevel
-// comes back as this exact enum name (e.g. "Grade_4"), NOT a raw number.
-// Previously this was [4, 5, 6], which meant the client-side section
-// filter below could never actually match anything once real section
-// data (with string gradeLevel values) was wired in.
-const GRADE_LEVEL_OPTIONS = [
-  { value: "Grade_4", label: "Grade 4" },
-  { value: "Grade_5", label: "Grade 5" },
-  { value: "Grade_6", label: "Grade 6" },
-];
+// Canonical display order, so the dropdown always lists whichever
+// levels are available in ascending order rather than whatever order
+// they happen to appear in `sections`.
+const GRADE_LEVEL_ORDER = ["Grade_4", "Grade_5", "Grade_6"];
 
 function StudentForm({ formik, sections = [], onRfidClick }) {
   // Archived sections can still be returned by getSections() (kept for
@@ -23,6 +17,20 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
   // missing on data fetched before this field existed, so treat that
   // (undefined) as active rather than silently hiding every section.
   const activeSections = sections.filter((s) => s.status !== "archived");
+
+  // Grade Level options are derived from whichever active sections this
+  // signed-in user actually has to offer - the full active list for an
+  // admin (via getSections()), or just their own advisory section(s) for
+  // a teacher (via getSectionsByAdviser() - see EnrollmentPage.jsx's
+  // loadSections()). This used to be a hardcoded [Grade 4, 5, 6] shown to
+  // everyone regardless of role, so a teacher advising only a Grade 5
+  // section could still pick "Grade 4" here and land on a Section
+  // dropdown with nothing in it - there was no way to tell, from the
+  // Level dropdown alone, which levels actually had a real section to
+  // enroll into.
+  const gradeLevelOptions = GRADE_LEVEL_ORDER.filter((value) =>
+    activeSections.some((s) => s.gradeLevel === value)
+  ).map((value) => ({ value, label: value.replace("_", " ") }));
 
   // Empty (not "all sections") until a level is chosen - picking level
   // first, then only seeing that level's sections, is a lot friendlier
@@ -81,7 +89,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
                 className={selectClass(formik.touched.level && formik.errors.level, Boolean(formik.values.level))}
               >
                 <option value="" className="text-gray-700">Select Level</option>
-                {GRADE_LEVEL_OPTIONS.map((opt) => (
+                {gradeLevelOptions.map((opt) => (
                   <option key={opt.value} value={opt.value} className="text-gray-700">
                     {opt.label}
                   </option>

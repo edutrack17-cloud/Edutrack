@@ -6,12 +6,73 @@ const sectionApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// --- Client-side rate-limit throttle ------------------------------------
+// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
+// 1 minute) = 1 token added every 6s. Same idiom as every other *Api
+// instance in this app, sharing the same backend bucket (keyed
+// "user:" + userId). Matters most here for
+// cloneSectionsAcrossSchoolYears() near the bottom of this file, which
+// fires two GET /section batches plus one POST /section per cloned
+// section, one after another - a school year with enough sections
+// could previously outrun the backend's bucket partway through and
+// have the tail end fail with 429 instead of a real business error.
+// Every sectionApi call (including that loop) now waits its turn at
+// this local bucket before it's sent, so no per-call retry logic is
+// needed inside the loop itself.
+const RATE_LIMIT_CAPACITY = 10;
+const RATE_LIMIT_REFILL_MS = 6000;
+
+let availableTokens = RATE_LIMIT_CAPACITY;
+let lastRefillAt = Date.now();
+const throttleQueue = [];
+
+function refillTokens() {
+  const elapsed = Date.now() - lastRefillAt;
+  if (elapsed <= 0) return;
+  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
+  if (tokensToAdd > 0) {
+    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
+    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
+  }
+}
+
+function processThrottleQueue() {
+  refillTokens();
+  while (availableTokens > 0 && throttleQueue.length > 0) {
+    availableTokens -= 1;
+    throttleQueue.shift()();
+  }
+  if (throttleQueue.length > 0) {
+    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+  }
+}
+
+// Awaited by the request interceptor below before every call.
+function acquireRequestSlot() {
+  refillTokens();
+  if (availableTokens > 0 && throttleQueue.length === 0) {
+    availableTokens -= 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    throttleQueue.push(resolve);
+    if (throttleQueue.length === 1) {
+      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
+    }
+  });
+}
+
 // Attach the JWT to every outgoing request so the backend's
 // @PreAuthorize checks (hasRole('ADMIN'), etc.) actually see who's calling.
 // Without this, requests go out unauthenticated even after a successful
-// login - AuthContext.jsx stores the token under localStorage key "token".
-sectionApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+// login - authService.js stores the access token under localStorage key
+// "accessToken" (this used to read the stale "token" key left over from
+// before that refactor, which meant no Authorization header was ever
+// sent - fixed here).
+sectionApi.interceptors.request.use(async (config) => {
+  await acquireRequestSlot();
+
+  const token = localStorage.getItem("accessToken");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -23,12 +84,30 @@ sectionApi.interceptors.request.use((config) => {
 // letting every subsequent call fail silently.
 sectionApi.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       window.location.href = "/login"; // adjust to your actual login route
+      return Promise.reject(error);
     }
+
+    // Our local bucket should keep this tab under the backend's limit
+    // on its own, so reaching a real 429 means something else is also
+    // spending from this admin's shared bucket right now. Resync the
+    // local bucket to empty and retry this one request once after a
+    // full refill interval - including mid-loop inside
+    // cloneSectionsAcrossSchoolYears(), so one contested request there
+    // doesn't abort the whole clone.
+    if (error.response?.status === 429 && !error.config?._rateLimitRetried) {
+      availableTokens = 0;
+      lastRefillAt = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
+      error.config._rateLimitRetried = true;
+      return sectionApi(error.config);
+    }
+
     return Promise.reject(error);
   }
 );
@@ -231,6 +310,11 @@ const CLONE_FETCH_SIZE = 300;
 // cloned SectionResponses (mirrors startNewSchoolYear()'s return shape),
 // `failed` is `{ sectionName, reason }` entries for anything that
 // couldn't be copied.
+//
+// RATE LIMIT: every getSections()/createSection() call below goes
+// through sectionApi, so the request interceptor's local bucket now
+// paces this loop automatically (see the throttle comment near the top
+// of this file) - no per-call retry logic needed here specifically.
 export async function cloneSectionsAcrossSchoolYears({
   sourceLabel,
   targetLabel,

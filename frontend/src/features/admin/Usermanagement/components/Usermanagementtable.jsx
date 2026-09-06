@@ -2,10 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { MoreHorizontal, Eye, Pencil, UserCheck, UserX } from "lucide-react";
 
-// Same compact cell chrome as Sectiontable.jsx (Section & Level page):
-// table-fixed + colgroup so columns don't jump around, truncate so long
-// values ellipsize instead of wrapping, and the same padding/text-size
-// scale (xs on mobile, sm from sm: up).
+// Same compact cell chrome as Sectiontable.jsx: table-fixed + colgroup, truncated cells, xs/sm text scale
 const thClass =
   "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
 const tdClass =
@@ -17,13 +14,7 @@ function getStatusClass(status) {
   return status === "Active" ? "text-success" : "text-danger";
 }
 
-// The table wrapper below has overflow-x-auto (for horizontal
-// scrolling on mobile). Positioning the kebab dropdown with plain
-// "absolute" inside that wrapper gets it CLIPPED the same way
-// StudentTable.jsx's action menu was before - setting overflow-x on an
-// element makes the browser clip overflow-y too, even though nothing
-// asked for that. Rendering the menu through a Portal (straight into
-// document.body) sidesteps this entirely, same fix as StudentTable.jsx.
+// Portal renders the kebab menu into document.body to avoid clipping from the table's overflow-x-auto wrapper
 function Usermanagementtable({ users, onView, onEdit, onToggleStatus }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -95,12 +86,7 @@ function Usermanagementtable({ users, onView, onEdit, onToggleStatus }) {
           )}
 
           {users.map((user) => {
-            // Prefer the backend's own `fullName` (built by NameUtil on
-            // the Java side) over reconstructing it from
-            // firstName/middleName/lastName - those are only a
-            // best-effort guess split back out of `fullName`, and can
-            // scramble multi-word names. Fall back to the split parts
-            // only if `fullName` wasn't provided.
+            // Prefer backend's fullName over reconstructing from split parts (can scramble multi-word names)
             const fullName =
               user.fullName ??
               `${user.firstName} ${user.middleName ? `${user.middleName} ` : ""}${user.lastName}`;
