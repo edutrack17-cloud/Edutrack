@@ -53,8 +53,8 @@ export function AuthProvider({ children }) {
   // /login response shape) - this only needs to persist the user object
   // and put it into React state.
   //
-  // role MUST be lowercase - "admin" | "teacher" - Sidebar.jsx and
-  // ProtectedRoute.jsx both compare against these lowercase values.
+  // role MUST be lowercase - "admin" | "teacher" | "guard" - Sidebar.jsx
+  // and ProtectedRoute.jsx both compare against these lowercase values.
   function login({ user: loggedInUser }) {
     localStorage.setItem(USER_KEY, JSON.stringify(loggedInUser));
     setUser(loggedInUser);

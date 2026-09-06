@@ -1,118 +1,15 @@
 import axios from "axios";
+import { createApiClient } from "../../../services/apiClient"; // TODO: adjust to wherever apiClient.js actually lives relative to this file
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
-
-const studentApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
-});
-
-// --- Client-side rate-limit throttle ------------------------------------
-// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
-// 1 minute) = 1 token added every 6s. Same idiom as enrollmentService.js's
-// studentApi and Attendanceservice.js's attendanceApi - and the same
-// actual backend bucket, since it's keyed per logged-in user
-// ("user:" + userId in RateLimitFilter) and this page shares that login
-// with Enrollment/Attendance. Every call through studentApi (roster
-// paging/filters, section dropdowns, promote/graduate) draws from this
-// local bucket first via the request interceptor below, instead of
-// firing immediately and letting the backend answer some with 429 -
-// this matters especially for graduateStudents() below, which fires one
-// PATCH per selected student in a loop.
-const RATE_LIMIT_CAPACITY = 10;
-const RATE_LIMIT_REFILL_MS = 6000;
-
-let availableTokens = RATE_LIMIT_CAPACITY;
-let lastRefillAt = Date.now();
-const throttleQueue = [];
-
-function refillTokens() {
-  const elapsed = Date.now() - lastRefillAt;
-  if (elapsed <= 0) return;
-  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
-  if (tokensToAdd > 0) {
-    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
-    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
-  }
-}
-
-function processThrottleQueue() {
-  refillTokens();
-  while (availableTokens > 0 && throttleQueue.length > 0) {
-    availableTokens -= 1;
-    throttleQueue.shift()();
-  }
-  if (throttleQueue.length > 0) {
-    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-  }
-}
-
-// Awaited by the request interceptor below before every call. Under the
-// limit, resolves immediately; over it, queues (in call order) and
-// resolves as tokens refill - so a burst of filter changes, or a
-// "Select All" -> Graduate batch, gets spaced out instead of racing the
-// backend's bucket and losing.
-function acquireRequestSlot() {
-  refillTokens();
-  if (availableTokens > 0 && throttleQueue.length === 0) {
-    availableTokens -= 1;
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    throttleQueue.push(resolve);
-    if (throttleQueue.length === 1) {
-      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-    }
-  });
-}
-
-// authService.js stores the access token under localStorage key
-// "accessToken" (this used to read the stale "token" key left over from
-// before that refactor, which meant no Authorization header was ever
-// sent - fixed here).
-studentApi.interceptors.request.use(async (config) => {
-  await acquireRequestSlot();
-
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-studentApi.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-      return Promise.reject(error);
-    }
-
-    // Our local bucket should keep this tab under the backend's limit
-    // on its own, so reaching a real 429 means something else is also
-    // spending from this user's shared bucket right now (another tab,
-    // another device signed in as the same account - including
-    // Enrollment/Attendance, if open elsewhere under the same login,
-    // since the backend keys the bucket by "user:" + userId regardless
-    // of which frontend module made the call). Resync the local bucket
-    // to empty and retry this one request once after a full refill
-    // interval, instead of surfacing a raw 429 straight to whichever
-    // screen (or loop iteration, for graduateStudents below) triggered
-    // it.
-    if (error.response?.status === 429 && !error.config?._rateLimitRetried) {
-      availableTokens = 0;
-      lastRefillAt = Date.now();
-      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
-      error.config._rateLimitRetried = true;
-      return studentApi(error.config);
-    }
-
-    return Promise.reject(error);
-  }
-);
+// Rate-limit throttle, Authorization header, 401-refresh-retry, and
+// 429-retry all now live in apiClient.js. This file's studentApi used to
+// be its own axios.create() stuck on the OLD rate-limit numbers (capacity
+// 10, refill every 6s) with no refresh-on-401 at all - both are fixed by
+// building it from the shared client instead. Note this is a SEPARATE
+// studentApi instance from enrollmentService.js's (same shared backend
+// bucket, different local JS bucket) - see apiClient.js's comment on why
+// that's an acceptable, existing trade-off.
+const studentApi = createApiClient();
 
 function getErrorMessage(error, fallback) {
   const data = error?.response?.data;
@@ -304,10 +201,10 @@ export async function promoteStudents(studentIds, targetSectionId) {
 // own, so a big enough batch (e.g. "Select All" then Graduate) would
 // outrun the backend's bucket and the tail end would fail with 429
 // instead of a real business error. Now that every studentApi call
-// waits its turn at the shared local bucket above BEFORE it's sent
-// (not just retried after it fails), each iteration of this loop
-// already paces itself to match the backend's 10-per-6s limit - so
-// this goes back to a plain call, same shape as promoteStudents()
+// waits its turn at the shared local bucket (inside apiClient.js)
+// BEFORE it's sent (not just retried after it fails), each iteration of
+// this loop already paces itself to match the backend's per-minute
+// limit - so this stays a plain call, same shape as promoteStudents()
 // above. The interceptor's own single 429 resync-and-retry (for
 // cross-tab/cross-device contention on the same account) is the
 // remaining safety net, same as every other call through studentApi.

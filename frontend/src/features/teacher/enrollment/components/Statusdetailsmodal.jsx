@@ -1,22 +1,3 @@
-// StatusDetailsModal.jsx
-//
-// Step 1 of the "Dropped" / "Transferred Out" flows: collects remarks
-// (and locks leftAt to today - see below) BEFORE ConfirmStatusModal's
-// "are you sure?" step fires. Once remarks is filled in and the admin
-// hits "Next", StudentTable stashes the values and opens
-// ConfirmStatusModal as before - this modal never calls the API itself.
-//
-// leftAt is always today, not admin-editable - status changes are
-// logged the day they happen, so there's nothing to pick here. The
-// field is still shown (disabled) so it's clear what date is being
-// recorded.
-//
-// Not wired to "Graduated" - that action still goes straight to
-// ConfirmStatusModal with no remarks/leftAt collected
-// (enrollmentService.js's graduateStudent() just defaults them), but
-// this is written generically (title/statusLabel/statusColorClass are
-// props) in case that's wanted later too.
-
 import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
@@ -74,7 +55,7 @@ function StatusDetailsModal({ isOpen, onClose, onNext, studentName, statusLabel,
         <form onSubmit={handleNext} className="flex flex-col gap-4 px-4 py-6 sm:px-6">
           <p className="text-sm text-gray-600">
             Marking <span className="font-semibold text-gray-700">{studentName}</span> as{" "}
-            {statusLabel}, effective today. Enter a reason below before continuing.
+            <span className={`font-semibold ${statusColorClass || "text-gray-700"}`}>{statusLabel}</span>, effective today. Enter a reason below before continuing.
           </p>
 
           <div>

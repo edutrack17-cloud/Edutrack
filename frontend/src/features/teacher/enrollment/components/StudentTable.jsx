@@ -58,15 +58,14 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkD
   // cross-transition, so nothing stops "graduated" -> "dropped" from
   // succeeding at the API level. Hide these actions once a student has
   // already left (any status other than "enrolled") so that can't be
-  // triggered from the UI. View/Edit stay available regardless, since
-  // correcting a past student's record is still a valid use case.
+  // triggered from the UI. View stays available regardless, since
+  // looking up a past student's record is still a valid use case.
   const isEnrolled = studentStatus === "enrolled";
 
-  // A student who has left outright (dropped/transferred out) shouldn't
-  // have their record edited anymore from here. Graduated isn't included -
-  // correcting a graduated student's record is still a valid use case, same
-  // as the reasoning above for why View/Edit otherwise stay available.
-  const canEdit = studentStatus !== "dropped" && studentStatus !== "transferred_out";
+  // Editing is only for actively enrolled students - once a student has
+  // left (dropped/transferred out) or graduated, their record is closed
+  // and shouldn't be editable from here anymore.
+  const canEdit = isEnrolled;
 
   return (
     <div

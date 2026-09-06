@@ -11,80 +11,25 @@ import {
 } from "recharts";
 import { Check, ChevronDown } from "lucide-react";
 
-// TODO: BACKEND CONNECTION
-// GET /api/dashboard/attendance-trend?range={range}
-// Covers all FOUR metrics shown on the StatCards up in Dashboardpage.jsx
-// (those cards are static display only), toggleable here via this
-// chart's own "Show:" filter dropdown below - this used to only ever plot
-// "Attendance" + "New Enrollees", and "New Enrollees" wasn't even one
-// of the four stat cards, so card and chart were showing unrelated
-// numbers. Each key below maps to a real ERD field:
-//   "totalStudents" -> COUNT(*) FROM students WHERE student_status = 'enrolled'
-//                       (as of the end of that day/week/month)
-//   "present"       -> COUNT(*) FROM attendance WHERE status = 'present',
-//                       grouped by day (Week) / week (Month) / month (Year)
-//   "absent"        -> COUNT(*) FROM attendance WHERE status = 'absent',
-//                       same grouping
-//   "dropped"       -> COUNT(*) FROM students WHERE student_status = 'dropped'
-//                       (as of the end of that day/week/month)
+// Data now comes from the parent (Dashboardpage.jsx), which fetches
+// GET /api/dashboard/admin or /teacher and passes down `data:
+// attendanceOverview`. This component no longer owns any mock dataset -
+// see Dashboardpage.jsx for the fetch + range-to-period mapping.
 //
-// Each range below has its OWN mock dataset (and its own x-axis
-// labels), so switching the dropdown actually changes what's drawn.
-const CHART_DATA_BY_RANGE = {
-  // A single day only ever has ONE count per metric (no sub-daily
-  // breakdown in the ERD - attendance.status is one row per student
-  // per day), so this is one data point, not a trend line. The chart
-  // still renders fine with just a dot per active metric.
-  Daily: [
-    { label: "Today", totalStudents: 522, present: 42, absent: 3, dropped: 13 },
-  ],
-  // Mon-Fri only - no Sat/Sun entries, since there's no school (and so
-  // no attendance) on weekends. The header label above the chart still
-  // shows the full calendar week ("Aug 3-9") via getDisplayDate() below,
-  // but the plotted data itself only ever has 5 points for Week.
-  Week: [
-    { label: "Mon", totalStudents: 500, present: 35, absent: 2, dropped: 10 },
-    { label: "Tue", totalStudents: 500, present: 42, absent: 0, dropped: 10 },
-    { label: "Wed", totalStudents: 501, present: 38, absent: 1, dropped: 10 },
-    { label: "Thu", totalStudents: 501, present: 45, absent: 3, dropped: 11 },
-    { label: "Fri", totalStudents: 502, present: 40, absent: 0, dropped: 11 },
-  ],
-  Month: [
-    { label: "Week 1", totalStudents: 495, present: 180, absent: 7, dropped: 8 },
-    { label: "Week 2", totalStudents: 498, present: 195, absent: 8, dropped: 9 },
-    { label: "Week 3", totalStudents: 500, present: 170, absent: 6, dropped: 10 },
-    { label: "Week 4", totalStudents: 502, present: 205, absent: 9, dropped: 11 },
-  ],
-  Year: [
-    { label: "Jan", totalStudents: 470, present: 720, absent: 35, dropped: 5 },
-    { label: "Feb", totalStudents: 472, present: 690, absent: 28, dropped: 6 },
-    { label: "Mar", totalStudents: 475, present: 710, absent: 30, dropped: 6 },
-    { label: "Apr", totalStudents: 478, present: 680, absent: 25, dropped: 7 },
-    { label: "May", totalStudents: 480, present: 650, absent: 22, dropped: 7 },
-    { label: "Jun", totalStudents: 482, present: 200, absent: 8, dropped: 8 },
-    { label: "Jul", totalStudents: 485, present: 210, absent: 9, dropped: 8 },
-    // Aug: new school year - enrollment jumps, matching students.admission_type
-    { label: "Aug", totalStudents: 510, present: 700, absent: 32, dropped: 9 },
-    { label: "Sep", totalStudents: 515, present: 715, absent: 34, dropped: 10 },
-    { label: "Oct", totalStudents: 518, present: 705, absent: 33, dropped: 11 },
-    { label: "Nov", totalStudents: 520, present: 690, absent: 30, dropped: 12 },
-    { label: "Dec", totalStudents: 522, present: 300, absent: 25, dropped: 13 },
-  ],
-};
-
-// Single source of truth for how each metric is drawn - label + color
-// both deliberately match the corresponding StatCard exactly
-// (Dashboardpage.jsx's colorClass), using the same hex values defined
-// in index.css's @theme block. METRIC_ORDER is separate from whatever
-// order metrics were clicked in, so the legend/lines always render in
-// one stable, predictable order.
+// TODO: BACKEND MISMATCH - the old mock plotted FOUR metrics
+// (totalStudents, present, absent, dropped) to match the dashboard's
+// four StatCards. AttendanceOverviewPointResponse.java only returns
+// THREE: present, absent, onSchool - no totalStudents, no dropped.
+// METRIC_CONFIG below reflects what the backend actually sends; adding
+// totalStudents/dropped back here means adding those fields to
+// AttendanceOverviewPointResponse.java (and DashboardService.java's
+// buildAttendanceOverview()) first.
 const METRIC_CONFIG = {
-  totalStudents: { label: "Total Students", color: "#01379A" }, // matches text-primary
   present: { label: "Present", color: "#008C34" }, // matches text-success
   absent: { label: "Absent", color: "#dc2626" }, // matches text-danger
-  dropped: { label: "Dropped", color: "#C08E00" }, // matches text-warning
+  onSchool: { label: "On School", color: "#01379A" }, // no matching StatCard right now - see Dashboardpage.jsx
 };
-const METRIC_ORDER = ["totalStudents", "present", "absent", "dropped"];
+const METRIC_ORDER = ["present", "absent", "onSchool"];
 
 const RANGE_OPTIONS = ["Daily", "Week", "Month", "Year"];
 
@@ -92,8 +37,11 @@ const RANGE_OPTIONS = ["Daily", "Week", "Month", "Year"];
 // GET /api/grade-levels, GET /api/sections
 // Same mock lists already used by Enrollment/Attendance/SF2 - matches
 // the Figma's "All" (grade level) + "Section" dropdowns next to the
-// date, which weren't in the chart before this. Added for consistency
-// with sections.grade_level / sections.section_name in the ERD.
+// date. STILL INERT: DashboardController doesn't accept gradeLevel/
+// section query params yet, and DashboardService.buildAttendanceOverview()
+// only ever filters by section for a teacher's OWN section (forced, not
+// user-selectable) - never for admin. Picking a value here won't change
+// what's plotted until the backend adds that filtering.
 const GRADE_LEVEL_OPTIONS = ["Grade 4", "Grade 5", "Grade 6"];
 const SECTION_OPTIONS = ["Apple", "Rose", "Jade"];
 
@@ -149,21 +97,17 @@ function getDisplayDate(range) {
   return `${startLabel}-${endLabel}`;
 }
 
-// Which metrics plot on the chart is now entirely this component's own
-// concern - controlled by the "Show:" dropdown below, NOT by clicking
-// the StatCards up in Dashboardpage.jsx (those are plain static
-// display cards).
-function AttendanceChart() {
-  const [range, setRange] = useState("Month");
+// Which metrics plot on the chart is still entirely this component's own
+// concern - controlled by the "Show:" dropdown below. `range` itself is
+// now controlled by the parent (Dashboardpage.jsx needs to know it too,
+// to know which `period` to request), passed in as `range` +
+// `onRangeChange`.
+function AttendanceChart({ data: attendanceOverview, range, onRangeChange, isLoading }) {
   const [isRangeOpen, setIsRangeOpen] = useState(false);
   const [selectedMetrics, setSelectedMetrics] = useState(METRIC_ORDER);
 
-  // Matches the Figma's "All" / "Section" dropdowns. NOTE: the mock
-  // data above (CHART_DATA_BY_RANGE) is school-wide only - it doesn't
-  // currently branch by grade level or section, so picking a filter
-  // here won't change the plotted numbers yet. Once
-  // GET /api/dashboard/attendance-trend accepts gradeLevel/section
-  // query params, this is where those values should get passed in.
+  // Matches the Figma's "All" / "Section" dropdowns. Still inert - see
+  // the TODO above GRADE_LEVEL_OPTIONS.
   const [gradeLevel, setGradeLevel] = useState("");
   const [section, setSection] = useState("");
 
@@ -212,9 +156,7 @@ function AttendanceChart() {
     });
   }
 
-  // This is the actual fix: read the dataset that matches the
-  // currently selected range, instead of one hardcoded array.
-  const chartData = CHART_DATA_BY_RANGE[range];
+  const chartData = attendanceOverview ?? [];
 
   // Stable render order regardless of the order the chips were clicked in.
   const activeKeys = METRIC_ORDER.filter((key) => selectedMetrics.includes(key));
@@ -222,19 +164,15 @@ function AttendanceChart() {
   // Year totals are much bigger than a single Week's, so one fixed
   // domain (the old code) would visually flatten/clip the Year line.
   // Scale the top of the Y-axis to whatever range AND whichever
-  // metrics are currently active - e.g. if only Absent/Dropped are
-  // selected, the axis zooms in on their (much smaller) scale instead
-  // of staying stretched out for Total Students/Present.
+  // metrics are currently active. Guarded against an empty chartData -
+  // Math.max(...[]) is -Infinity, which would otherwise turn yAxisMax
+  // into NaN and break the chart entirely on a period with no data.
   const maxValue =
-    activeKeys.length > 0
-      ? Math.max(...chartData.flatMap((point) => activeKeys.map((key) => point[key])))
+    activeKeys.length > 0 && chartData.length > 0
+      ? Math.max(...chartData.flatMap((point) => activeKeys.map((key) => point[key] ?? 0)))
       : 0;
-  const yAxisMax = Math.ceil((maxValue * 1.15) / 10) * 10;
+  const yAxisMax = Math.ceil((maxValue * 1.15) / 10) * 10 || 10;
 
-  // TODO: BACKEND CONNECTION - once the real chart data is fetched,
-  // this should reflect whatever date range the fetched data actually
-  // covers, in case it doesn't line up with the current calendar
-  // period (e.g. showing last week's data for some reason).
   const displayDate = getDisplayDate(range);
 
   return (
@@ -370,12 +308,14 @@ function AttendanceChart() {
             />
           </div>
 
-          {/* Range selector (Daily/Week/Month/Year) */}
+          {/* Range selector (Daily/Week/Month/Year) - now controlled by
+              the parent so it can know which `period` to refetch. */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsRangeOpen((prev) => !prev)}
-              className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:border-primary"
+              disabled={isLoading}
+              className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
               {range}
               <ChevronDown
@@ -396,7 +336,7 @@ function AttendanceChart() {
                       <button
                         type="button"
                         onClick={() => {
-                          setRange(option);
+                          onRangeChange(option);
                           setIsRangeOpen(false);
                         }}
                         className={`block w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-gray-50 ${
@@ -413,13 +353,21 @@ function AttendanceChart() {
           </div>
       </div>
 
-      {activeKeys.length === 0 ? (
+      {isLoading ? (
+        <div className="flex h-72 items-center justify-center text-center text-sm text-gray-500 sm:h-80">
+          Loading chart...
+        </div>
+      ) : activeKeys.length === 0 ? (
         // Defensive fallback - toggleMetric above already refuses to
         // let selectedMetrics go empty, but keeping this in case that
         // guard is ever changed or bypassed - an empty chart with no
         // explanation would just look broken.
         <div className="flex h-72 items-center justify-center text-center text-sm text-gray-500 sm:h-80">
           Select at least one metric above to see its trend here.
+        </div>
+      ) : chartData.length === 0 ? (
+        <div className="flex h-72 items-center justify-center text-center text-sm text-gray-500 sm:h-80">
+          No attendance data for this period.
         </div>
       ) : (
         <div className="h-72 w-full sm:h-80">
@@ -448,11 +396,7 @@ function AttendanceChart() {
               />
 
               {/* One Line per active metric, in stable METRIC_ORDER,
-                  each colored to match its StatCard exactly. Using
-                  Line (not Line+Scatter like before) for all of them
-                  since up to 4 series can be active at once now - a
-                  consistent shape and distinct colors + the Legend are
-                  what tell them apart, rather than mixing shapes. */}
+                  each colored to match METRIC_CONFIG above. */}
               {activeKeys.map((key) => {
                 const config = METRIC_CONFIG[key];
                 return (

@@ -43,10 +43,10 @@ export const ATTENDANCE_FILTER_OPTIONS = [
 // Sectionlevelfilters.jsx - keeps the exported *_FILTER_OPTIONS arrays
 // untouched (in case anything else imports them) while giving the
 // dropdown itself a built-in placeholder/reset option.
-const STUDENT_FILTER_ALL = { value: "", label: "Student Filter", textClass: "text-gray-700" };
+const STUDENT_FILTER_ALL = { value: "", label: "All Student Activities", textClass: "text-gray-700" };
 const STUDENT_FILTER_MENU_OPTIONS = [STUDENT_FILTER_ALL, ...STUDENT_FILTER_OPTIONS];
 
-const ATTENDANCE_FILTER_ALL = { value: "", label: "Attendance Filter", textClass: "text-gray-700" };
+const ATTENDANCE_FILTER_ALL = { value: "", label: "All Attendance Activities", textClass: "text-gray-700" };
 const ATTENDANCE_FILTER_MENU_OPTIONS = [ATTENDANCE_FILTER_ALL, ...ATTENDANCE_FILTER_OPTIONS];
 
 // Same shared visual language (radius, height, weight, chevron rotation)
@@ -59,7 +59,7 @@ const triggerClass =
 // width/height at every breakpoint for every dropdown in the row) - just
 // wider, since these option labels run much longer ("Student Information
 // Updated", "Marked Students as Absent") than a grade level or status.
-const wrapperClass = "relative h-9 w-full shrink-0 sm:w-60";
+const wrapperClass = "relative h-9 w-full shrink-0 sm:w-50";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -85,7 +85,7 @@ function useClickOutside(isOpen, ref, onClose) {
 // duplicated here (not imported) to match this codebase's per-feature
 // component convention, rather than making the two features depend on
 // each other.
-function FilterDropdown({ options, value, onChange, ariaLabel }) {
+function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
@@ -98,7 +98,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
   }
 
   return (
-    <div className={wrapperClass} ref={dropdownRef}>
+    <div className={wrapperClassName || wrapperClass} ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -154,6 +154,7 @@ function Activitylogheaderfilter({ value, onChange }) {
         value={value}
         onChange={onChange}
         ariaLabel="Filter by attendance activity"
+        wrapperClassName="relative h-9 w-full shrink-0 sm:w-50"
       />
     </div>
   );

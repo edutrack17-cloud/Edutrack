@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
-import ProtectedRoute from "./ProtectedRoute";
+import ProtectedRoute from "./Protectedroute";
+import { useAuth } from "../Context/Authcontext";
 import LoginPage from "../features/auth/LoginPage";
 import ChangePassword from "../features/auth/pages/Changepassword";
 import EnrollmentPage from "../features/teacher/enrollment/pages/EnrollmentPage" ;
@@ -15,27 +16,37 @@ import ActivityLogsPage from "../features/admin/ActivityLogs/Activitylogspage";
 import GuardAttendancePage from "../features/guard/attendance/Guardattendancepage";
 
 
+// "/" connects to /guard-attendance for guards, /dashboard for everyone else, /login if not authenticated.
+function RootRedirect() {
+  const { isAuthenticated, isInitializing, role } = useAuth();
+
+  if (isInitializing) return null;
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (role === "guard") {
+    return <Navigate to="/guard-attendance" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
 
-      <Route path="/" element={<Navigate to="/attendance" replace />} />
+      <Route path="/" element={<RootRedirect />} />
 
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Guard-only: was previously unguarded (sitting next to /login),
-          so anyone could open it without logging in. Now requires a
-          logged-in user with role === "guard", same pattern as the
-          admin-only block below. Unauthenticated -> /login;
-          logged in but wrong role (e.g. admin/teacher) -> /dashboard. */}
+      {/* /guard-attendance connects to guard role only. */}
       <Route element={<ProtectedRoute allowedRoles={["guard"]} />}>
         <Route path="/guard-attendance" element={<GuardAttendancePage />} />
       </Route>
 
-      {/* Everything below requires a logged-in user. ProtectedRoute
-          reads useAuth() and bounces to /login if there's no session -
-          this was already built but never actually used in this file,
-          so routes weren't being guarded at all. */}
+      {/* Everything below connects to a logged-in user only. */}
       <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -45,9 +56,7 @@ function AppRoutes() {
           <Route path="/promote-student" element={<PromoteStudentPage />} />
           <Route path="/change-password" element={<ChangePassword />} />
 
-          {/* Admin-only - ProtectedRoute redirects a logged-in
-              non-admin (e.g. a teacher) to /dashboard instead of
-              rendering these. */}
+          {/* Everything below connects to admin role only. */}
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/user-management" element={<UserManagementPage />} />
             <Route path="/section-level" element={<SectionlevelPage />} />

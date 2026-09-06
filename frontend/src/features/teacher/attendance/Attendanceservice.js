@@ -1,134 +1,14 @@
-// TODO: adjust this path to wherever authService.js actually lives
-// relative to this file (matches the "../auth/authService" sibling-
-// feature-folder pattern used elsewhere - confirm before committing).
-import axios from "axios";
-import { refreshAccessToken, clearTokens } from "../../auth/authService";
+import { createApiClient } from "../../../services/apiClient"; // TODO: adjust to wherever apiClient.js actually lives relative to this file
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api";
-
-const attendanceApi = axios.create({
-  baseURL: BASE_URL,
-  headers: { "Content-Type": "application/json" },
-});
-
-// --- Client-side rate-limit throttle ------------------------------------
-// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
-// 1 minute) = 1 token added every 6s. That bucket is shared across
-// EVERY call this page makes - roster paging, grade/section filters,
-// RFID taps, manual time-in/out, mark-absent - so instead of firing
-// requests as soon as the UI wants them (and letting the backend
-// answer some with 429), every call through attendanceApi draws from
-// a matching local bucket first via the request interceptor below.
-// Same idiom as enrollmentService.js's studentApi - identical numbers,
-// identical logic, just ported off fetch onto axios interceptors.
-const RATE_LIMIT_CAPACITY = 10;
-const RATE_LIMIT_REFILL_MS = 6000;
-
-let availableTokens = RATE_LIMIT_CAPACITY;
-let lastRefillAt = Date.now();
-const throttleQueue = [];
-
-function refillTokens() {
-  const elapsed = Date.now() - lastRefillAt;
-  if (elapsed <= 0) return;
-  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
-  if (tokensToAdd > 0) {
-    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
-    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
-  }
-}
-
-function processThrottleQueue() {
-  refillTokens();
-  while (availableTokens > 0 && throttleQueue.length > 0) {
-    availableTokens -= 1;
-    throttleQueue.shift()();
-  }
-  if (throttleQueue.length > 0) {
-    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-  }
-}
-
-// Awaited by the request interceptor before every call. Under the
-// limit, resolves immediately; over it, queues (in call order) and
-// resolves as tokens refill - so a burst of RFID taps/manual actions
-// gets spaced out instead of racing the backend's bucket and losing.
-function acquireRequestSlot() {
-  refillTokens();
-  if (availableTokens > 0 && throttleQueue.length === 0) {
-    availableTokens -= 1;
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    throttleQueue.push(resolve);
-    if (throttleQueue.length === 1) {
-      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-    }
-  });
-}
-
-// authService.js stores the access token under localStorage key
-// "accessToken" - same key enrollmentService.js's studentApi reads.
-attendanceApi.interceptors.request.use(async (config) => {
-  await acquireRequestSlot();
-
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-attendanceApi.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const status = error.response?.status;
-
-    // Our local bucket should keep this tab under the backend's limit
-    // on its own, so reaching a real 429 means something else is also
-    // spending from this user's shared bucket right now (another tab,
-    // another device signed in as the same guard/admin account -
-    // including enrollmentService.js's studentApi, if that page is
-    // open elsewhere under the same login, since the backend keys the
-    // bucket by "user:" + userId regardless of which frontend module
-    // made the call). Resync the local bucket to empty and retry this
-    // one request once after a full refill interval, instead of
-    // letting a raw 429 bubble up - which recordTap's catch chain
-    // would otherwise misread as "no record" (see the comment there).
-    if (status === 429 && !error.config?._rateLimitRetried) {
-      availableTokens = 0;
-      lastRefillAt = Date.now();
-      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
-      error.config._rateLimitRetried = true;
-      return attendanceApi(error.config);
-    }
-
-    if (status === 401 && !error.config?._authRetried) {
-      error.config._authRetried = true;
-      try {
-        await refreshAccessToken();
-        // Retrying through attendanceApi() re-runs the request
-        // interceptor above, which re-reads the (now refreshed)
-        // "accessToken" from localStorage - no need to patch the
-        // header manually here.
-        return attendanceApi(error.config);
-      } catch {
-        clearTokens();
-        localStorage.removeItem("user");
-        window.location.href = "/login";
-        return Promise.reject(error);
-      }
-    }
-
-    if (status === 401 && error.config?._authRetried) {
-      clearTokens();
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-    }
-
-    return Promise.reject(error);
-  }
-);
+// Rate-limit throttle, Authorization header, 401-refresh-retry, and
+// 429-retry all now live in apiClient.js - this file used to implement
+// that logic itself (it was the one reference implementation that had
+// the refresh-on-401 retry right), but was still stuck on the OLD
+// capacity 10 / 6s rate-limit numbers. Switching to the shared client
+// picks up the current capacity 50 / 1.2s numbers automatically, and
+// means any future rate-limit or refresh-flow change only has to happen
+// in one place.
+const attendanceApi = createApiClient();
 
 const STATUS_TO_LABEL = {
   present: "Present",

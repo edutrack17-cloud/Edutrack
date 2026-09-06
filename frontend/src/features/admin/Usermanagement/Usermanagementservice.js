@@ -1,87 +1,10 @@
-import axios from "axios";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
+import { createApiClient } from "../../../services/apiClient"; // TODO: adjust to wherever apiClient.js actually lives relative to this file
 
-const userApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
-});
-
-// Client-side token-bucket throttle mirroring RateLimitConfig.java (capacity 10, +1 token/6s)
-const RATE_LIMIT_CAPACITY = 10;
-const RATE_LIMIT_REFILL_MS = 6000;
-
-let availableTokens = RATE_LIMIT_CAPACITY;
-let lastRefillAt = Date.now();
-const throttleQueue = [];
-
-function refillTokens() {
-  const elapsed = Date.now() - lastRefillAt;
-  if (elapsed <= 0) return;
-  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
-  if (tokensToAdd > 0) {
-    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
-    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
-  }
-}
-
-function processThrottleQueue() {
-  refillTokens();
-  while (availableTokens > 0 && throttleQueue.length > 0) {
-    availableTokens -= 1;
-    throttleQueue.shift()();
-  }
-  if (throttleQueue.length > 0) {
-    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-  }
-}
-
-function acquireRequestSlot() {
-  refillTokens();
-  if (availableTokens > 0 && throttleQueue.length === 0) {
-    availableTokens -= 1;
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    throttleQueue.push(resolve);
-    if (throttleQueue.length === 1) {
-      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-    }
-  });
-}
-
-userApi.interceptors.request.use(async (config) => {
-  await acquireRequestSlot();
-
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-userApi.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-      return Promise.reject(error);
-    }
-
-    // Real 429 means another tab is also spending from this admin's shared bucket - resync and retry once
-    if (error.response?.status === 429 && !error.config?._rateLimitRetried) {
-      availableTokens = 0;
-      lastRefillAt = Date.now();
-      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
-      error.config._rateLimitRetried = true;
-      return userApi(error.config);
-    }
-
-    return Promise.reject(error);
-  }
-);
+// Rate-limit throttle, Authorization header, 401-refresh-retry, and
+// 429-retry all now live in apiClient.js - this file used to hand-roll
+// all of that itself, on the OLD capacity 10 / 6s numbers, with no
+// refresh-on-401 retry at all.
+const userApi = createApiClient();
 
 function getErrorMessage(error, fallback) {
   return error?.response?.data?.message || fallback;

@@ -54,7 +54,24 @@ function InfoField({ label, value }) {
 // returns them in - no client-side re-sort). The top entry is the
 // student's current assignment when leftAt is null; every entry below
 // that is a past assignment with its own exitType.
-function HistoryTimeline({ entries }) {
+//
+// studentStatus (StudentResponse.studentStatus, passed down from the
+// `student` prop that's already in scope where this is rendered) is
+// used to catch a data gap: some Dropped/Transferred Out/Graduated
+// students were marked that way before dropStudent()/transferOutStudent()/
+// graduateStudent() started closing out the assignment row itself, so
+// their top assignment can still have leftAt === null even though the
+// STUDENT is no longer enrolled. Treating that as "Current" is wrong -
+// so the top entry only counts as current when leftAt is null AND the
+// student's own status agrees with that. Otherwise it falls back to
+// studentStatus for the label/icon/color (dropped/transferred_out/
+// graduated share their exact string values with ExitType, so the same
+// EXIT_TYPE_META lookup covers both). This can only fix the LABEL,
+// though - the real leftAt date and remarks were genuinely never
+// recorded for these older rows, so both are shown as "not recorded"
+// rather than guessed at. A proper fix (backfilling the real leftAt/
+// exitType on those old assignment rows) is a backend/data job.
+function HistoryTimeline({ entries, studentStatus }) {
   if (entries.length === 0) {
     return <p className="py-6 text-center text-sm text-gray-500">No section history yet.</p>;
   }
@@ -62,8 +79,19 @@ function HistoryTimeline({ entries }) {
   return (
     <ul className="flex flex-col gap-5">
       {entries.map((entry, index) => {
-        const isCurrent = entry.leftAt === null;
-        const meta = entry.exitType ? EXIT_TYPE_META[entry.exitType] : null;
+        const isStaleOpenAssignment =
+          index === 0 &&
+          entry.leftAt === null &&
+          studentStatus &&
+          studentStatus !== "enrolled";
+
+        const isCurrent = entry.leftAt === null && !isStaleOpenAssignment;
+
+        const meta = isStaleOpenAssignment
+          ? EXIT_TYPE_META[studentStatus]
+          : entry.exitType
+          ? EXIT_TYPE_META[entry.exitType]
+          : null;
         const Icon = meta?.icon ?? Clock;
         const iconColorClass = isCurrent ? "text-success" : (meta?.colorClass ?? "text-gray-600");
 
@@ -87,14 +115,18 @@ function HistoryTimeline({ entries }) {
                   </span>
                 ) : (
                   <span className={`rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold ${meta?.colorClass ?? "text-gray-600"}`}>
-                    {meta?.label ?? entry.exitType}
+                    {meta?.label ?? entry.exitType ?? studentStatus}
                   </span>
                 )}
               </div>
               <p className="mt-0.5 text-xs text-gray-500">
                 Assigned {formatHistoryDate(entry.assignedAt)}
                 {" · "}
-                {isCurrent ? "Present" : `Left At ${formatHistoryDate(entry.leftAt)}`}
+                {isCurrent
+                  ? "Present"
+                  : entry.leftAt
+                  ? `Left At ${formatHistoryDate(entry.leftAt)}`
+                  : "Left At — not recorded"}
               </p>
               {/* Remarks is only collected for exits (Dropped/Transferred
                   Out today - see StatusDetailsModal), so it's skipped for
@@ -269,7 +301,7 @@ function ViewStudentModal({ isOpen, onClose, student }) {
               )}
 
               {!isLoadingHistory && !historyError && history !== null && (
-                <HistoryTimeline entries={history} />
+                <HistoryTimeline entries={history} studentStatus={student.studentStatus} />
               )}
             </>
           )}

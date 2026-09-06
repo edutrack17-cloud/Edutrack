@@ -2,16 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 
-// Colors stay as-is (success/danger/warning/primary) - only the hover
-// tint and font-weight below were changed to match Sectionlevelfilters.
-//
-// The "" option used to just read as a neutral "Status" placeholder,
-// back when a backend listing bug meant most non-enrolled students
-// didn't reliably show up anyway. Now that the bug's fixed (see the
-// EduTrack backend-changes doc), selecting "" genuinely returns every
-// status - dropped/transferred/graduated students included - so it's
-// labeled "All Statuses" to make that an intentional choice rather than
-// something that looks like an unset filter.
 const STATUS_OPTIONS = [
   { value: "", label: "All Statuses", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
   { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "", selectedBgClass: "bg-success/10" },
@@ -20,8 +10,8 @@ const STATUS_OPTIONS = [
   { value: "graduated", label: "Graduated", textClass: "text-primary", hoverClass: "", selectedBgClass: "bg-primary/10" },
 ];
 
-const LEVEL_ALL = { value: "", label: "Grade Level", textClass: "text-gray-700" };
-const SECTION_ALL = { value: "", label: "Section", textClass: "text-gray-700" };
+const LEVEL_ALL = { value: "", label: "All Grade Levels", textClass: "text-gray-700" };
+const SECTION_ALL = { value: "", label: "All Sections", textClass: "text-gray-700" };
 
 const triggerClass =
   "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
@@ -51,7 +41,7 @@ function useClickOutside(isOpen, ref, onClose) {
 // <select> can't animate its own arrow or color each option's text, and
 // three separately-styled controls previously looked inconsistent next
 // to each other.
-function FilterDropdown({ options, value, onChange, ariaLabel }) {
+function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
@@ -67,7 +57,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
   }
 
   return (
-    <div className={wrapperClass} ref={dropdownRef}>
+    <div className={wrapperClassName || wrapperClass} ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -141,6 +131,7 @@ function StudentFilters({
         value={level}
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
+        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-32 md:w-36"
       />
 
       <FilterDropdown
@@ -148,6 +139,7 @@ function StudentFilters({
         value={section}
         onChange={onSectionChange}
         ariaLabel="Filter by section"
+        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-32 md:w-36"
       />
 
       <FilterDropdown

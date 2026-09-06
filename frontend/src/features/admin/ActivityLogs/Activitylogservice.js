@@ -1,75 +1,5 @@
 import axios from "axios";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
-
-const activityLogApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
-});
-
-// --- Client-side rate-limit throttle ------------------------------------
-// Mirrors RateLimitConfig.java exactly: capacity 10, refillGreedy(10,
-// 1 minute) = 1 token added every 6s. Same idiom as enrollmentService.js's
-// studentApi and Attendanceservice.js's attendanceApi - and the same
-// actual backend bucket, since it's keyed per logged-in user
-// ("user:" + userId in RateLimitFilter), so an admin browsing the
-// Activity Log while another admin/teacher page is open under the same
-// login draws from the same 10 req/6s allowance.
-const RATE_LIMIT_CAPACITY = 10;
-const RATE_LIMIT_REFILL_MS = 6000;
-
-let availableTokens = RATE_LIMIT_CAPACITY;
-let lastRefillAt = Date.now();
-const throttleQueue = [];
-
-function refillTokens() {
-  const elapsed = Date.now() - lastRefillAt;
-  if (elapsed <= 0) return;
-  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
-  if (tokensToAdd > 0) {
-    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
-    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
-  }
-}
-
-function processThrottleQueue() {
-  refillTokens();
-  while (availableTokens > 0 && throttleQueue.length > 0) {
-    availableTokens -= 1;
-    throttleQueue.shift()();
-  }
-  if (throttleQueue.length > 0) {
-    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-  }
-}
-
-// Awaited by the request interceptor below before every call.
-function acquireRequestSlot() {
-  refillTokens();
-  if (availableTokens > 0 && throttleQueue.length === 0) {
-    availableTokens -= 1;
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    throttleQueue.push(resolve);
-    if (throttleQueue.length === 1) {
-      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-    }
-  });
-}
-
-// Same auth wiring as sectionApi in Sectionlevelservice.js. Without this,
-// every request here goes out with no Authorization header, and
-// SecurityConfig's `.anyRequest().authenticated()` rejects it with a 401
-// before @PreAuthorize("hasRole('ADMIN')") on the controller ever runs.
-activityLogApi.interceptors.request.use(async (config) => {
-  await acquireRequestSlot();
-
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+import { createApiClient } from "../../../services/apiClient"; // TODO: adjust to wherever apiClient.js actually lives relative to this file
 
 // IMPORTANT: GlobalExceptionHandler.handleAuthorizationDenied() maps a
 // failed @PreAuthorize("hasRole('ADMIN')") check (AuthorizationDeniedException,
@@ -77,50 +7,28 @@ activityLogApi.interceptors.request.use(async (config) => {
 // to 401 - NOT 403 - with message "You're not allowed to access this
 // feature". That means a fully logged-in, non-admin user (e.g. a Teacher)
 // gets the exact same status code as an expired/invalid/missing token.
-// A blanket "401 -> clear session & redirect to login" would force-logout
-// that valid session over a permissions issue, not an auth one. Excluding
-// this specific message is a stopgap based on the one response shape we've
-// actually confirmed (GlobalExceptionHandler) - JwtAuthenticationEntryPoint,
-// which is what actually fires for a real expired/invalid token, is a
-// separate filter-level component we haven't seen, so its response shape
-// isn't confirmed to differ from this. Worth asking backend to either
-// share that file, or better, add a distinct field (e.g. an error code)
-// so this doesn't have to rely on matching an exact message string.
+// A blanket "401 -> refresh/logout" would either try a pointless refresh
+// or force-logout that valid session over a permissions issue, not an
+// auth one. Excluding this specific message is a stopgap based on the
+// one response shape we've actually confirmed (GlobalExceptionHandler) -
+// JwtAuthenticationEntryPoint, which is what actually fires for a real
+// expired/invalid token, is a separate filter-level component we haven't
+// seen, so its response shape isn't confirmed to differ from this.
+// Worth asking backend to either share that file, or better, add a
+// distinct field (e.g. an error code) so this doesn't have to rely on
+// matching an exact message string.
 const AUTHZ_DENIED_MESSAGE = "You're not allowed to access this feature";
 
-activityLogApi.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const status = error.response?.status;
-    const message = error.response?.data?.message;
-
-    if (status === 401 && message !== AUTHZ_DENIED_MESSAGE) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("user");
-      window.location.href = "/login"; // adjust to your actual login route
-      return Promise.reject(error);
-    }
-
-    // Our local bucket should keep this tab under the backend's limit
-    // on its own, so reaching a real 429 means something else is also
-    // spending from this admin's shared bucket right now (another tab
-    // or page open under the same login). Resync the local bucket to
-    // empty and retry this one request once after a full refill
-    // interval, instead of surfacing a raw 429 straight to the Activity
-    // Log table. This check runs regardless of the 401/AUTHZ branch
-    // above since the two status codes are mutually exclusive.
-    if (status === 429 && !error.config?._rateLimitRetried) {
-      availableTokens = 0;
-      lastRefillAt = Date.now();
-      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
-      error.config._rateLimitRetried = true;
-      return activityLogApi(error.config);
-    }
-
-    return Promise.reject(error);
-  }
-);
+// Rate-limit throttle, Authorization header, 401-refresh-retry, and
+// 429-retry all now live in apiClient.js - this file used to hand-roll
+// all of that itself, on the OLD capacity 10 / 6s numbers, with no
+// refresh-on-401 retry for REAL 401s (only the AUTHZ_DENIED_MESSAGE
+// carve-out existed). isAuthBypass here preserves that carve-out: a 401
+// carrying this exact message is passed straight through to the caller
+// instead of triggering a refresh attempt or a logout.
+const activityLogApi = createApiClient({
+  isAuthBypass: (error) => error.response?.data?.message === AUTHZ_DENIED_MESSAGE,
+});
 
 function getErrorMessage(error, fallback) {
   return error?.response?.data?.message || fallback;

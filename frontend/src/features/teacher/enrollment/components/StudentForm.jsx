@@ -8,6 +8,26 @@ import Input from "../../../../components/ui/Input";
 // they happen to appear in `sections`.
 const GRADE_LEVEL_ORDER = ["Grade_4", "Grade_5", "Grade_6"];
 
+// Character-level input guards. Typing AND pasting both surface as an
+// onChange with the field's would-be next value, so filtering that one
+// value covers both cases - no separate paste handler needed.
+
+// Strips everything but digits and caps the result at `maxDigits`, so
+// e.g. LRN can never hold a 13th digit or a non-numeric character,
+// regardless of whether it got there by typing or by pasting.
+function sanitizeDigits(value, maxDigits) {
+  return value.replace(/\D/g, "").slice(0, maxDigits);
+}
+
+// Same character set as enrollmentSchema's NAME_REGEX (letters incl.
+// ñ/Ñ, spaces, apostrophes, hyphens), so a name field can never end up
+// holding a character the Yup validation would reject anyway. Roman
+// numerals (I, V, X, L, C, D, M) are untouched since they're ordinary
+// letters here.
+function sanitizeName(value) {
+  return value.replace(/[^a-zA-ZñÑ'\-\s]/g, "");
+}
+
 function StudentForm({ formik, sections = [], onRfidClick }) {
   // Archived sections can still be returned by getSections() (kept for
   // StudentFilters' use case - see the comment there), but they should
@@ -70,20 +90,27 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
     formik.setFieldValue("sectionId", "");
   }
 
-  // Same visual rule Input.jsx uses for placeholder vs. typed text:
-  // light gray while nothing is chosen yet, darker once a real value is
-  // selected - takes a boolean for "does this select have a value" so
-  // it works for both Level and Section independently.
+  function handleLrnChange(event) {
+    formik.setFieldValue("lrn", sanitizeDigits(event.target.value, 12));
+  }
+
+  function handleGuardianPhoneNumberChange(event) {
+    formik.setFieldValue("guardianPhoneNumber", sanitizeDigits(event.target.value, 11));
+  }
+
+  function handleNameChange(fieldName) {
+    return function (event) {
+      formik.setFieldValue(fieldName, sanitizeName(event.target.value));
+    };
+  }
+
+
   const selectClass = (hasError, hasValue) =>
     `w-full py-2.5 pl-3 pr-9 rounded-lg border ${
       hasError ? "border-danger" : "border-gray-300"
     } bg-white text-sm ${hasValue ? "text-gray-700" : "text-gray-500"} appearance-none transition-colors cursor-pointer focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-50`;
 
   const fieldLabelClass = "mb-1 block text-sm font-semibold text-gray-700";
-  // Passed into Input.jsx's "labelClassName" prop - gray-700 to match
-  // the plain <label> elements above (Level/Section/RFID), instead of
-  // Input's own default blue text-primary (which is only meant for the
-  // Login page's styling).
   const inputLabelClass = "text-gray-700";
   const errorTextClass = "mt-1 text-xs text-danger";
 
@@ -157,12 +184,14 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             name="lrn"
             type="text"
             value={formik.values.lrn}
-            onChange={formik.handleChange}
+            onChange={handleLrnChange}
             onBlur={formik.handleBlur}
             error={formik.errors.lrn}
             touched={formik.touched.lrn}
             placeholder="123456789012"
             labelClassName={inputLabelClass}
+            maxLength={12}
+            inputMode="numeric"
           />
 
           <div>
@@ -183,10 +212,6 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             )}
           </div>
 
-          {/* Matches students.admission_type ENUM(regular, transferred_in)
-              from the ERD. Full-width (sm:col-span-2) since it's an odd
-              5th item in an otherwise 2-column grid, same treatment as
-              the Address field below. */}
           <div className="sm:col-span-2">
             <label className={fieldLabelClass}>Admission Type</label>
             <div className="relative">
@@ -227,7 +252,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             name="firstName"
             type="text"
             value={formik.values.firstName}
-            onChange={formik.handleChange}
+            onChange={handleNameChange("firstName")}
             onBlur={formik.handleBlur}
             error={formik.errors.firstName}
             touched={formik.touched.firstName}
@@ -240,7 +265,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             name="middleName"
             type="text"
             value={formik.values.middleName}
-            onChange={formik.handleChange}
+            onChange={handleNameChange("middleName")}
             onBlur={formik.handleBlur}
             error={formik.errors.middleName}
             touched={formik.touched.middleName}
@@ -253,7 +278,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             name="lastName"
             type="text"
             value={formik.values.lastName}
-            onChange={formik.handleChange}
+            onChange={handleNameChange("lastName")}
             onBlur={formik.handleBlur}
             error={formik.errors.lastName}
             touched={formik.touched.lastName}
@@ -290,7 +315,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             name="guardian"
             type="text"
             value={formik.values.guardian}
-            onChange={formik.handleChange}
+            onChange={handleNameChange("guardian")}
             onBlur={formik.handleBlur}
             error={formik.errors.guardian}
             touched={formik.touched.guardian}
@@ -303,12 +328,14 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             name="guardianPhoneNumber"
             type="text"
             value={formik.values.guardianPhoneNumber}
-            onChange={formik.handleChange}
+            onChange={handleGuardianPhoneNumberChange}
             onBlur={formik.handleBlur}
             error={formik.errors.guardianPhoneNumber}
             touched={formik.touched.guardianPhoneNumber}
             placeholder="09xxxxxxxxx"
             labelClassName={inputLabelClass}
+            maxLength={11}
+            inputMode="numeric"
           />
         </div>
       </div>

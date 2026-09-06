@@ -5,132 +5,15 @@
 // StudentTable) should need to change, since they already call these
 // same function names/shapes.
 
-import axios from "axios";
+import { createApiClient } from "../../../services/apiClient"; // TODO: adjust to wherever apiClient.js actually lives relative to this file
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
-
-const studentApi = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
-});
-
-// --- Client-side rate-limit throttle ------------------------------------
-// Mirrors the current RateLimitConfig.java: capacity 50, refillGreedy(50,
-// 1 minute) = 1 token added every 1.2s (60_000ms / 50 - Bucket4j's greedy
-// refill spreads the batch evenly across the window, so the per-token
-// interval is just duration / capacity). This used to mirror an older
-// capacity-10/refill-every-6s config; bump these two constants again if
-// RateLimitConfig.java's numbers ever change - everything else in this
-// throttle (queueing, the 429 retry below) is written generically off
-// of them, not hardcoded to any particular capacity/refill pair.
-//
-// Same throttle idea as Attendanceservice.js - and the same actual
-// backend bucket: RateLimitFilter.resolveKey() keys on "user:<id>" (or
-// "ip:<addr>" if unauthenticated), not per-endpoint, so every request
-// this logged-in user makes anywhere in the app - this page, the
-// Attendance page, another tab - draws from ONE 50-token bucket, not a
-// separate one per screen. Every call through studentApi (roster paging/
-// filters, section dropdowns, enroll/edit/status changes) draws from
-// this local bucket first via the request interceptor below, instead
-// of firing immediately and letting the backend answer some with 429.
-//
-// NOTE: if Attendanceservice.js's copy of this same throttle isn't
-// bumped to these same two numbers, its local bucket and this one will
-// each think they have their own fresh 50-token budget instead of
-// splitting the ONE the backend actually enforces per user - harmless
-// (the 429 retry below still recovers either way), just less effective
-// at heading off a 429 in the first place when both pages are open at
-// once. Flag that file for the same update if/when it's in scope here.
-const RATE_LIMIT_CAPACITY = 50;
-const RATE_LIMIT_REFILL_MS = 1200;
-
-let availableTokens = RATE_LIMIT_CAPACITY;
-let lastRefillAt = Date.now();
-const throttleQueue = [];
-
-function refillTokens() {
-  const elapsed = Date.now() - lastRefillAt;
-  if (elapsed <= 0) return;
-  const tokensToAdd = Math.floor(elapsed / RATE_LIMIT_REFILL_MS);
-  if (tokensToAdd > 0) {
-    availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
-    lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
-  }
-}
-
-function processThrottleQueue() {
-  refillTokens();
-  while (availableTokens > 0 && throttleQueue.length > 0) {
-    availableTokens -= 1;
-    throttleQueue.shift()();
-  }
-  if (throttleQueue.length > 0) {
-    setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-  }
-}
-
-// Awaited by the request interceptor below before every call. Under the
-// limit, resolves immediately; over it, queues (in call order) and
-// resolves as tokens refill - so a burst of filter changes/modal opens
-// gets spaced out instead of racing the backend's bucket and losing.
-function acquireRequestSlot() {
-  refillTokens();
-  if (availableTokens > 0 && throttleQueue.length === 0) {
-    availableTokens -= 1;
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    throttleQueue.push(resolve);
-    if (throttleQueue.length === 1) {
-      setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
-    }
-  });
-}
-
-// authService.js stores the access token under localStorage key
-// "accessToken" (this used to read the stale "token" key left over from
-// before that refactor, which meant no Authorization header was ever
-// sent - fixed here).
-studentApi.interceptors.request.use(async (config) => {
-  await acquireRequestSlot();
-
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-studentApi.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-      return Promise.reject(error);
-    }
-
-    if (error.response?.status === 429 && !error.config?._rateLimitRetried) {
-      // Our local bucket should keep this tab under the backend's
-      // limit on its own, so reaching this means something else is
-      // also spending from this user's shared bucket right now
-      // (another tab, another device signed in as the same account -
-      // including the Attendance page, if that's open elsewhere under
-      // the same login). Resync the local bucket to empty and retry
-      // this one request once after a full refill interval, instead of
-      // surfacing a raw 429 straight to whichever screen triggered it.
-      availableTokens = 0;
-      lastRefillAt = Date.now();
-      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
-      error.config._rateLimitRetried = true;
-      return studentApi(error.config);
-    }
-
-    return Promise.reject(error);
-  }
-);
+// Rate-limit throttle, Authorization header, 401-refresh-retry, and
+// 429-retry all now live in apiClient.js. This file's studentApi already
+// had the CURRENT rate-limit numbers (capacity 50, refill every 1.2s) -
+// it was the only one of the *Api instances that did - but was missing
+// the refresh-on-401 retry that Attendanceservice.js had. Both problems
+// go away by building studentApi from the shared client instead.
+const studentApi = createApiClient();
 
 // BACKEND GAP: there is no @ControllerAdvice/@ExceptionHandler on the
 // backend, so custom exceptions (StudentAlreadyExists, RFIDAlreadyExists,
