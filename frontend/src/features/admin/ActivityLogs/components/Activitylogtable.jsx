@@ -42,6 +42,27 @@ function formatTimestamp(value) {
   });
 }
 
+// ActivityLogService.createLogRecord() (backend) bakes the actor's role +
+// full name into the FRONT of logDescription itself, e.g.
+// "Teacher John Doe enrolled a new student" - while ActivityLogResponse
+// ALSO returns that same full name separately as userFullName
+// (-> log.performedBy here). Rendered as-is, the name shows twice on the
+// card: once inside the sentence, once again in the footer. This strips
+// that known "{Teacher|Admin} {performedBy} " prefix from the displayed
+// description when present, so the footer stays the single source for
+// "who did this." If the prefix doesn't match (backend format changes,
+// missing performedBy, etc.) this is a no-op - the description just
+// renders untouched, it never throws or hides text.
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripEmbeddedActor(logDescription, performedBy) {
+  if (!logDescription || !performedBy) return logDescription;
+  const pattern = new RegExp(`^(Teacher|Admin)\\s+${escapeRegExp(performedBy)}\\s+`, "i");
+  return logDescription.replace(pattern, "");
+}
+
 function Activitylogtable({ logs }) {
   if (logs.length === 0) {
     return (
@@ -56,6 +77,7 @@ function Activitylogtable({ logs }) {
       {logs.map((log) => {
         const { label, colorClass } = getLogVisual(log.logHeader);
         const timestamp = formatTimestamp(log.createdAt);
+        const description = stripEmbeddedActor(log.logDescription, log.performedBy);
 
         return (
           <div
@@ -63,7 +85,7 @@ function Activitylogtable({ logs }) {
             className="flex flex-col gap-1 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-3"
           >
             <span className={`shrink-0 text-sm font-bold ${colorClass}`}>{label}:</span>
-            <p className="text-sm text-gray-600">{log.logDescription}</p>
+            <p className="text-sm text-gray-600">{description}</p>
 
             {(log.performedBy || timestamp) && (
               <p className="shrink-0 text-xs text-gray-500">
