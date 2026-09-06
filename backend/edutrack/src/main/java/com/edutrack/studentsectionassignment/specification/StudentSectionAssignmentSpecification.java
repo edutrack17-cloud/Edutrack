@@ -131,6 +131,57 @@ public class StudentSectionAssignmentSpecification {
         };
     }
 
+    // SEARCH BY STUDENT NAME OR LRN - CASE INSENSITIVE
+    public static Specification<StudentSectionAssignment> matchesSearch(
+            String search
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            if (search == null || search.isBlank()) {
+                return criteriaBuilder.conjunction();
+            }
+
+            String trimmedSearch = search.trim().toLowerCase();
+
+            Expression<String> lrn =
+                    criteriaBuilder.lower(
+                            root.get("student").get("lrn")
+                    );
+
+            Predicate lrnMatches = criteriaBuilder.like(
+                    lrn,
+                    "%" + trimmedSearch + "%"
+            );
+
+            String[] studentNameParts = trimmedSearch.split("\\s+");
+
+            Expression<String> firstName =
+                    criteriaBuilder.lower(root.get("student").get("firstName"));
+            Expression<String> middleName =
+                    criteriaBuilder.lower(root.get("student").get("middleName"));
+            Expression<String> lastName =
+                    criteriaBuilder.lower(root.get("student").get("lastName"));
+
+            List<Predicate> studentNamePredicates = new ArrayList<>();
+
+            for (String part : studentNameParts) {
+                String pattern = "%" + part + "%";
+                studentNamePredicates.add(
+                        criteriaBuilder.or(
+                                criteriaBuilder.like(firstName, pattern),
+                                criteriaBuilder.like(middleName, pattern),
+                                criteriaBuilder.like(lastName, pattern)
+                        )
+                );
+            }
+
+            Predicate nameMatches = criteriaBuilder.and(
+                    studentNamePredicates.toArray(new Predicate[0])
+            );
+
+            return criteriaBuilder.or(nameMatches, lrnMatches);
+        };
+    }
+
     // FILTER BY ADVISER
     public static Specification<StudentSectionAssignment> hasAdviserId(
             Long adviserId
