@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("api/school-year")
 public class SchoolYearController {
@@ -39,6 +41,13 @@ public class SchoolYearController {
                                                                   @RequestParam(required = false) SchoolYearStatus schoolYearStatus,
                                                                   Pageable pageable){
         return ResponseEntity.ok(schoolYearService.getSchoolYear(schoolYearName, schoolYearStatus, pageable));
+    }
+
+    //DROPDOWN
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("dropdown")
+    public ResponseEntity<List<SchoolYearResponse>> schoolYearDropdown(){
+        return ResponseEntity.ok(schoolYearService.schoolYearDropdown());
     }
 
     //UPDATE
