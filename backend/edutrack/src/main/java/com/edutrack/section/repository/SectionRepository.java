@@ -52,5 +52,5 @@ public interface SectionRepository extends JpaRepository<Section, Integer>, JpaS
     Boolean existsBySectionNameAndSchoolYear(String sectionName, SchoolYear schoolYear);
 
     long countBySectionStatusAndSchoolYear(SectionStatus sectionStatus, SchoolYear schoolYear);
-    Optional<Section> findByUser_UserIdAndSchoolYear(Long userId, SchoolYear schoolYear);
+    List<Section> findByUser_UserIdAndSchoolYear(Long userId, SchoolYear schoolYear);
 }

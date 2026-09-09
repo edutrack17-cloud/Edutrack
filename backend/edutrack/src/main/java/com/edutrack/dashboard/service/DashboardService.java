@@ -27,6 +27,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
 import java.time.format.TextStyle;
@@ -88,21 +89,32 @@ public class DashboardService {
         return new AdminDashboardResponse(summary, overview, recentAttendance);
     }
 
-    public TeacherDashboardResponse getTeacherDashboard(DashboardPeriod period, LocalDate anchorDate, String username) {
+    //TEACHER DASHBOARD
+    public TeacherDashboardResponse getTeacherDashboard(DashboardPeriod period, LocalDate anchorDate, String username, Integer sectionId) {
         SchoolYear currentSchoolYear = getCurrentSchoolYear();
 
         Long teacherUserId = userRepository.findByUsername(username)
                 .map(User::getUserId)
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + username));
 
-        Section mySection = sectionRepository.findByUser_UserIdAndSchoolYear(teacherUserId, currentSchoolYear)
-                .orElseThrow(() -> new NoSectionAssignedException(teacherUserId));
+        List<Section> mySections = sectionRepository.findByUser_UserIdAndSchoolYear(teacherUserId, currentSchoolYear);
+        if (mySections.isEmpty()) {
+            throw new NoSectionAssignedException(teacherUserId);
+        }
+
+        Section selectedSection = sectionId != null
+                ? mySections.stream()
+                .filter(s -> s.getSectionId() == sectionId)
+                .findFirst()
+                .orElseThrow(() -> new AccessDeniedException(
+                        "Section " + sectionId + " is not assigned to teacher " + teacherUserId))
+                : mySections.get(0);
 
         LocalDate today = LocalDate.now();
-        long myStudents = assignmentRepository.countBySectionAndLeftAtIsNull(mySection);
+        long myStudents = assignmentRepository.countBySectionAndLeftAtIsNull(selectedSection);
 
         Specification<Attendance> todayFilter = Specification
-                .where(AttendanceSpecification.hasSection(mySection.getSectionId()))
+                .where(AttendanceSpecification.hasSection(selectedSection.getSectionId()))
                 .and(AttendanceSpecification.createdToday(today));
 
         long presentToday = attendanceRepository.count(todayFilter.and(AttendanceSpecification.hasStatus(AttendanceStatus.present)));
@@ -116,10 +128,14 @@ public class DashboardService {
         );
 
         DateRange range = DashboardDateRangeResolver.resolve(period, anchorDate);
-        List<AttendanceOverviewPointResponse> overview = buildAttendanceOverview(period, range, mySection.getSectionId());
-        List<DashboardAttendanceLogResponse> todayAttendance = buildLogs(mySection.getSectionId(), null);
+        List<AttendanceOverviewPointResponse> overview = buildAttendanceOverview(period, range, selectedSection.getSectionId());
+        List<DashboardAttendanceLogResponse> todayAttendance = buildLogs(selectedSection.getSectionId(), null);
 
-        return new TeacherDashboardResponse(summary, overview, todayAttendance);
+        List<SectionSummaryResponse> sectionOptions = mySections.stream()
+                .map(s -> new SectionSummaryResponse(s.getSectionId(), s.getSectionName()))
+                .toList();
+
+        return new TeacherDashboardResponse(summary, overview, todayAttendance, sectionOptions, selectedSection.getSectionId());
     }
 
     private SchoolYear getCurrentSchoolYear() {

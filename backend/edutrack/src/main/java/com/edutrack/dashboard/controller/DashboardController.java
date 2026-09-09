@@ -36,7 +36,8 @@ public class DashboardController {
     public TeacherDashboardResponse getTeacherDashboard(
             @RequestParam(defaultValue = "daily") DashboardPeriod period,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) Integer sectionId,
             Authentication authentication) {
-        return dashboardService.getTeacherDashboard(period, date, authentication.getName());
+        return dashboardService.getTeacherDashboard(period, date, authentication.getName(), sectionId);
     }
 }
