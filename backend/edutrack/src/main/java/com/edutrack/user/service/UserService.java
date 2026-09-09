@@ -11,6 +11,7 @@ import com.edutrack.user.enums.UserRole;
 import com.edutrack.user.exception.*;
 import com.edutrack.user.mapper.UserMapper;
 import com.edutrack.user.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.parameters.P;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -38,6 +39,12 @@ public class UserService {
         this.refreshTokenService = refreshTokenService;
         this.sectionRepository = sectionRepository;
     }
+
+    @Value("${default.password.teacher}")
+    private String defaultPasswordTeacher;
+
+    @Value("${default.password.guard}")
+    private String defaultPasswordGuard;
 
     private User findUserByUserId(Long userId){
         return userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
@@ -153,6 +160,28 @@ public class UserService {
         User restoredUser = userRepository.save(userToRestore);
 
         return userMapper.toResponseDTO(restoredUser);
+    }
+
+    //RESET PASSWORD
+    @Transactional
+    public void resetPassword(Long userId){
+        User userToResetPassword = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
+        String teacherPassword = passwordEncoder.encode(defaultPasswordTeacher);
+        String guardPassword = passwordEncoder.encode(defaultPasswordGuard);
+
+        if (userToResetPassword.getUserRole() == UserRole.admin){
+            throw new ResetPasswordNotAllowed();
+        }
+
+        if (userToResetPassword.getUserRole() == UserRole.guard){
+            userToResetPassword.setPassword(guardPassword);
+        }
+
+        if (userToResetPassword.getUserRole() == UserRole.teacher){
+            userToResetPassword.setPassword(teacherPassword);
+        }
+
+        userRepository.save(userToResetPassword);
     }
 
 }

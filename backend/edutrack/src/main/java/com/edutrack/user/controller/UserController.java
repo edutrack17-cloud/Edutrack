@@ -71,4 +71,12 @@ public class UserController {
         return ResponseEntity.ok(restoredUser);
     }
 
+    //RESET PASSWORD
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("{userId}/reset-password")
+    public ResponseEntity<String> resetPassword(@PathVariable Long userId){
+        userService.resetPassword(userId);
+        return ResponseEntity.ok("Password reset successful");
+    }
+
 }
