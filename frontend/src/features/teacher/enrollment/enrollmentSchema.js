@@ -25,9 +25,6 @@ function calculateAge(birthdateValue) {
 }
 
 const enrollSchema = Yup.object({
-  // =========================
-  // ENROLLMENT INFORMATION
-  // =========================
 
   level: Yup.string()
     .required("Please select a grade level"),
@@ -52,10 +49,7 @@ const enrollSchema = Yup.object({
       "Please select a valid admission type"
     ),
 
-  // =========================
-  // STUDENT INFORMATION
-  // =========================
-
+  
   firstName: Yup.string()
     .required("Please enter the student's first name")
     .matches(
@@ -108,9 +102,6 @@ const enrollSchema = Yup.object({
       }
     ),
 
-  // =========================
-  // PARENT / GUARDIAN INFORMATION
-  // =========================
 
   guardian: Yup.string()
     .required("Please enter the guardian's name")

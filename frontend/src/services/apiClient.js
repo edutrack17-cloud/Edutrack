@@ -7,8 +7,54 @@ const RATE_LIMIT_CAPACITY = 50;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REFILL_MS = RATE_LIMIT_WINDOW_MS / RATE_LIMIT_CAPACITY; // 1200ms
 
-let availableTokens = RATE_LIMIT_CAPACITY;
-let lastRefillAt = Date.now();
+// Persisted so a reload or a Vite HMR re-eval of this module doesn't reset
+// the client's idea of its own budget back to a full 50 - the server's
+// bucket (RateLimitService's per-user ConcurrentHashMap) has no idea a
+// reload happened and keeps counting from wherever it actually was.
+//
+// Sharing the key via localStorage also means a second tab on the same
+// login reads/writes the same numbers instead of starting fresh - but
+// that's a soft improvement, not a hard guarantee: localStorage has no
+// cross-tab read-modify-write lock, so two tabs writing within the same
+// instant can still stomp each other's count (lost update). This closes
+// the common case (reload, HMR, opening a second tab later); genuinely
+// simultaneous multi-tab drain still relies on the 429 resync below,
+// same as before.
+const RATE_LIMIT_STORAGE_KEY = "apiClient:rateLimitBucket";
+
+function loadPersistedBucket() {
+  try {
+    const raw = localStorage.getItem(RATE_LIMIT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.availableTokens !== "number" || typeof parsed.lastRefillAt !== "number") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    // Private/incognito mode, storage disabled or full, or a corrupt
+    // value - fall back to an in-memory-only bucket for this tab.
+    return null;
+  }
+}
+
+function persistBucket() {
+  try {
+    localStorage.setItem(
+      RATE_LIMIT_STORAGE_KEY,
+      JSON.stringify({ availableTokens, lastRefillAt })
+    );
+  } catch {
+    // Same fallback as above - the bucket still works for this tab, it
+    // just won't survive a reload or sync across tabs.
+  }
+}
+
+const persistedBucket = loadPersistedBucket();
+let availableTokens = persistedBucket
+  ? Math.min(RATE_LIMIT_CAPACITY, persistedBucket.availableTokens)
+  : RATE_LIMIT_CAPACITY;
+let lastRefillAt = persistedBucket ? persistedBucket.lastRefillAt : Date.now();
 const throttleQueue = [];
 
 function refillTokens() {
@@ -18,6 +64,7 @@ function refillTokens() {
   if (tokensToAdd > 0) {
     availableTokens = Math.min(RATE_LIMIT_CAPACITY, availableTokens + tokensToAdd);
     lastRefillAt += tokensToAdd * RATE_LIMIT_REFILL_MS;
+    persistBucket();
   }
 }
 
@@ -27,6 +74,7 @@ function processThrottleQueue() {
     availableTokens -= 1;
     throttleQueue.shift()();
   }
+  persistBucket();
   if (throttleQueue.length > 0) {
     setTimeout(processThrottleQueue, RATE_LIMIT_REFILL_MS);
   }
@@ -42,6 +90,7 @@ function acquireRequestSlot() {
   refillTokens();
   if (availableTokens > 0 && throttleQueue.length === 0) {
     availableTokens -= 1;
+    persistBucket();
     return Promise.resolve();
   }
   return new Promise((resolve) => {
@@ -160,6 +209,7 @@ export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
       if (status === 429 && !error.config?._rateLimitRetried) {
         availableTokens = 0;
         lastRefillAt = Date.now();
+        persistBucket();
         await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_REFILL_MS));
         error.config._rateLimitRetried = true;
         return instance(error.config);

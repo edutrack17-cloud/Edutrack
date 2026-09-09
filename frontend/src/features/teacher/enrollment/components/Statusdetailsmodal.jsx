@@ -32,6 +32,16 @@ function StatusDetailsModal({ isOpen, onClose, onNext, studentName, statusLabel,
     onNext({ remarks: remarks.trim(), leftAt });
   }
 
+  // Same idea as EnrollStudentModal/SchoolYearFormModal's Clear button:
+  // the X icon already closes/cancels out of this modal, so this button
+  // doesn't need to duplicate that - it just resets Remarks (the only
+  // field an admin actually fills in here; Left At is fixed to today
+  // and disabled) instead of leaving the modal.
+  function handleClear() {
+    setRemarks("");
+    setTouched(false);
+  }
+
   const fieldErrorClass = "border-danger";
   const fieldOkClass = "border-gray-300 focus:border-primary";
 
@@ -93,10 +103,10 @@ function StatusDetailsModal({ isOpen, onClose, onNext, studentName, statusLabel,
             </button>
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+              onClick={handleClear}
+              className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
             >
-              Cancel
+              Clear
             </button>
           </div>
         </form>

@@ -54,11 +54,9 @@ function Sidebar({
   isMobileOpen,
   onCloseMobile,
   role = "teacher",
-  personName = "IORI YAGAMI",
 }) {
   const isAdmin = role === "admin";
   const navigationItems = isAdmin ? ADMIN_NAV_ITEMS : TEACHER_NAV_ITEMS;
-  const subtitle = isAdmin ? "Administrator" : personName;
 
   function getLinkClasses({ isActive }) {
     let baseClasses =
@@ -133,7 +131,6 @@ function Sidebar({
               <h1 className="text-base font-bold leading-tight">
                 ELEMENTARY SCHOOL
               </h1>
-              <p className="mt-1 text-sm text-white/80">{subtitle}</p>
             </div>
           )}
         </div>

@@ -8,6 +8,7 @@ import Usermanagementpagination from "./components/Usermanagementpagination";
 import Createusermodal from "./components/Createusermodal";
 import Editusermodal from "./components/Editusermodal";
 import Viewusermodal from "./components/Viewusermodal";
+import Confirmuserstatusmodal from "./components/Confirmuserstatusmodal";
 // NOTE: adjust path if Toast.jsx lives elsewhere in your project
 import { useToasts, ToastContainer } from "../../../components/ui/Toast";
 import {
@@ -15,6 +16,7 @@ import {
   createUser,
   updateUser,
   toggleUserStatus,
+  resetPassword,
 } from "./Usermanagementservice";
 
 function Usermanagementpage() {
@@ -32,6 +34,11 @@ function Usermanagementpage() {
   const [viewingUser, setViewingUser] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  // Single state drives Confirmuserstatusmodal for BOTH actions -
+  // { user, type: "toggleStatus" | "resetPassword" }. One shared confirm
+  // dialog instead of a separate modal per action.
+  const [confirmAction, setConfirmAction] = useState(null);
 
   // Debounce search to avoid refetching on every keystroke
   useEffect(() => {
@@ -96,6 +103,21 @@ function Usermanagementpage() {
     }
   }
 
+  async function handleResetPassword(user) {
+    try {
+      setErrorMessage("");
+      // CONNECTED: PATCH /api/user/{userId}/reset-password - see resetPassword() in Usermanagementservice.js
+      await resetPassword(user.id);
+      showToast(`Password for "${user.username}" was reset to the default password.`, "success");
+      return true;
+    } catch (error) {
+      console.error("resetPassword failed:", error.message);
+      setErrorMessage(error.message);
+      showToast(error.message, "error");
+      return false;
+    }
+  }
+
   async function handleToggleStatus(user) {
     const nextStatus = user.status === "Active" ? "Disabled" : "Active";
     try {
@@ -104,11 +126,31 @@ function Usermanagementpage() {
       await toggleUserStatus(user.id, nextStatus.toLowerCase());
       showToast(`${user.username} is now ${nextStatus}.`, "success");
       await loadUsers();
+      return true;
     } catch (error) {
       console.error("toggleUserStatus failed:", error.message);
       setErrorMessage(error.message);
       showToast(error.message, "error");
+      return false;
     }
+  }
+
+  // Opens the shared confirm dialog instead of acting straight away -
+  // mirrors Confirmschoolyearstatusmodal.jsx's flow for school years.
+  function handleToggleStatusRequest(user) {
+    setConfirmAction({ user, type: "toggleStatus" });
+  }
+
+  function handleResetPasswordRequest(user) {
+    setConfirmAction({ user, type: "resetPassword" });
+  }
+
+  async function handleConfirmAction() {
+    if (!confirmAction) return;
+    const { user, type } = confirmAction;
+    const success =
+      type === "resetPassword" ? await handleResetPassword(user) : await handleToggleStatus(user);
+    if (success) setConfirmAction(null);
   }
 
   // Keeps the open view modal in sync with fresher data from loadUsers()
@@ -151,7 +193,8 @@ function Usermanagementpage() {
         users={users}
         onView={handleView}
         onEdit={setEditingUser}
-        onToggleStatus={handleToggleStatus}
+        onResetPassword={handleResetPasswordRequest}
+        onToggleStatus={handleToggleStatusRequest}
       />
 
       <Usermanagementpagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
@@ -170,6 +213,20 @@ function Usermanagementpage() {
       />
 
       <Viewusermodal isOpen={viewingUser !== null} onClose={() => setViewingUser(null)} user={viewingUser} />
+
+      <Confirmuserstatusmodal
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={handleConfirmAction}
+        userName={confirmAction?.user?.username}
+        newStatus={
+          confirmAction?.type === "resetPassword"
+            ? "reset"
+            : confirmAction?.user?.status === "Active"
+            ? "disabled"
+            : "active"
+        }
+      />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>

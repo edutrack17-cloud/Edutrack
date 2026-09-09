@@ -1,5 +1,5 @@
 import axios from "axios";
-import { createApiClient } from "../../../services/apiClient"; // TODO: adjust to wherever apiClient.js actually lives relative to this file
+import { createApiClient } from "../../../services/apiClient"; 
 
 // Rate-limit throttle, Authorization header, 401-refresh-retry, and
 // 429-retry all now live in apiClient.js - this file used to hand-roll
@@ -116,6 +116,16 @@ export async function getActiveSchoolYear() {
     // Non-critical lookup - if this fails, treat it as "no known Active
     // school year" rather than blocking the rest of the page on it.
     return null;
+  }
+}
+
+// CONNECT: GET /api/school-year/dropdown
+export async function getSchoolYearDropdown() {
+  try {
+    const { data } = await schoolYearApi.get("/school-year/dropdown");
+    return data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to load school year options"));
   }
 }
 

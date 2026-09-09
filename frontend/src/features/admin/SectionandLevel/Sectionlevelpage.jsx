@@ -16,6 +16,7 @@ import {
   restoreSection,
   getTeachers,
   getSchoolYears,
+  getSchoolYearDropdown,
   startNewSchoolYear,
   cloneSectionsAcrossSchoolYears,
 } from "./Sectionlevelservice";
@@ -62,7 +63,7 @@ function Sectionlevelpage() {
   const [gradeLevel, setGradeLevel] = useState("");
 
 
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
 
   // Separate from schoolYears/planningSchoolYears above (those two only
@@ -300,14 +301,13 @@ function Sectionlevelpage() {
   // mount fetch.
   async function loadAllSchoolYears() {
     try {
-      // getSchoolYears(null), not "all" - SchoolYearStatus on the backend
-      // has no "all" value (only planning/active/closed/archived), so
-      // sending the literal string "all" as schoolYearStatus gets rejected
-      // with a 400. Passing null skips the default param and axios drops
-      // null/undefined params entirely, so no schoolYearStatus is sent at
-      // all - which is exactly what SchoolYearSpecification.hasStatus()
-      // treats as "no filter, return every status."
-      const years = await getSchoolYears(null);
+      // Dedicated /school-year/dropdown endpoint - returns every year,
+      // no size ceiling, unlike getSchoolYears() above (hardcoded
+      // size:100 on the paginated GET /school-year, fine for the
+      // active/planning/closed pulls but wrong for "every year regardless
+      // of status," which is what this filter needs). See
+      // getSchoolYearDropdown() in Sectionlevelservice.js.
+      const years = await getSchoolYearDropdown();
       setAllSchoolYears(years);
     } catch (error) {
       setAllSchoolYears([]);

@@ -27,14 +27,13 @@ function EnrollmentPage() {
 
   const [level, setLevel] = useState("");
   const [section, setSection] = useState("");
-  // Defaults to "enrolled" rather than "" (all statuses). A backend
-  // listing bug used to mean dropped/transferred/graduated students
-  // often didn't show up in an unfiltered list anyway - now that it's
-  // fixed (see the EduTrack backend-changes doc), "" genuinely returns
-  // every status. Defaulting this page to currently-enrolled students
-  // keeps that same effective landing view; admins can still switch to
-  // "All Statuses" (or any specific one) via StudentFilters.
-  const [status, setStatus] = useState("enrolled");
+  // Defaults to "" (all statuses), same as Sectionlevelfilters' Status
+  // filter defaults to "All Status". The backend listing bug that used
+  // to hide dropped/transferred/graduated students from an unfiltered
+  // list is fixed (see the EduTrack backend-changes doc), so "" now
+  // genuinely returns every status - no more reason to land admins on
+  // an "enrolled"-only view by default.
+  const [status, setStatus] = useState("");
 
   const [gradeLevels, setGradeLevels] = useState([]);
   const [sections, setSections] = useState([]);

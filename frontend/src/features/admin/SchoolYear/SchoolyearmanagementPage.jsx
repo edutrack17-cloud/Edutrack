@@ -29,6 +29,15 @@ function SchoolYearManagementpage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  // Filter by a specific school year, picked from the dropdown (fed by
+  // GET /api/school-year/dropdown via SchoolYearFilterDropdown). We keep
+  // the id only to drive which option shows as selected; the actual
+  // filtering reuses the existing GET /api/school-year?schoolYearName=
+  // param with the option's exact name (see loadSchoolYears below) -
+  // no new backend param needed.
+  const [schoolYearId, setSchoolYearId] = useState("");
+  const [schoolYearNameFilter, setSchoolYearNameFilter] = useState("");
+
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -73,7 +82,7 @@ function SchoolYearManagementpage() {
       setIsLoading(true);
       setErrorMessage("");
       const response = await getSchoolYears({
-        search: debouncedSearch,
+        search: schoolYearNameFilter || debouncedSearch,
         status,
         page: currentPage - 1,
         size: PAGE_SIZE,
@@ -114,7 +123,7 @@ function SchoolYearManagementpage() {
   useEffect(() => {
     loadSchoolYears();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, status, currentPage]);
+  }, [debouncedSearch, status, schoolYearNameFilter, currentPage]);
 
   function handleOpenAdd() {
     setModalMode("add");
@@ -135,6 +144,27 @@ function SchoolYearManagementpage() {
 
   function handleSearchChange(event) {
     setSearch(event.target.value);
+    // Typing a free-text search supersedes a specific school year picked
+    // from the dropdown, so the two filters never fight each other.
+    if (schoolYearId) {
+      setSchoolYearId("");
+      setSchoolYearNameFilter("");
+    }
+  }
+
+  // CONNECT: reuses GET /api/school-year/dropdown (already wired in
+  // SchoolYearFilterDropdown) - picking an option here just sends its
+  // exact schoolYearName through the existing GET /api/school-year
+  // filter, same as the search box does, so no backend change is needed.
+  function handleSchoolYearFilterChange(event) {
+    const { value, name } = event.target;
+    setSchoolYearId(value);
+    setSchoolYearNameFilter(name || "");
+    // Clear the free-text search so the search box doesn't show stale
+    // text while a specific year is selected from the dropdown.
+    setSearch("");
+    setDebouncedSearch("");
+    setCurrentPage(1);
   }
 
   async function handleSubmitSchoolYear(formData) {
@@ -190,7 +220,12 @@ function SchoolYearManagementpage() {
     <div className="space-y-4 p-4 sm:p-6">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <SchoolYearFilters status={status} onStatusChange={handleStatusChange} />
+          <SchoolYearFilters
+            status={status}
+            onStatusChange={handleStatusChange}
+            schoolYearId={schoolYearId}
+            onSchoolYearChange={handleSchoolYearFilterChange}
+          />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <SchoolYearSearchInput value={search} onChange={handleSearchChange} />

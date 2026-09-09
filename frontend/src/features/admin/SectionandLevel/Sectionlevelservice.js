@@ -131,6 +131,28 @@ export async function getSchoolYears(status = "active") {
   }
 }
 
+// CONNECT: GET /api/school-year/dropdown
+// Same dedicated, unpaginated endpoint the School Year feature's own
+// filter uses (see getSchoolYearDropdown() in Schoolyearservice.js) -
+// SchoolYearService.schoolYearDropdown() is just repository.findAll(),
+// so it returns every school year regardless of status, no page-size
+// ceiling. Replaces getSchoolYears(null) for loadAllSchoolYears(), which
+// was hitting GET /school-year with a hardcoded size:100 - fine for the
+// active/planning/closed pulls above, wrong for "give me literally
+// every year to filter by."
+export async function getSchoolYearDropdown() {
+  try {
+    const { data } = await sectionApi.get("/school-year/dropdown");
+    return (data || []).map((sy) => ({
+      id: sy.schoolYearId,
+      label: sy.schoolYearName,
+      status: sy.schoolYearStatus,
+    }));
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to load school year options"));
+  }
+}
+
 // CONNECT: GET /api/section/dropdown
 // Returns active sections belonging to the currently-active school year
 // (unpaginated). Used as a live preview of which sections would be carried

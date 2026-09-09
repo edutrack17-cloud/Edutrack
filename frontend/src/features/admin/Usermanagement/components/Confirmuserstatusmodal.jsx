@@ -1,56 +1,47 @@
 import React, { useEffect, useState } from "react";
-import { X, Archive, Hourglass, CircleCheck, Lock, Loader2, AlertTriangle } from "lucide-react";
+import { X, UserCheck, UserX, KeyRound, Loader2 } from "lucide-react";
 
-// Mirrors STATUS_ACTIONS in Schoolyeartable.jsx so the icon/color the
-// person sees in the kebab menu is the same one they see here.
+// Mirrors STATUS_META in Confirmschoolyearstatusmodal.jsx so the icon/color
+// the person sees in the kebab menu (Usermanagementtable.jsx) is the same
+// one they see here. The "reset" entry lets this same modal also confirm
+// "Reset Password" instead of needing a separate modal component.
 const STATUS_META = {
-  archived: {
-    verb: "Archive",
-    verbIng: "Archiving",
-    Icon: Archive,
-    badgeClass: "bg-secondary/10 text-secondary",
-    confirmButtonClass: "bg-secondary hover:bg-red-700",
-    bodyText: "It will be removed from the list, and can't be restored from here.",
-  },
-  planning: {
-    verb: "Mark Planning",
-    verbIng: "Marking Planning",
-    Icon: Hourglass,
-    badgeClass: "bg-warning/10 text-warning",
-    confirmButtonClass: "bg-warning hover:bg-amber-600",
-    bodyText: "It's not in use yet, but it's ready. You can make it Active anytime.",
-  },
   active: {
-    verb: "Mark Active",
-    verbIng: "Marking Active",
-    Icon: CircleCheck,
+    title: (userName) => `Enable "${userName}"?`,
+    verb: "Enable",
+    verbIng: "Enabling",
+    Icon: UserCheck,
     badgeClass: "bg-success/10 text-success",
     confirmButtonClass: "bg-success hover:bg-emerald-700",
-    bodyText: "This will be the school year in use starting now.",
+    bodyText: "This account will be able to log in again.",
   },
-  closed: {
-    verb: "Mark Closed",
-    verbIng: "Marking Closed",
-    Icon: Lock,
+  disabled: {
+    title: (userName) => `Disable "${userName}"?`,
+    verb: "Disable",
+    verbIng: "Disabling",
+    Icon: UserX,
     badgeClass: "bg-danger/10 text-danger",
     confirmButtonClass: "bg-danger hover:bg-red-700",
-    bodyText: "This school year is done. It can only be Archived next — it won't go back to Planning or Active.",
+    bodyText: "This account won't be able to log in until it's re-enabled.",
+  },
+  reset: {
+    title: (userName) => `Reset password for "${userName}"?`,
+    verb: "Reset password",
+    verbIng: "Resetting",
+    Icon: KeyRound,
+    badgeClass: "bg-primary/10 text-primary",
+    confirmButtonClass: "bg-primary hover:bg-sky-700",
+    bodyText:
+      "This will set their password back to the default password. They'll need to change it the next time they log in.",
   },
 };
 
-function ConfirmSchoolYearStatusModal({
-  isOpen,
-  onClose,
-  onConfirm,
-  schoolYearName,
-  newStatus,
-  isVacatingOnlyActive = false,
-}) {
+function Confirmuserstatusmodal({ isOpen, onClose, onConfirm, userName, newStatus }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset local submitting state whenever a fresh confirmation is opened,
-  // so a previous status-change action can't leave the buttons stuck
-  // disabled the next time this dialog is reused.
+  // so a previous action can't leave the buttons stuck disabled the next
+  // time this dialog is reused for a different user/action.
   useEffect(() => {
     if (isOpen) setIsSubmitting(false);
   }, [isOpen]);
@@ -67,16 +58,16 @@ function ConfirmSchoolYearStatusModal({
   if (!isOpen) return null;
 
   const statusKey = newStatus?.toLowerCase();
-  const meta = STATUS_META[statusKey] ?? STATUS_META.archived;
-  const { verb, verbIng, Icon, badgeClass, confirmButtonClass, bodyText } = meta;
+  const meta = STATUS_META[statusKey] ?? STATUS_META.disabled;
+  const { verb, verbIng, Icon, badgeClass, confirmButtonClass, bodyText, title } = meta;
 
   function handleBackdropClick(event) {
     if (event.target === event.currentTarget && !isSubmitting) onClose();
   }
 
   // Guards against double-submits (e.g. an eager double click) while the
-  // status-change request is in flight, and gives the person feedback
-  // that something is actually happening instead of a silently frozen modal.
+  // request is in flight, and gives the person feedback that something is
+  // actually happening instead of a silently frozen modal.
   async function handleConfirmClick() {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -95,7 +86,7 @@ function ConfirmSchoolYearStatusModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="confirm-status-title"
+        aria-labelledby="confirm-user-status-title"
         className="relative flex w-full max-w-sm flex-col rounded-2xl bg-white p-6 shadow-xl"
       >
         <button
@@ -113,16 +104,10 @@ function ConfirmSchoolYearStatusModal({
             <Icon size={22} />
           </div>
           <div className="flex-1 pt-1">
-            <h2 id="confirm-status-title" className="text-base font-bold text-primary">
-              {verb} "{schoolYearName}"?
+            <h2 id="confirm-user-status-title" className="text-base font-bold text-primary">
+              {title(userName)}
             </h2>
             <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
-            {isVacatingOnlyActive && (
-              <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                <span>No school year will be Active until you set a new one.</span>
-              </div>
-            )}
           </div>
         </div>
 
@@ -150,4 +135,4 @@ function ConfirmSchoolYearStatusModal({
   );
 }
 
-export default ConfirmSchoolYearStatusModal;
+export default Confirmuserstatusmodal;

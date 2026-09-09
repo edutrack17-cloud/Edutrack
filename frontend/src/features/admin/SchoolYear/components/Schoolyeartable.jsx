@@ -59,14 +59,17 @@ const STATUS_ACTIONS = {
 // Closed year get bounced back to Planning/Active, which doesn't make
 // sense for a year that has already run its course.
 //
-// Mirrors ALLOWED_TRANSITIONS in SchoolYearService.java (backend) 1:1 -
-// keep these two in sync if the backend transition map ever changes:
-//   Planning -> Active or Archive
+// This is the BASE map - "archived" is always offered from Planning,
+// but "active" is added back in per-row (see availableStatuses below)
+// only when there's currently no Active school year at all. That keeps
+// "Mark Active" from ever showing up as a dead-end disabled option -
+// it's either a real, clickable action or it isn't shown at all.
+//   Planning -> Archive always; -> Active only when nothing else is Active
 //   Active   -> Closed or Archive
 //   Closed   -> Archive only
 //   Archived -> nothing here (would need a dedicated restore action)
 const ALLOWED_TRANSITIONS = {
-  planning: ["active", "archived"],
+  planning: ["archived"],
   active: ["closed", "archived"],
   closed: ["archived"],
   archived: [],
@@ -149,26 +152,20 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, activeSchoolYear
 
           {schoolYears.map((schoolYear) => {
             const isEditable = !NON_EDITABLE_STATUSES.includes(schoolYear.schoolYearStatus);
-            const availableStatuses = otherStatuses(schoolYear.schoolYearStatus);
-            const hasAnyAction = isEditable || availableStatuses.length > 0;
 
-            // "Mark Active" while another school year already holds that
-            // status - kept visible but disabled (with a tooltip naming
-            // which one) instead of silently disappearing, so the person
-            // knows why the action isn't available rather than wondering
-            // if the menu is missing an option. activeSchoolYear is
-            // fetched independently of this page's rows (see
+            // "Mark Active" only ever makes sense for a Planning row, and
+            // only when nothing else currently holds Active - otherwise
+            // the backend would just reject it (ActiveSchoolYearAlreadyExists
+            // / pessimistic lock in SchoolYearService.java). activeSchoolYear
+            // is fetched independently of this page's rows (see
             // SchoolyearmanagementPage.jsx), so this stays correct even
             // when the Active row itself is on a different page/filter.
-            // The backend (ActiveSchoolYearAlreadyExists / pessimistic
-            // lock in SchoolYearService.java) remains the real guard.
-            function isActionBlocked(status) {
-              return (
-                status === "active" &&
-                activeSchoolYear != null &&
-                activeSchoolYear.schoolYearId !== schoolYear.schoolYearId
-              );
-            }
+            const canActivate =
+              schoolYear.schoolYearStatus === "planning" && activeSchoolYear == null;
+            const availableStatuses = canActivate
+              ? ["active", ...otherStatuses(schoolYear.schoolYearStatus)]
+              : otherStatuses(schoolYear.schoolYearStatus);
+            const hasAnyAction = isEditable || availableStatuses.length > 0;
 
             return (
               <tr key={schoolYear.schoolYearId} className="border-b border-gray-200 transition hover:bg-gray-50">
@@ -184,17 +181,21 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, activeSchoolYear
                 </td>
 
                 <td className="relative px-3 py-1.5 text-center sm:px-4 sm:py-2">
-                  <button
-                    type="button"
-                    data-kebab-trigger
-                    onClick={(event) => toggleMenu(schoolYear.schoolYearId, event)}
-                    aria-label="Row actions"
-                    className="rounded-lg p-2 transition hover:bg-gray-100"
-                  >
-                    <MoreHorizontal size={20} />
-                  </button>
+                  {hasAnyAction ? (
+                    <button
+                      type="button"
+                      data-kebab-trigger
+                      onClick={(event) => toggleMenu(schoolYear.schoolYearId, event)}
+                      aria-label="Row actions"
+                      className="rounded-lg p-2 transition hover:bg-gray-100"
+                    >
+                      <MoreHorizontal size={20} />
+                    </button>
+                  ) : (
+                    <span className="text-gray-300"> </span>
+                  )}
 
-                  {openMenuId === schoolYear.schoolYearId && (
+                  {hasAnyAction && openMenuId === schoolYear.schoolYearId && (
                     <div
                       ref={menuRef}
                       style={{ top: menuPosition.top, left: menuPosition.left }}
@@ -216,39 +217,22 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, activeSchoolYear
                       {availableStatuses.map((status) => {
                         const action = STATUS_ACTIONS[status];
                         const Icon = action.icon;
-                        const isBlocked = isActionBlocked(status);
 
                         return (
                           <button
                             key={status}
                             type="button"
-                            disabled={isBlocked}
-                            title={isBlocked ? `${activeSchoolYear.schoolYearName} is already Active` : undefined}
                             onClick={() => {
-                              if (isBlocked) return;
                               setOpenMenuId(null);
                               onChangeStatus?.(schoolYear, status);
                             }}
-                            className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-sm font-medium transition ${
-                              isBlocked
-                                ? "cursor-not-allowed text-gray-300"
-                                : `cursor-pointer ${action.colorClass}`
-                            }`}
+                            className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-sm font-medium transition ${action.colorClass}`}
                           >
-                            <span className="flex items-center gap-3">
-                              <Icon size={16} />
-                              {action.label}
-                            </span>
-                            {isBlocked && (
-                              <span className="text-[10px] font-normal text-gray-400">In use</span>
-                            )}
+                            <Icon size={16} />
+                            {action.label}
                           </button>
                         );
                       })}
-
-                      {!hasAnyAction && (
-                        <p className="px-4 py-2 text-sm text-gray-400">No actions available</p>
-                      )}
                     </div>
                   )}
                 </td>

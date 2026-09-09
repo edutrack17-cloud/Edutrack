@@ -13,36 +13,18 @@ function parseLocalDate(value) {
   return new Date(Number(year), Number(month) - 1, Number(day));
 }
 
-function startOfToday() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-}
-
-export function getSchoolYearFormSchema(mode = "add", originalStartDate = null) {
+// Mirrors the backend's ONLY date rule (SchoolYearService -
+// createSchoolYear / updateSchoolYear): startDate must be strictly
+// before endDate. The backend has no "not in the past" restriction on
+// startDate - backdating a school year, or fixing a typo on an
+// already-Active year's start date, is a valid request as far as the
+// API is concerned, so the form doesn't block it either anymore.
+export function getSchoolYearFormSchema() {
   return Yup.object({
     schoolYearName: Yup.string().trim().required(MESSAGES.schoolYearName),
     startDate: Yup.date()
       .typeError("Enter a valid date.")
-      .required(MESSAGES.startDate)
-      .test(
-        "not-in-past",
-        "Start date cannot be in the past.",
-        function (value) {
-          if (!value) return true; // let required() report empties
-
-          // In edit mode, an already-started (or already-Active) school
-          // year legitimately has a start date in the past. Only enforce
-          // "not in the past" if the person actually changed the start
-          // date - otherwise editing just the name, say, would fail on a
-          // field they never touched.
-          if (mode === "edit" && value === originalStartDate) return true;
-
-          const parsed = parseLocalDate(value);
-          if (!parsed) return true;
-          return parsed >= startOfToday();
-        }
-      ),
+      .required(MESSAGES.startDate),
 
     endDate: Yup.date()
       .typeError("Enter a valid date.")
@@ -66,4 +48,4 @@ export const emptySchoolYearForm = {
   schoolYearName: "",
   startDate: "",
   endDate: "",
-};``
+};

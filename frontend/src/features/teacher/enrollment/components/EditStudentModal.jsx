@@ -104,6 +104,15 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [], o
 
   if (!isOpen || !student) return null;
 
+  // Same idea as EnrollStudentModal/SchoolYearFormModal's Clear button:
+  // the X icon already closes/cancels out of this modal, so this button
+  // doesn't need to duplicate that - it resets the fields back to
+  // whatever was originally loaded for this student instead, undoing
+  // any in-progress edits without leaving the modal.
+  function handleClear() {
+    formik.resetForm();
+  }
+
   function handleRfidConfirm(uid) {
     formik.setFieldValue("rfid", uid);
     formik.setFieldTouched("rfid", true);
@@ -145,10 +154,10 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [], o
           </button>
           <button
             type="button"
-            onClick={onClose}
-            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+            onClick={handleClear}
+            className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
           >
-            Cancel
+            Clear
           </button>
         </div>
       </div>

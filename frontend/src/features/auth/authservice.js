@@ -105,7 +105,16 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const status = error.response?.status;
 
-    if (status === 401 && originalRequest && !originalRequest._retry) {
+    // /login is unauthenticated - no access token is attached to it, so a
+    // 401 from it always means "wrong username/password," never "token
+    // expired." Skip the refresh-and-redirect flow for it and let
+    // LoginForm's own catch block handle the error directly. Otherwise a
+    // failed login attempt tries to refresh (which fails, since there's
+    // no valid session yet), which clears storage and forces a full-page
+    // redirect to /login - wiping out whatever the user had just typed.
+    const isLoginRequest = originalRequest?.url?.includes("/login");
+
+    if (status === 401 && originalRequest && !originalRequest._retry && !isLoginRequest) {
       originalRequest._retry = true; // never retry more than once per request
 
       try {
@@ -137,16 +146,29 @@ export async function loginUser(credentials) {
   // (previously just { token, userId, username, userRole }). Confirm
   // this with backend before shipping - if the field is still called
   // `token`, the destructure below silently gives you `undefined`.
+  //
+  // TODO (backend): /login does not currently return the user's name at
+  // all - only userId/username/userRole. Header/Sidebar need a display
+  // name, so ask backend to add either `fullName` or
+  // `firstName`/`middleName`/`lastName` to this response (same fields
+  // GET /api/user/teachers already returns - see mapTeacherResponse()
+  // in Usermanagementservice.js). Until that ships, fullName below
+  // falls back to username so nothing breaks.
   const response = await api.post("/login", credentials);
-  const { accessToken, refreshToken, userId, username, userRole } = response.data;
+  const { accessToken, refreshToken, userId, username, userRole, fullName, firstName, middleName, lastName } =
+    response.data;
 
   setTokens({ accessToken, refreshToken });
+
+  const resolvedFullName =
+    fullName || [firstName, middleName, lastName].filter(Boolean).join(" ") || username;
 
   // AuthContext.login() expects role lowercase ("admin" | "teacher" | "guard").
   return {
     user: {
       id: userId,
       username,
+      fullName: resolvedFullName,
       role: userRole?.toLowerCase(),
     },
   };

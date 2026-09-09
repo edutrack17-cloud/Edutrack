@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal, Eye, Pencil, UserCheck, UserX } from "lucide-react";
+import { MoreHorizontal, Eye, Pencil, KeyRound, UserCheck, UserX } from "lucide-react";
 
 // Same compact cell chrome as Sectiontable.jsx: table-fixed + colgroup, truncated cells, xs/sm text scale
 const thClass =
@@ -15,7 +15,7 @@ function getStatusClass(status) {
 }
 
 // Portal renders the kebab menu into document.body to avoid clipping from the table's overflow-x-auto wrapper
-function Usermanagementtable({ users, onView, onEdit, onToggleStatus }) {
+function Usermanagementtable({ users, onView, onEdit, onResetPassword, onToggleStatus }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
@@ -148,6 +148,17 @@ function Usermanagementtable({ users, onView, onEdit, onToggleStatus }) {
             >
               <Pencil size={16} />
               Edit
+            </button>
+
+            <button
+              onClick={() => {
+                setOpenMenuId(null);
+                onResetPassword?.(openUser);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
+            >
+              <KeyRound size={16} />
+              Reset Password
             </button>
 
             <div className="my-1 border-t border-gray-100" />

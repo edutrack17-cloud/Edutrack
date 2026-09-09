@@ -158,4 +158,15 @@ export async function toggleUserStatus(userId, nextStatus) {
   }
 }
 
+// CONNECTED: PATCH /api/user/{userId}/reset-password
+// Backend just returns a plain "Password reset successful" string, not a UserResponse -
+// nothing to remap here, unlike the other endpoints.
+export async function resetPassword(userId) {
+  try {
+    await userApi.patch(`/user/${userId}/reset-password`);
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to reset password"));
+  }
+}
+
 export default userApi;

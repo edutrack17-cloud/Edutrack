@@ -11,18 +11,6 @@ const inputClass = (hasError) =>
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
 const errorClass = "mt-1 text-xs text-danger";
 
-// YYYY-MM-DD in the viewer's LOCAL date, for the Start Date input's min=
-// attribute - using toISOString() here would shift to UTC and could show
-// yesterday's date as the cutoff for anyone west of UTC (same trap as
-// elsewhere in this feature - see formatDate() in Schoolyeartable.jsx).
-function getTodayDateString() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSubmit }) {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,9 +22,7 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
     }
   }, [isOpen]);
 
-  // Matches Sectionformmodal.jsx / Newschoolyearmodal.jsx - Escape closes
-  // the modal unless a submit is in flight, so closing mid-request can't
-  // leave that request running against an unmounted modal.
+
   useEffect(() => {
     if (!isOpen) return;
     function handleEscapeKey(event) {
@@ -112,32 +98,20 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
 
         <Formik
           initialValues={initialValues}
-          validationSchema={getSchoolYearFormSchema(mode, initialData?.startDate ?? null)}
+          validationSchema={getSchoolYearFormSchema()}
           onSubmit={handleFormSubmit}
           enableReinitialize
         >
-          {({ errors, touched, isSubmitting, dirty, values, setFieldValue, setFieldError, setFieldTouched }) => {
-            // Mirrors Sectionformmodal.jsx: in edit mode, Save stays disabled
-            // until something actually changed, so a no-op "Save Changes"
-            // click can't reach the backend just to bounce off its own
-            // "No changes detected" error.
+          {({ errors, touched, isSubmitting, dirty, resetForm }) => {
+
             const isSaveDisabled = isSubmitting || (mode === "edit" && !dirty);
 
-            // The browser's min= attribute only stops the native picker -
-            // someone can still type/paste a past date straight into the
-            // segments and the browser will happily fire onChange with it.
-            // Reject that here instead of letting it land in Formik state:
-            // don't call setFieldValue, so the controlled input snaps back
-            // to whatever the last accepted value was, and surface the
-            // error immediately instead of waiting for blur/submit.
-            function handleStartDateChange(event) {
-              const newValue = event.target.value;
-              setFieldTouched("startDate", true, false);
-              if (newValue && newValue < getTodayDateString()) {
-                setFieldError("startDate", "Start date cannot be in the past.");
-                return;
-              }
-              setFieldValue("startDate", newValue);
+            // The X icon already handles closing/cancelling the modal, so
+            // this second button no longer duplicates that - it resets the
+            // fields back to their initial values instead (blank for Add,
+            // the loaded record for Edit) without closing the modal.
+            function handleClear() {
+              resetForm();
             }
 
             return (
@@ -160,12 +134,14 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
 
                 <div>
                   <label className={labelClass}>Start Date</label>
-                  <input
+                  {/* No min/past-date restriction here - the backend
+                      (SchoolYearService) only requires startDate to be
+                      strictly before endDate, so backdating a school
+                      year or fixing an Active year's original start
+                      date is a valid edit, same as the API allows. */}
+                  <Field
                     type="date"
                     name="startDate"
-                    min={getTodayDateString()}
-                    value={values.startDate}
-                    onChange={handleStartDateChange}
                     className={inputClass(errors.startDate && touched.startDate)}
                   />
                   <ErrorMessage name="startDate" component="p" className={errorClass} />
@@ -200,11 +176,11 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
                 </button>
                 <button
                   type="button"
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                  className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleClear}
+                  disabled={isSubmitting || !dirty}
+                  className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-100"
                 >
-                  Cancel
+                  Clear
                 </button>
               </div>
             </Form>

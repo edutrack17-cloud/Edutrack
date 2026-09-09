@@ -126,7 +126,7 @@ function EnrollStudentModal({
           <button
             type="button"
             onClick={handleClear}
-            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+            className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
           >
             Clear
           </button>

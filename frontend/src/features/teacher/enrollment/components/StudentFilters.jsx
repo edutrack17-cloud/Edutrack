@@ -3,7 +3,7 @@ import { Check, ChevronDown } from "lucide-react";
 
 
 const STATUS_OPTIONS = [
-  { value: "", label: "All Statuses", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
+  { value: "", label: "All Status", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
   { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "", selectedBgClass: "bg-success/10" },
   { value: "dropped", label: "Dropped", textClass: "text-danger", hoverClass: "", selectedBgClass: "bg-danger/10" },
   { value: "transferred_out", label: "Transferred", textClass: "text-warning", hoverClass: "", selectedBgClass: "bg-warning/10" },
