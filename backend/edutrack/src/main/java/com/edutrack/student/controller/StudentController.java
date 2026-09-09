@@ -28,7 +28,7 @@ public class StudentController {
     }
 
     //ENROLL STUDENT
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PostMapping
     public ResponseEntity<StudentResponse> enrollStudent(@Valid @RequestBody CreateStudentRequest studentRequest){
         StudentResponse enrolledStudent = studentService.enrollStudent(studentRequest);
