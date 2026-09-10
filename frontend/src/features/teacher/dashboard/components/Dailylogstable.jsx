@@ -1,24 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import AttendanceStatus from "../../attendance/components/AttendanceStatus";
 
-// Field names match DashboardAttendanceLogResponse.java exactly:
-//   lrn, studentName, sectionName, timeIn, timeOut, status
-//
-// TODO: BACKEND MISMATCH x2 (both against the old mock, not a problem
-// with the backend itself):
-//   1. No rfid field. DashboardAttendanceLogResponse only carries `lrn`,
-//      not the rfid tag the old "RFID Tag" column showed. Swapped the
-//      column for LRN. If the tap log needs to show the RFID tag too,
-//      that has to be added to DashboardAttendanceLogResponse.java (and
-//      wherever it's built in DashboardService.buildLogs()) first.
-//   2. No separate gradeLevel field - only `sectionName` - so the old
-//      combined "Grade 4 - Apple" column is now just the section name
-//      on its own ("Level-Section" -> "Section").
-const STATUS_STYLES = {
-  present: { label: "Present", className: "text-success" },
-  absent: { label: "Absent", className: "text-danger" },
-  on_school: { label: "On School", className: "text-primary" },
-};
 
 function formatTime(isoDateTime) {
   if (!isoDateTime) return "--";
@@ -29,9 +12,9 @@ function formatTime(isoDateTime) {
 
 function DailyLogsTable({ logs, isLoading }) {
   const thClass =
-    "whitespace-nowrap px-3 py-3 text-left text-xs font-semibold text-white sm:px-6 sm:py-4 sm:text-sm";
+    "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
   const tdClass =
-    "whitespace-nowrap px-3 py-3 text-left text-xs text-gray-700 sm:px-6 sm:py-4 sm:text-sm";
+    "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
 
   const rows = logs ?? [];
 
@@ -46,7 +29,7 @@ function DailyLogsTable({ logs, isLoading }) {
         </Link>
       </div>
 
-      <div className="w-full overflow-x-auto rounded-lg">
+      <div className="w-full overflow-x-auto rounded-xl">
         <table className="min-w-full border-collapse">
           <thead className="bg-primary">
             <tr>
@@ -76,28 +59,26 @@ function DailyLogsTable({ logs, isLoading }) {
             )}
 
             {!isLoading &&
-              rows.map((log) => {
-                const statusInfo = STATUS_STYLES[log.status] ?? {
-                  label: log.status,
-                  className: "text-gray-700",
-                };
-                return (
-                  <tr
-                    key={`${log.lrn}-${log.timeIn}`}
-                    className="border-b border-gray-100 transition hover:bg-gray-50"
-                  >
-                    <td className={tdClass}>{log.lrn}</td>
-                    <td className={tdClass}>{log.studentName}</td>
-                    <td className={tdClass}>{log.sectionName}</td>
-                    <td className={tdClass}>{formatTime(log.timeIn)}</td>
-                    <td className={tdClass}>
-                      <span className={`text-sm font-semibold ${statusInfo.className}`}>
-                        {statusInfo.label}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              rows.map((log) => (
+                <tr
+                  key={`${log.lrn}-${log.timeIn}`}
+                  className="border-b border-gray-100 transition hover:bg-gray-50"
+                >
+                  <td className={tdClass}>{log.lrn}</td>
+                  <td className={tdClass} title={log.studentName}>{log.studentName}</td>
+                  <td className={tdClass} title={log.sectionName}>{log.sectionName}</td>
+                  <td className={tdClass}>{formatTime(log.timeIn)}</td>
+                  <td className={tdClass}>
+                    {log.status ? (
+                      <div className="flex justify-center">
+                        <AttendanceStatus status={log.status} />
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">--</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
