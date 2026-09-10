@@ -76,6 +76,16 @@ function LoginForm() {
         touched={formik.touched.password}
       />
 
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => navigate("/forgot-password")}
+          className="text-sm text-primary hover:underline"
+        >
+          Forgot password?
+        </button>
+      </div>
+
       {formik.status && <p className="text-sm text-danger">{formik.status}</p>}
 
       <Button type="submit" className="w-full bg-primary text-white hover:bg-sky-700">

@@ -3,6 +3,7 @@ import MainLayout from "../components/layout/MainLayout";
 import ProtectedRoute from "./Protectedroute";
 import { useAuth } from "../Context/Authcontext";
 import LoginPage from "../features/auth/LoginPage";
+import ForgotPasswordPage from "../features/auth/ForgotPass/ForgotPasswordPage";
 import ChangePassword from "../features/auth/pages/Changepassword";
 import EnrollmentPage from "../features/teacher/enrollment/pages/EnrollmentPage" ;
 import AttendancePage from "../features/teacher/attendance/Attendancepage";
@@ -16,36 +17,37 @@ import ActivityLogsPage from "../features/admin/ActivityLogs/Activitylogspage";
 import GuardAttendancePage from "../features/guard/attendance/Guardattendancepage";
 
 
-// "/" connects to /guard-attendance for guards, /dashboard for everyone else, /login if not authenticated.
+
 function RootRedirect() {
   const { isAuthenticated, isInitializing, role } = useAuth();
-
+ 
   if (isInitializing) return null;
-
+ 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-
+ 
   if (role === "guard") {
     return <Navigate to="/guard-attendance" replace />;
   }
-
+ 
   return <Navigate to="/dashboard" replace />;
 }
-
+ 
 function AppRoutes() {
   return (
     <Routes>
-
+ 
       <Route path="/" element={<RootRedirect />} />
-
+ 
       <Route path="/login" element={<LoginPage />} />
-
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+ 
       {/* /guard-attendance connects to guard role only. */}
       <Route element={<ProtectedRoute allowedRoles={["guard"]} />}>
         <Route path="/guard-attendance" element={<GuardAttendancePage />} />
       </Route>
-
+ 
       {/* Everything below connects to a logged-in user only. */}
       <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
@@ -55,7 +57,7 @@ function AppRoutes() {
           <Route path="/enrollment" element={<EnrollmentPage />} />
           <Route path="/promote-student" element={<PromoteStudentPage />} />
           <Route path="/change-password" element={<ChangePassword />} />
-
+ 
           {/* Everything below connects to admin role only. */}
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/user-management" element={<UserManagementPage />} />
@@ -68,5 +70,5 @@ function AppRoutes() {
     </Routes>
   );
 }
-
+ 
 export default AppRoutes;

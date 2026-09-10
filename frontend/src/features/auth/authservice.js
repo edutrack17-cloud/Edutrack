@@ -138,6 +138,63 @@ api.interceptors.response.use(
   }
 );
 
+// --- Forgot password (OTP-based) -----------------------------------------
+// Fully unauthenticated flow, so it runs on its own axios instance - no
+// Authorization header ever gets attached (there's no session yet), and
+// it deliberately skips `api`'s 401-refresh interceptor. A wrong/expired
+// OTP naturally comes back as a 401/400, and that should just surface as
+// a form error, not kick off a refresh attempt and redirect-to-login.
+//
+// TODO (backend): endpoints/payloads below are PLACEHOLDERS - nothing has
+// been agreed on yet. Confirm before wiring this up for real:
+//   POST /forgot-password/request-otp  { identifier }              -> 204, no body
+//   POST /forgot-password/verify-otp   { identifier, otp }         -> { resetToken }
+//   POST /forgot-password/reset        { resetToken, newPassword } -> 204, no body
+//
+// Security note for backend: /request-otp should return the same generic
+// "if that account exists, a code was sent" response whether or not
+// `identifier` matches a real admin account - otherwise this endpoint can
+// be used to enumerate valid usernames/emails. Also worth rate-limiting
+// (per identifier + per IP) since it's unauthenticated.
+const forgotPasswordClient = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+const FORGOT_PASSWORD_ENDPOINTS = {
+  requestOtp: "/forgot-password/request-otp", // PLACEHOLDER - confirm with backend
+  verifyOtp: "/forgot-password/verify-otp", // PLACEHOLDER - confirm with backend
+  reset: "/forgot-password/reset", // PLACEHOLDER - confirm with backend
+};
+
+// Step 1: admin submits their username/email, backend sends an OTP to
+// whatever contact info (email/SMS) is on file for that account.
+export async function requestPasswordResetOtp(identifier) {
+  await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.requestOtp, {
+    identifier,
+  });
+}
+
+// Step 2: admin submits the OTP they received. On success, backend
+// returns a short-lived resetToken that step 3 uses to actually set the
+// new password - the OTP itself is single-use and shouldn't double as
+// the reset credential.
+export async function verifyPasswordResetOtp(identifier, otp) {
+  const response = await forgotPasswordClient.post(
+    FORGOT_PASSWORD_ENDPOINTS.verifyOtp,
+    { identifier, otp }
+  );
+  return response.data.resetToken;
+}
+
+// Step 3: admin submits their new password along with the resetToken
+// from step 2.
+export async function resetPasswordWithOtp(resetToken, newPassword) {
+  await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.reset, {
+    resetToken,
+    newPassword,
+  });
+}
+
 export async function loginUser(credentials) {
   // POST http://localhost:8080/api/auth/login
   //
