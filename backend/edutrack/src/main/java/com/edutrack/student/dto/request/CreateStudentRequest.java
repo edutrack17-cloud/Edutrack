@@ -1,6 +1,7 @@
 package com.edutrack.student.dto.request;
 
 import com.edutrack.student.enums.AdmissionType;
+import com.edutrack.student.enums.Sex;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -22,6 +23,9 @@ public record CreateStudentRequest(
         @NotBlank
         @Size(max = 100)
         String lastName,
+
+        @NotNull
+        Sex sex,
 
         LocalDate birthDate,
 

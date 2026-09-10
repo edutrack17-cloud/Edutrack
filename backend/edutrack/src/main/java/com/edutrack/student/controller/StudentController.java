@@ -36,6 +36,14 @@ public class StudentController {
                 .ok(enrolledStudent);
     }
 
+    //BULK ENROLL STUDENTS
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PostMapping("/bulk")
+    public ResponseEntity<List<StudentResponse>> bulkEnrollStudents(@Valid @RequestBody BulkEnrollStudentRequest bulkEnrollStudentRequest){
+        List<StudentResponse> enrolledStudents = studentService.bulkEnrollStudents(bulkEnrollStudentRequest);
+        return ResponseEntity.ok(enrolledStudents);
+    }
+
     //GET STUDENT HISTORY
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @GetMapping("{studentId}/history")

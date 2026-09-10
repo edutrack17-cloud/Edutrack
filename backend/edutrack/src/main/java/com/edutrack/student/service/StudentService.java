@@ -69,6 +69,55 @@ public class StudentService {
         this.activityLogService = activityLogService;
     }
 
+    private record EnrollmentResult(Student student, Section section, boolean reEnrolled) {}
+
+    private EnrollmentResult enrollStudentCore(CreateStudentRequest studentRequest){
+        Section sectionToBeAssigned = getBySectionId(studentRequest.sectionId());
+
+        int age = Period.between(studentRequest.birthDate(), now).getYears();
+        if (age < 9){
+            throw new StudentUnderAge();
+        }
+
+        if (sectionToBeAssigned.getSectionStatus() == SectionStatus.archived){
+            throw new InactiveSectionNotAllowed();
+        }
+
+        if (sectionToBeAssigned.getSchoolYear().getSchoolYearStatus() != SchoolYearStatus.active){
+            throw new InactiveSectionNotAllowed();
+        }
+
+        if (studentRepository.existsByRfidAndStudentStatus(studentRequest.rfid(), StudentStatus.enrolled)){
+            throw new RFIDAlreadyExists();
+        }
+
+        Optional<Student> existingStudent = studentRepository.findByLrn(studentRequest.lrn());
+        boolean reEnrolled = existingStudent.isPresent();
+        Student savedStudent;
+
+        if (existingStudent.isPresent()){
+            Student student = existingStudent.get();
+
+            if (student.getStudentStatus() == StudentStatus.enrolled){
+                throw new StudentAlreadyExists(studentRequest.lrn());
+            }
+
+            student.setStudentStatus(StudentStatus.enrolled);
+            student.setRfid(studentRequest.rfid());
+            savedStudent = studentRepository.save(student);
+        } else {
+            Student requestToEntity = studentMapper.toEntity(studentRequest);
+            savedStudent = studentRepository.save(requestToEntity);
+        }
+
+        StudentSectionAssignment assignmentToCreate = new StudentSectionAssignment();
+        assignmentToCreate.setStudent(savedStudent);
+        assignmentToCreate.setSection(sectionToBeAssigned);
+        studentSectionAssignmentRepository.save(assignmentToCreate);
+
+        return new EnrollmentResult(savedStudent, sectionToBeAssigned, reEnrolled);
+    }
+
     private static final DateTimeFormatter DATE_FORMATTER =                                                                                                                                         DateTimeFormatter.ofPattern("MMM d, yyyy");
 
     LocalDate now = LocalDate.now();
@@ -91,60 +140,44 @@ public class StudentService {
                 .orElseThrow(() -> new SectionAssignmentNotFound(studentId));
     }
 
-
+    //ENROLL STUDENT
     @Transactional
     public StudentResponse enrollStudent(CreateStudentRequest studentRequest){
-        Section sectionToBeAssigned = getBySectionId(studentRequest.sectionId());
-
-        int age = Period.between(studentRequest.birthDate(), now).getYears();
-        if (age < 9){
-            throw new StudentUnderAge();
-        }
-
-        if (sectionToBeAssigned.getSectionStatus() == SectionStatus.archived){
-            throw new InactiveSectionNotAllowed();
-        }
-
-        if (sectionToBeAssigned.getSchoolYear().getSchoolYearStatus() != SchoolYearStatus.active){
-            throw new InactiveSectionNotAllowed();
-        }
-
-        if (studentRepository.existsByRfidAndStudentStatus(studentRequest.rfid(), StudentStatus.enrolled)){
-            throw new RFIDAlreadyExists();
-        }
-
-        Optional<Student> existingStudent = studentRepository.findByLrn(studentRequest.lrn());
-        Student savedStudent;
-
-        if (existingStudent.isPresent()){
-            Student student = existingStudent.get();
-
-            if (student.getStudentStatus() == StudentStatus.enrolled){
-                throw new StudentAlreadyExists(studentRequest.lrn());
-            }
-
-            //RE-ENROLLMENT: reactivate the same student record
-            student.setStudentStatus(StudentStatus.enrolled);
-            student.setRfid(studentRequest.rfid());
-            savedStudent = studentRepository.save(student);
-        } else {
-            Student requestToEntity = studentMapper.toEntity(studentRequest);
-            savedStudent = studentRepository.save(requestToEntity);
-        }
-
-        StudentSectionAssignment assignmentToCreate = new StudentSectionAssignment();
-        assignmentToCreate.setStudent(savedStudent);
-        assignmentToCreate.setSection(sectionToBeAssigned);
-        studentSectionAssignmentRepository.save(assignmentToCreate);
+        EnrollmentResult result = enrollStudentCore(studentRequest);
 
         activityLogService.createLogRecord(
-                existingStudent.isPresent() ? "STUDENT RE-ENROLLED" : "STUDENT ENROLLED",
-                (existingStudent.isPresent() ? "re-enrolled " : "enrolled student ")
-                        + NameUtil.buildFullName(savedStudent.getFirstName(), savedStudent.getMiddleName(), savedStudent.getLastName())
-                        + " to section " + sectionToBeAssigned.getSectionName()
+                result.reEnrolled() ? "STUDENT RE-ENROLLED" : "STUDENT ENROLLED",
+                (result.reEnrolled() ? "re-enrolled " : "enrolled student ")
+                        + NameUtil.buildFullName(result.student().getFirstName(), result.student().getMiddleName(), result.student().getLastName())
+                        + " to section " + result.section().getSectionName()
         );
 
-        return studentMapper.toStudentResponseDTO(savedStudent, sectionToBeAssigned);
+        return studentMapper.toStudentResponseDTO(result.student(), result.section());
+    }
+
+    //BULK ENROLLMENT
+    @Transactional
+    public List<StudentResponse> bulkEnrollStudents(BulkEnrollStudentRequest bulkEnrollStudentRequest){
+        List<StudentResponse> responses = new ArrayList<>();
+        List<String> enrolledStudents = new ArrayList<>();
+
+        for (CreateStudentRequest studentRequest : bulkEnrollStudentRequest.students()){
+            EnrollmentResult result = enrollStudentCore(studentRequest);
+
+            enrolledStudents.add(
+                    NameUtil.buildFullName(result.student().getFirstName(), result.student().getMiddleName(), result.student().getLastName())
+                            + " (" + result.section().getSectionName() + ")"
+            );
+
+            responses.add(studentMapper.toStudentResponseDTO(result.student(), result.section()));
+        }
+
+        activityLogService.createLogRecord(
+                "STUDENTS BULK ENROLLED",
+                "enrolled " + responses.size() + " student(s): " + String.join(", ", enrolledStudents)
+        );
+
+        return responses;
     }
 
     //GET STUDENT HISTORY
@@ -218,6 +251,12 @@ public class StudentService {
                 !studentToUpdate.getLastName().equalsIgnoreCase(updateStudentRequest.lastName())){
             changes.add("last name: from " + studentToUpdate.getLastName() + " to " + updateStudentRequest.lastName());
             studentToUpdate.setLastName(updateStudentRequest.lastName());
+        }
+
+        if (updateStudentRequest.sex() != null &&
+                studentToUpdate.getSex() != updateStudentRequest.sex()){
+            changes.add("sex: from " + studentToUpdate.getSex() + " to " + updateStudentRequest.sex());
+            studentToUpdate.setSex(updateStudentRequest.sex());
         }
 
         if (updateStudentRequest.guardian() != null &&
@@ -294,6 +333,7 @@ public class StudentService {
                 assignment.setUpdatedAt(now);
             }
         }
+
 
         if (changes.isEmpty()){
             throw new NoChangesDetected();

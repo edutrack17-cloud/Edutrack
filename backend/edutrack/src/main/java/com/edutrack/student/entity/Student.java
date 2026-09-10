@@ -1,6 +1,7 @@
 package com.edutrack.student.entity;
 
 import com.edutrack.student.enums.AdmissionType;
+import com.edutrack.student.enums.Sex;
 import com.edutrack.student.enums.StudentStatus;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.persistence.*;
@@ -26,6 +27,10 @@ public class Student {
 
     @Column(nullable = false, length = 100)
     private String lastName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Sex sex;
 
     @Column(nullable = false)
     private LocalDate birthDate;
@@ -87,6 +92,14 @@ public class Student {
 
     public void setFirstName(String firstName) {
         this.firstName = firstName;
+    }
+
+    public Sex getSex() {
+        return sex;
+    }
+
+    public void setSex(Sex sex) {
+        this.sex = sex;
     }
 
     public String getLrn() {

@@ -1,6 +1,7 @@
 package com.edutrack.student.dto.request;
 
 import com.edutrack.student.enums.AdmissionType;
+import com.edutrack.student.enums.Sex;
 import jakarta.validation.constraints.Positive;
 
 import java.time.LocalDate;
@@ -9,6 +10,7 @@ public record UpdateStudentRequest(
         String firstName,
         String middleName,
         String lastName,
+        Sex sex,
         String lrn,
         String rfid,
         String guardian,
