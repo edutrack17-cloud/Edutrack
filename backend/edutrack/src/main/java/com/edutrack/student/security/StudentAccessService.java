@@ -31,6 +31,15 @@ public class StudentAccessService {
                 .orElse(false);
     }
 
+    public boolean isAdviserOfSectionId(Integer sectionId) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+
+        return sectionRepository.findById(sectionId)
+                .map(section -> section.getUser().getUserId())
+                .map(currentUserId::equals)
+                .orElse(false);
+    }
+
     public boolean isAdviserOfAllStudents(List<Long> studentIds) {
         if (studentIds == null || studentIds.isEmpty()) return false;
 

@@ -7,7 +7,10 @@ import com.edutrack.student.entity.Student;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +25,18 @@ public interface StudentSectionAssignmentRepository
     Optional<StudentSectionAssignment> findByStudentAndLeftAtIsNull(
             Student student
     );
+
+    @Query("""
+        SELECT a FROM StudentSectionAssignment a
+        WHERE a.section.sectionId = :sectionId
+        AND a.assignedAt <= :periodEnd
+        AND (a.leftAt IS NULL OR a.leftAt >= :periodStart)
+        ORDER BY a.student.lastName, a.student.firstName
+        """)
+    List<StudentSectionAssignment> findActiveDuringPeriod(
+            @Param("sectionId") int sectionId,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
 
     Optional<StudentSectionAssignment> findByStudent_RfidAndLeftAtIsNull(String rfid);
 

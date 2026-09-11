@@ -22,9 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -172,6 +175,10 @@ public class AttendanceService {
 
         Attendance attendanceToMarkPresent = findByAssignmentAndDateTime(filters);
 
+        if (attendanceToMarkPresent.getAttendanceStatus() == AttendanceStatus.absent){
+            throw new AlreadyMarkedAbsent();
+        }
+
         if (attendanceToMarkPresent.getAttendanceStatus() == AttendanceStatus.present){
             throw new AlreadyMarkedPresent();
         }
@@ -231,20 +238,26 @@ public class AttendanceService {
                 .where(AttendanceSpecification.hasAssignmentIn(assignmentIds))
                 .and(AttendanceSpecification.createdToday(today));
 
-        List<Attendance> studentsWithExistingAttendance =
-                attendanceRepository.findAll(attendanceFilter);
+        List<Attendance> todaysAttendance = attendanceRepository.findAll(attendanceFilter);
 
-        Set<Long> assignmentIdsWithAttendance = studentsWithExistingAttendance.stream()
-                .map(a -> a.getStudentSectionAssignment().getAssignmentId())
-                .collect(Collectors.toSet());
+        Map<Long, Attendance> attendanceByAssignmentId = todaysAttendance.stream()
+                .collect(Collectors.toMap(
+                        a -> a.getStudentSectionAssignment().getAssignmentId(),
+                        a -> a));
 
-        List<StudentSectionAssignment> absentStudents = listOfStudents.stream()
-                .filter(s -> !assignmentIdsWithAttendance.contains(s.getAssignmentId()))
+        // no tap-in at all today -> new absent record
+        List<StudentSectionAssignment> noRecordStudents = listOfStudents.stream()
+                .filter(s -> !attendanceByAssignmentId.containsKey(s.getAssignmentId()))
                 .toList();
 
-        if (absentStudents.isEmpty()) return List.of();
+        // tapped in at the gate but never reached class -> flip existing record
+        List<Attendance> onSchoolOnlyRecords = attendanceByAssignmentId.values().stream()
+                .filter(a -> a.getAttendanceStatus() == AttendanceStatus.on_school)
+                .toList();
 
-        List<Attendance> absentRecords = absentStudents.stream()
+        if (noRecordStudents.isEmpty() && onSchoolOnlyRecords.isEmpty()) return List.of();
+
+        List<Attendance> newAbsentRecords = noRecordStudents.stream()
                 .map(assignment -> {
                     Attendance absentAttendanceRecord = new Attendance();
                     absentAttendanceRecord.setAttendanceStatus(AttendanceStatus.absent);
@@ -253,13 +266,20 @@ public class AttendanceService {
                 })
                 .toList();
 
-        List<Attendance> savedAbsentRecords = attendanceRepository.saveAll(absentRecords);
+        onSchoolOnlyRecords.forEach(a -> a.setAttendanceStatus(AttendanceStatus.absent));
 
-        String studentNames = absentStudents.stream()
-                .map(assignment -> NameUtil.buildFullName(
-                        assignment.getStudent().getFirstName(),
-                        assignment.getStudent().getMiddleName(),
-                        assignment.getStudent().getLastName()))
+        List<Attendance> savedAbsentRecords = new ArrayList<>();
+        if (!newAbsentRecords.isEmpty()) {
+            savedAbsentRecords.addAll(attendanceRepository.saveAll(newAbsentRecords));
+        }
+        if (!onSchoolOnlyRecords.isEmpty()) {
+            savedAbsentRecords.addAll(attendanceRepository.saveAll(onSchoolOnlyRecords));
+        }
+
+        String studentNames = Stream.concat(
+                        noRecordStudents.stream().map(StudentSectionAssignment::getStudent),
+                        onSchoolOnlyRecords.stream().map(a -> a.getStudentSectionAssignment().getStudent()))
+                .map(student -> NameUtil.buildFullName(student.getFirstName(), student.getMiddleName(), student.getLastName()))
                 .collect(Collectors.joining(", "));
 
         activityLogService.createLogRecord(
