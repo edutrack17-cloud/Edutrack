@@ -5,17 +5,20 @@ import {
   Pencil,
   UserX,
   Shuffle,
+  Repeat,
   GraduationCap,
 } from "lucide-react";
 import ViewStudentModal from "./ViewStudentModal";
 import EditStudentModal from "./EditStudentModal";
 import ConfirmStatusModal from "./ConfirmStatusModal";
 import StatusDetailsModal from "./Statusdetailsmodal";
+import TransferSectionModal from "../components/Transfersectionmodal";
 import {
   updateStudent,
   dropStudent,
   transferOutStudent,
   graduateStudent,
+  transferStudentSection,
 } from "../enrollmentService";
 
 const menuButtonClass =
@@ -24,6 +27,10 @@ const menuButtonClass =
 const actionColorClass = {
   view: "text-gray-700 hover:bg-gray/10",
   edit: "text-gray-700 hover:bg-gray/10",
+  // Same gray tone ViewStudentModal's history timeline already uses for
+  // exitType "section_transfer", so this action reads consistently
+  // wherever it shows up.
+  section_transfer: "text-gray-600 hover:bg-gray/10",
   dropped: "text-danger hover:bg-danger/10",
   transferred_out: "text-warning hover:bg-warning/10",
   graduated: "text-primary hover:bg-primary/10",
@@ -51,7 +58,7 @@ export function formatGradeLevel(gradeLevel) {
   return gradeLevel.replace("_", " ");
 }
 
-function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
+function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onTransferSection, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
   // The backend's dropStudent()/transferOutStudent()/graduateStudent()
   // each only guard against re-applying the SAME status (e.g.
   // StudentAlreadyGraduated) - there's no check preventing an invalid
@@ -87,6 +94,11 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onMarkD
 
       {isEnrolled && (
         <>
+          <button onClick={onTransferSection} className={`${menuButtonClass} ${actionColorClass.section_transfer}`}>
+            <Repeat size={16} />
+            Transfer Section
+          </button>
+
           <button onClick={onMarkDropped} className={`${menuButtonClass} ${actionColorClass.dropped}`}>
             <UserX size={16} />
             Dropped
@@ -123,6 +135,8 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
 
   const [viewingStudent, setViewingStudent] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [transferringStudent, setTransferringStudent] = useState(null);
+  const [isTransferSubmitting, setIsTransferSubmitting] = useState(false);
   // { student, newStatus } while StatusDetailsModal (the remarks/leftAt
   // step) is open, else null. Used for "dropped" and "transferred_out".
   const [detailsRequest, setDetailsRequest] = useState(null);
@@ -240,6 +254,28 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
     }
   }
 
+  function handleRequestTransfer(student) {
+    setOpenMenu(null);
+    setTransferringStudent(student);
+  }
+
+  async function handleConfirmTransfer(studentId, sectionId) {
+    const transferredStudentName = transferringStudent?.fullName;
+    try {
+      setIsTransferSubmitting(true);
+      setErrorMessage("");
+      await transferStudentSection(studentId, sectionId);
+      showToast?.(`${transferredStudentName} transferred to a new section.`, "success");
+      setTransferringStudent(null);
+      await onChanged?.();
+    } catch (error) {
+      setErrorMessage(error.message);
+      showToast?.(error.message, "error");
+    } finally {
+      setIsTransferSubmitting(false);
+    }
+  }
+
   async function handleEditSubmit(studentId, values) {
     try {
       await updateStudent(studentId, values);
@@ -322,6 +358,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                       studentStatus={student.studentStatus}
                       onView={() => handleView(student)}
                       onEdit={() => handleEdit(student)}
+                      onTransferSection={() => handleRequestTransfer(student)}
                       onMarkDropped={() => handleRequestStatusWithDetails(student, "dropped")}
                       onMarkTransferred={() => handleRequestStatusWithDetails(student, "transferred_out")}
                       onMarkGraduated={() => handleRequestStatusChange(student, "graduated")}
@@ -382,6 +419,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                 studentStatus={student.studentStatus}
                 onView={() => handleView(student)}
                 onEdit={() => handleEdit(student)}
+                onTransferSection={() => handleRequestTransfer(student)}
                 onMarkDropped={() => handleRequestStatusWithDetails(student, "dropped")}
                 onMarkTransferred={() => handleRequestStatusWithDetails(student, "transferred_out")}
                 onMarkGraduated={() => handleRequestStatusChange(student, "graduated")}
@@ -405,6 +443,16 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
         student={editingStudent}
         sections={sections}
         onRefreshSections={onRefreshSections}
+      />
+
+      <TransferSectionModal
+        isOpen={transferringStudent !== null}
+        onClose={() => setTransferringStudent(null)}
+        onConfirm={handleConfirmTransfer}
+        student={transferringStudent}
+        sections={sections}
+        onRefreshSections={onRefreshSections}
+        isSubmitting={isTransferSubmitting}
       />
 
       <StatusDetailsModal

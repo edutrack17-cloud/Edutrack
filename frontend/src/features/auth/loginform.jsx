@@ -1,13 +1,19 @@
 import React from "react";
 import { useFormik } from "formik";
 import { useNavigate } from "react-router-dom";
-import { User, Lock } from "lucide-react";
+import { User, Lock, Loader2 } from "lucide-react";
 
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import loginSchema from "./loginSchema";
 import { loginUser } from "./authService";
 import { useAuth } from "../../Context/Authcontext";
+
+const MIN_LOADING_MS = 600;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function LoginForm() {
   const navigate = useNavigate();
@@ -16,25 +22,24 @@ function LoginForm() {
   async function handleLoginSubmit(values, formikHelpers) {
     formikHelpers.setStatus(undefined);
 
+    const startedAt = Date.now();
+
     try {
-      // authService.loginUser() already writes accessToken/refreshToken
-      // to localStorage itself and returns { user: { id, username, role } }
-      // normalized from the backend's response - nothing left to map here.
       const { user } = await loginUser(values);
+
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_LOADING_MS) {
+        await wait(MIN_LOADING_MS - elapsed);
+      }
 
       login({ user });
 
-      // Guards don't use the MainLayout/dashboard shell (no sidebar nav
-      // items exist for them) - send them straight to their own screen.
-      // Admins and teachers both land on /dashboard; MainLayout/Sidebar
-      // already branch their UI off `role`.
       const redirectPath = user.role === "guard" ? "/guard-attendance" : "/dashboard";
       navigate(redirectPath, { replace: true });
     } catch (error) {
       formikHelpers.setStatus("Login failed. Please check your username and password.");
+      formikHelpers.setSubmitting(false);
     }
-
-    formikHelpers.setSubmitting(false);
   }
 
   const formik = useFormik({
@@ -60,6 +65,7 @@ function LoginForm() {
         onBlur={formik.handleBlur}
         error={formik.errors.username}
         touched={formik.touched.username}
+        disabled={formik.isSubmitting}
       />
 
       <Input
@@ -74,6 +80,7 @@ function LoginForm() {
         onBlur={formik.handleBlur}
         error={formik.errors.password}
         touched={formik.touched.password}
+        disabled={formik.isSubmitting}
       />
 
       <div className="flex justify-end">
@@ -88,8 +95,16 @@ function LoginForm() {
 
       {formik.status && <p className="text-sm text-danger">{formik.status}</p>}
 
-      <Button type="submit" className="w-full bg-primary text-white hover:bg-sky-700">
-        Login
+      <Button
+        type="submit"
+        disabled={formik.isSubmitting}
+        className="w-full bg-primary text-white hover:bg-sky-700 disabled:opacity-70 flex items-center justify-center gap-2"
+      >
+        {formik.isSubmitting ? (
+          <Loader2 size={18} className="animate-spin" />
+        ) : (
+          "Login"
+        )}
       </Button>
     </form>
   );

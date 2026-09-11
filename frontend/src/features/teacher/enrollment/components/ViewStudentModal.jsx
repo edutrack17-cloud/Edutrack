@@ -267,6 +267,7 @@ function ViewStudentModal({ isOpen, onClose, student }) {
                     here until the backend exposes them individually. */}
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
                   <InfoField label="Name" value={student.fullName} />
+                  <InfoField label="Sex" value={student.sex} />
                   <InfoField label="Birthdate" value={student.birthDate} />
                 </div>
               </div>

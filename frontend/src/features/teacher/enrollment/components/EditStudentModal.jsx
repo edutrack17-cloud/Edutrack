@@ -61,6 +61,10 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [], o
         lrn: student?.lrn ?? "",
         rfid: student?.rfid ?? "",
         admissionType: student?.admissionType ?? "",
+        // StudentResponse already returns sex directly (no split needed,
+        // unlike fullName above) - was missing here, so editing a
+        // student always reopened with the Sex field blank.
+        sex: student?.sex ?? "",
         firstName,
         middleName,
         lastName,

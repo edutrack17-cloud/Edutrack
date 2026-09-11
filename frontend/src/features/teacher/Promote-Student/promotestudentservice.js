@@ -39,10 +39,19 @@ function mapSections(data) {
 // turn comes around (axios rejects the actual network call at that
 // point via the signal, same as always) - a minor, pre-existing
 // characteristic of this throttle shape, not something new here.
-export async function getPromotableStudents({ gradeLevel, section, page = 0, size = 10, signal } = {}) {
+//
+// UPDATE: `search` is now actually sent as the `search` query param -
+// it used to be accepted as `studentName` here and never forwarded at
+// all, so typing in the search box did nothing. Confirmed against
+// StudentController.getStudents()/StudentService.getStudents(), which
+// runs this through StudentSectionAssignmentSpecification.matchesSearch()
+// - matches student name (first/middle/last) OR lrn, across the full
+// dataset, not just the current page.
+export async function getPromotableStudents({ gradeLevel, section, search, page = 0, size = 10, signal } = {}) {
   const params = { studentStatus: "enrolled", page, size };
   if (gradeLevel) params.gradeLevel = gradeLevel;
   if (section) params.sectionName = section;
+  if (search) params.search = search;
 
   try {
     const { data } = await studentApi.get("/student", { params, signal });

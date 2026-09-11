@@ -5,11 +5,14 @@ import { Check, ChevronDown } from "lucide-react";
 const STATUS_OPTIONS = [
   { value: "", label: "Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
   { value: "Active", label: "Active", textClass: "text-success", selectedBgClass: "bg-success/10" },
-  { value: "Disabled", label: "Disabled", textClass: "text-danger", selectedBgClass: "bg-danger/10" },
+  { value: "Disabled", label: "Disabled", textClass: "text-red-600", selectedBgClass: "bg-red-600/10" },
 ];
 
+// text color intentionally left out here (comes from selected.textClass instead) -
+// having it here too caused text-gray-700 to fight with text-danger/text-red-600
+// on the trigger button and win, so "Disabled" rendered gray/black instead of red.
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
 const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
 
 function useClickOutside(isOpen, ref, onClose) {

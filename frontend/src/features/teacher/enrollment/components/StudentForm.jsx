@@ -246,19 +246,25 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
           Student Information
         </h3>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
-          <Input
-            label="First Name"
-            id="firstName"
-            name="firstName"
-            type="text"
-            value={formik.values.firstName}
-            onChange={handleNameChange("firstName")}
-            onBlur={formik.handleBlur}
-            error={formik.errors.firstName}
-            touched={formik.touched.firstName}
-            placeholder="Juan"
-            labelClassName={inputLabelClass}
-          />
+          {/* Full-width: First Name gets its own row (sm:col-span-2) so
+              Middle Name and Last Name land together as a pair right
+              below it, instead of First+Middle pairing off and leaving
+              Last Name to trail alone. */}
+          <div className="sm:col-span-2">
+            <Input
+              label="First Name"
+              id="firstName"
+              name="firstName"
+              type="text"
+              value={formik.values.firstName}
+              onChange={handleNameChange("firstName")}
+              onBlur={formik.handleBlur}
+              error={formik.errors.firstName}
+              touched={formik.touched.firstName}
+              placeholder="Juan"
+              labelClassName={inputLabelClass}
+            />
+          </div>
           <Input
             label="Middle Name"
             id="middleName"
@@ -285,6 +291,35 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             placeholder="Dela Cruz"
             labelClassName={inputLabelClass}
           />
+
+          {/* No col-start hack needed here anymore: First Name now fills
+              row 1 on its own, Middle+Last fill row 2 as a pair, so Sex
+              naturally lands at the start of row 3 and pairs with
+              Birthdate right after it. */}
+          <div>
+            <label className={fieldLabelClass}>Sex</label>
+            <div className="relative">
+              <select
+                name="sex"
+                value={formik.values.sex}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={selectClass(formik.touched.sex && formik.errors.sex, Boolean(formik.values.sex))}
+              >
+                <option value="" className="text-gray-700">Select Sex</option>
+                <option value="Male" className="text-gray-700">Male</option>
+                <option value="Female" className="text-gray-700">Female</option>
+              </select>
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+              />
+            </div>
+            {formik.touched.sex && formik.errors.sex && (
+              <p className={errorTextClass}>{formik.errors.sex}</p>
+            )}
+          </div>
+
           <Input
             label="Birthdate"
             id="birthDate"
@@ -300,7 +335,6 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             max={maxBirthdate}
             min={minBirthdate}
           />
-
         </div>
       </div>
 

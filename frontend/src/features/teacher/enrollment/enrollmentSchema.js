@@ -49,6 +49,14 @@ const enrollSchema = Yup.object({
       "Please select a valid admission type"
     ),
 
+  // Matches Sex.java exactly - "Male"/"Female", case-sensitive (backend
+  // stores this with @Enumerated(EnumType.STRING)). CreateStudentRequest
+  // requires this (@NotNull sex) - enrollment was failing 400 without it,
+  // since no field/input for it existed anywhere in this form.
+  sex: Yup.string()
+    .required("Please select the student's sex")
+    .oneOf(["Male", "Female"], "Please select a valid option"),
+
   
   firstName: Yup.string()
     .required("Please enter the student's first name")

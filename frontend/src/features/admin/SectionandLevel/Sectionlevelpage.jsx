@@ -17,7 +17,6 @@ import {
   getTeachers,
   getSchoolYears,
   getSchoolYearDropdown,
-  startNewSchoolYear,
   cloneSectionsAcrossSchoolYears,
 } from "./Sectionlevelservice";
 import { logActivity } from "../ActivityLogs/Activitylogservice";
@@ -413,73 +412,67 @@ function Sectionlevelpage() {
     }
   }
 
-  // CONNECT: POST /api/section/school-year/new-school-year (active source)
-  // or cloneSectionsAcrossSchoolYears() (closed source - see that function
-  // in Sectionlevelservice.js for why it can't reuse the endpoint above).
-  //
-  // Which path runs depends entirely on the STATUS of whichever source the
-  // person picked in the modal, not anything the modal itself decides -
-  // newSchoolYearSourceOptions (below) is the single source of truth for
-  // that, since it's the same list that populated the modal's dropdown.
+  // CONNECT: cloneSectionsAcrossSchoolYears() - source is always a Closed
+  // (past) school year and target is always the current Active one now
+  // (see newSchoolYearSourceOptions below), so this no longer branches on
+  // the source's status and never calls the old POST
+  // /section/school-year/new-school-year endpoint, which used to close
+  // the source and activate a Planning target instead.
   async function handleStartNewSchoolYear(payload) {
     const sourceYear = newSchoolYearSourceOptions.find((sy) => sy.id === payload.sourceSchoolYearId);
-    // A Closed source can now target either a "Planning" year (original
-    // behavior) or the current Active year (so past sections can be
-    // cloned straight into the school year that's actually running right
-    // now) - so the lookup has to check both lists, not just planning.
-    const targetYear = [...planningSchoolYears, ...schoolYears].find(
-      (sy) => sy.id === payload.targetSchoolYearId
-    );
+    const targetYear = schoolYears.find((sy) => sy.id === payload.targetSchoolYearId);
 
     try {
-      if (sourceYear?.status === "closed") {
-        const { created, failed } = await cloneSectionsAcrossSchoolYears({
-          sourceLabel: sourceYear.label,
-          targetLabel: targetYear?.label,
-          targetSchoolYearId: payload.targetSchoolYearId,
-          gradeLevel: payload.gradeLevel,
-          advisers,
-        });
+      const { created, failed } = await cloneSectionsAcrossSchoolYears({
+        sourceLabel: sourceYear?.label,
+        targetLabel: targetYear?.label,
+        targetSchoolYearId: payload.targetSchoolYearId,
+        gradeLevel: payload.gradeLevel,
+        advisers,
+        // Which specific sections the admin checked in the modal's
+        // preview list - see cloneSectionsAcrossSchoolYears() for how
+        // this narrows the clone down instead of copying everything
+        // under the source year.
+        sectionIds: payload.sectionIds,
+      });
 
-        // All-failed is treated as a real error (nothing to show for it,
-        // and the person should see why) - anything else is best-effort:
-        // whatever copied over did copy over, so surface the partial
-        // shortfall as a toast rather than discarding the successful ones.
-        if (created.length === 0 && failed.length > 0) {
-          throw new Error(failed.map((item) => `${item.sectionName}: ${item.reason}`).join(" "));
-        }
-
-        const shortfallNote = failed.length > 0 ? ` ${failed.length} couldn't be copied.` : "";
-        showToast(
-          `${created.length} section(s) copied into "${targetYear?.label}".${shortfallNote}`,
-          failed.length > 0 ? "error" : undefined
-        );
-        logActivity(
-          "Sections Cloned",
-          `${created.length} section(s) copied from "${sourceYear.label}" into "${targetYear?.label}".` +
-            (failed.length > 0
-              ? ` ${failed.length} failed: ${failed.map((item) => item.sectionName).join(", ")}.`
-              : "")
-        );
-      } else {
-        const clonedSections = await startNewSchoolYear(payload);
-
-        // The target came from planningSchoolYears in the first place (that's
-        // what populated the modal's dropdown), so its label is already
-        // available here without a extra fetch - used to spell out exactly
-        // which year is now Active instead of leaving that implicit.
-        const targetYearLabel = targetYear?.label ? `"${targetYear.label}" is now Active. ` : "";
-
-        showToast(`${targetYearLabel}${clonedSections.length} section(s) carried over.`);
-        logActivity(
-          "New School Year Started",
-          `${targetYearLabel}${clonedSections.length} section(s) carried over from the current school year.`
-        );
+      // All-failed is treated as a real error (nothing to show for it,
+      // and the person should see why) - anything else is best-effort:
+      // whatever copied over did copy over, so surface the partial
+      // shortfall as a toast rather than discarding the successful ones.
+      if (created.length === 0 && failed.length > 0) {
+        throw new Error(failed.map((item) => `${item.sectionName}: ${item.reason}`).join(" "));
       }
+
+      const shortfallNote = failed.length > 0 ? ` ${failed.length} couldn't be copied.` : "";
+      showToast(
+        `${created.length} section(s) copied into "${targetYear?.label}".${shortfallNote}`,
+        failed.length > 0 ? "error" : undefined
+      );
+      logActivity(
+        "Sections Cloned",
+        `${created.length} section(s) copied from "${sourceYear?.label}" into "${targetYear?.label}".` +
+          (failed.length > 0
+            ? ` ${failed.length} failed: ${failed.map((item) => item.sectionName).join(", ")}.`
+            : "")
+      );
+
+      // Jump the table's School Year filter to the target year so the
+      // freshly-copied sections are what's visible right after cloning,
+      // instead of being mixed in with the source year's own (still
+      // intact, on purpose - Copy keeps history) rows under whatever
+      // filter happened to be active before this ran. That mix is what
+      // reads as "doubled" even though nothing was actually duplicated -
+      // the section_name/school_year unique constraint on the backend
+      // already rules out two rows sharing a name under the same school
+      // year. loadSections() is still called explicitly (not left to the
+      // filter-change effect alone) so the table refreshes even if the
+      // filter already happened to be sitting on the target year.
+      setSchoolYearFilter(String(payload.targetSchoolYearId));
+      setCurrentPage(1);
 
       try {
         await loadSections();
-        await loadSchoolYearOptions();
       } catch (error) {
         showToast(
           "Done, but the page couldn't refresh automatically. Please reload.",
@@ -487,7 +480,6 @@ function Sectionlevelpage() {
         );
       }
     } catch (error) {
-      loadSchoolYearOptions();
       throw error;
     }
   }
@@ -502,16 +494,14 @@ function Sectionlevelpage() {
     ...planningSchoolYears.map((sy) => ({ ...sy, label: `${sy.label} (Planning)` })),
   ];
 
-  // Source options for "New School Year": the currently Active year(s)
-  // (the normal case - closes it, activates the target) PLUS any Closed
-  // (past) years (clone-only - see handleStartNewSchoolYear above). Each
-  // entry is tagged with its status so both the modal and the submit
-  // handler can tell which behavior applies without re-deriving it from
-  // three separate lists each time.
-  const newSchoolYearSourceOptions = [
-    ...schoolYears.map((sy) => ({ ...sy, status: "active" })),
-    ...closedSchoolYears.map((sy) => ({ ...sy, status: "closed" })),
-  ];
+  // Source options for "New School Year": Closed (past) school years
+  // only - Active is never a valid source anymore. Cloning here is purely
+  // a sections-only operation (see cloneSectionsAcrossSchoolYears in
+  // handleStartNewSchoolYear above) that never touches any school year's
+  // status; the target is always the current Active year (schoolYears,
+  // passed to the modal below), so the old "close the Active source /
+  // activate a Planning target" flow no longer applies.
+  const newSchoolYearSourceOptions = closedSchoolYears;
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
@@ -549,7 +539,7 @@ function Sectionlevelpage() {
            <button
               type="button"
               onClick={handleOpenNewSchoolYear}
-              title="Copies sections into a school year you've already created and marked 'Planning' - it does not create a new school year record. Picking your current school year as the source also closes it and activates the target; picking a past (Closed) year instead just clones its sections, without changing any school year's status."
+              title="Copies sections from a past (Closed) school year into the current Active school year. Only the sections are copied - no school year's status ever changes."
               className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-40" >
               <CalendarSync size={15} strokeWidth={2.5} />
               New School Year
@@ -590,8 +580,7 @@ function Sectionlevelpage() {
       <NewSchoolYearModal
         isOpen={isNewSchoolYearModalOpen}
         sourceSchoolYears={newSchoolYearSourceOptions}
-        targetSchoolYears={planningSchoolYears}
-        activeSchoolYears={schoolYears}
+        targetSchoolYears={schoolYears}
         onClose={() => setIsNewSchoolYearModalOpen(false)}
         onSubmit={handleStartNewSchoolYear}
       />

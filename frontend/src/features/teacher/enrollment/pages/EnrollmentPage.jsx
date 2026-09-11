@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import StudentFilters from "../components/StudentFilters";
 import SearchInput from "../components/SearchInput";
@@ -22,8 +22,21 @@ function EnrollmentPage() {
   const { user, role, isInitializing } = useAuth();
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const { toasts, showToast, dismissToast } = useToasts();
+
+  // Debounce so typing doesn't fire a request per keystroke - now that
+  // search actually hits the backend (see loadStudents() below), same
+  // pattern already used in PromoteStudentPage.jsx. Resets to page 1
+  // since the result set can shrink/change entirely once search applies.
+  useEffect(() => {
+    const debounceId = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(debounceId);
+  }, [search]);
 
   const [level, setLevel] = useState("");
   const [section, setSection] = useState("");
@@ -138,14 +151,19 @@ function EnrollmentPage() {
     );
   }, [role, sections]);
 
-  // GET /api/student - re-fetches whenever a filter or the page
-  // changes. NOTE: "search" is intentionally NOT sent to the backend -
-  // StudentController.getStudents() has no search/fullName param, so
-  // this only filters the students already loaded on the CURRENT page,
-  // not the full dataset. Flag this to the backend dev if real
-  // search-across-all-students is needed; until then the searchable
-  // set is whatever PAGE_SIZE happens to have loaded.
+  const abortControllerRef = useRef(null);
+
+  // GET /api/student - re-fetches whenever a filter, the debounced
+  // search, or the page changes. UPDATE: "search" now IS sent to the
+  // backend - StudentService.getStudents() honors it via
+  // StudentSectionAssignmentSpecification.matchesSearch(), matching
+  // name or LRN across the full dataset (see enrollmentService.js) -
+  // no more client-side-only filtering over just the current page.
   async function loadStudents() {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setIsLoading(true);
       setErrorMessage("");
@@ -153,16 +171,18 @@ function EnrollmentPage() {
         level,
         section,
         status,
+        search: debouncedSearch || undefined,
         page: currentPage - 1,
         size: PAGE_SIZE,
+        signal: controller.signal,
       });
       const newTotalPages = response.totalPages || 1;
       setTotalPages(newTotalPages);
 
       // Same "don't show a false empty page" guard used in
-      // Section-level's loadSections() - if a status/section change
-      // shrinks the result set below the current page, fall back to
-      // the new last page instead of rendering "No students found"
+      // Section-level's loadSections() - if a status/section/search
+      // change shrinks the result set below the current page, fall back
+      // to the new last page instead of rendering "No students found"
       // for a page that isn't really empty.
       if (currentPage > newTotalPages) {
         setCurrentPage(newTotalPages);
@@ -171,9 +191,10 @@ function EnrollmentPage() {
 
       setStudents(response.content ?? []);
     } catch (error) {
+      if (error.code === "ERR_CANCELED") return;
       setErrorMessage(error.message);
     } finally {
-      setIsLoading(false);
+      if (abortControllerRef.current === controller) setIsLoading(false);
     }
   }
 
@@ -181,18 +202,7 @@ function EnrollmentPage() {
     if (isInitializing) return;
     loadStudents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, section, status, currentPage, isInitializing]);
-
-  // Client-side only, over whatever's on the current page - see the
-  // note on loadStudents() above for why this can't search server-side
-  // yet.
-  const visibleStudents = search
-    ? students.filter(
-        (s) =>
-          s.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-          s.lrn?.includes(search)
-      )
-    : students;
+  }, [level, section, status, currentPage, debouncedSearch, isInitializing]);
 
   function handleLevelChange(event) {
     setLevel(event.target.value);
@@ -306,7 +316,7 @@ function EnrollmentPage() {
         ) : (
           <div className="flex flex-col gap-3">
             <StudentTable
-              students={visibleStudents}
+              students={students}
               sections={sections}
               onChanged={loadStudents}
               onRefreshSections={loadSections}

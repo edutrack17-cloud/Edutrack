@@ -10,10 +10,9 @@ const EMPTY_FORM = {
   sectionId: "",
   lrn: "",
   rfid: "",
-  // Matches students.admission_type ENUM(regular, transferred_in) from
-  // the ERD. Added here to match EditStudentModal's initialValues,
-  // which already carries this field.
+  
   admissionType: "",
+  sex: "",
   firstName: "",
   middleName: "",
   lastName: "",

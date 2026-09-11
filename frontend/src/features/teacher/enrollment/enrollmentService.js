@@ -5,6 +5,7 @@
 // StudentTable) should need to change, since they already call these
 // same function names/shapes.
 
+import axios from "axios";
 import { createApiClient } from "../../../services/apiClient"; // TODO: adjust to wherever apiClient.js actually lives relative to this file
 
 // Rate-limit throttle, Authorization header, 401-refresh-retry, and
@@ -167,12 +168,15 @@ export async function getSectionsByAdviser(userId) {
   }
 }
 
-// CONNECTED: GET /api/student?gradeLevel&sectionName&studentStatus&page&size
+// CONNECTED: GET /api/student?gradeLevel&sectionName&studentStatus&search&page&size
 // Confirmed via StudentController.getStudents(). Notes:
-//   - No "search" param exists server-side - "search" below is accepted
-//     but intentionally NOT sent to the backend (see the comment on
-//     SearchInput's usage in EnrollmentPage.jsx). Flag this to the
-//     backend dev if full-text search is needed here.
+//   - UPDATE: the backend now DOES accept and honor a "search" param -
+//     StudentService.getStudents() runs it through
+//     StudentSectionAssignmentSpecification.matchesSearch(search), which
+//     matches against student name (first/middle/last) OR lrn, across
+//     the FULL dataset (not just the current page). It's wired through
+//     here now instead of being dropped - see EnrollmentPage.jsx for the
+//     matching debounce/server-side-search change.
 //   - "section" is filtered by sectionName (a String), not a section ID.
 //   - "status" must already be one of the real StudentStatus enum
 //     values (enrolled | dropped | transferred_out | graduated) by the
@@ -180,18 +184,23 @@ export async function getSectionsByAdviser(userId) {
 //   - Response is a Spring Page<StudentResponse> - returns it as-is
 //     (response.content / response.totalPages), same shape as
 //     Section-level's getSections().
-export async function getStudents({ search, level, section, status, page = 0, size = 10 } = {}) {
+//   - "signal" added so EnrollmentPage can cancel an in-flight request
+//     when a filter/search/page changes again before it resolves,
+//     same idiom as promotestudentservice.js's getPromotableStudents().
+export async function getStudents({ search, level, section, status, page = 0, size = 10, signal } = {}) {
   const params = {};
   if (level) params.gradeLevel = level;
   if (section) params.sectionName = section;
   if (status) params.studentStatus = status;
+  if (search) params.search = search;
   params.page = page;
   params.size = size;
 
   try {
-    const { data } = await studentApi.get("/student", { params });
+    const { data } = await studentApi.get("/student", { params, signal });
     return data;
   } catch (error) {
+    if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
     throw new Error(getErrorMessage(error, "Failed to load students"));
   }
 }
@@ -340,12 +349,20 @@ export async function getStudentHistory(studentId) {
   }
 }
 
-// NOT YET WIRED ANYWHERE IN THE UI:
-// PATCH /api/student/{studentId}/section-assignment/transfer
-// Body: TransferSectionRequest { sectionId }. This moves a still-
-// enrolled student to a different section - there is currently no
-// button/modal anywhere for this (StudentTable.jsx's "Transferred"
-// action is transferOutStudent() above, a different concept entirely).
+// CONNECTED: PATCH /api/student/{studentId}/section-assignment/transfer
+// Body: TransferSectionRequest { sectionId }. Moves a still-enrolled
+// student to a different section (same grade level, same school year) -
+// distinct from transferOutStudent() above, which is the student
+// LEAVING the school entirely. Wired to StudentTable's kebab menu via
+// the new "Transfer Section" action -> TransferSectionModal.jsx.
+//
+// NOTE: bulk grade-level promotion (PATCH /student/grade-level/promote)
+// is intentionally NOT duplicated here - that flow lives entirely in
+// the separate Promote Student feature (promotestudentservice.js /
+// PromoteStudentPage.jsx), which already owns its own promoteStudents().
+// A second copy used to live in this file too but was never imported by
+// EnrollmentPage.jsx or anything else here - removed to avoid two
+// functions with the same name/shape drifting out of sync.
 export async function transferStudentSection(studentId, sectionId) {
   try {
     const { data } = await studentApi.patch(`/student/${studentId}/section-assignment/transfer`, {
@@ -354,22 +371,6 @@ export async function transferStudentSection(studentId, sectionId) {
     return data;
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to transfer student's section"));
-  }
-}
-
-// NOT YET WIRED ANYWHERE IN THE UI:
-// PATCH /api/student/grade-level/promote
-// Body: BulkPromotionRequest { studentIds: number[], targetSectionId }.
-// No "Promote Students" screen/button exists yet.
-export async function promoteStudents(studentIds, targetSectionId) {
-  try {
-    const { data } = await studentApi.patch("/student/grade-level/promote", {
-      studentIds,
-      targetSectionId: Number(targetSectionId),
-    });
-    return data;
-  } catch (error) {
-    throw new Error(getErrorMessage(error, "Failed to promote students"));
   }
 }
 

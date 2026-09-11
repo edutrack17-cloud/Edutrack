@@ -108,8 +108,12 @@ function PromoteStudentPage() {
   const abortControllerRef = useRef(null);
 
   // getPromotableStudents() -> GET /api/student, only returns studentStatus=enrolled (enforced server-side).
-  // Backend only supports `studentName` as a search param (no lrn/combined search), so we pass it straight
-  // through and let the server handle pagination even while searching.
+  // UPDATE: the real query param is `search` (not `studentName` - that
+  // was never actually being sent, see promotestudentservice.js). It
+  // matches student name OR lrn across the full dataset server-side
+  // (StudentSectionAssignmentSpecification.matchesSearch()), so we pass
+  // it straight through and let the server handle pagination even while
+  // searching.
   async function loadStudents() {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -122,7 +126,7 @@ function PromoteStudentPage() {
       const response = await getPromotableStudents({
         gradeLevel,
         section,
-        studentName: debouncedSearch || undefined,
+        search: debouncedSearch || undefined,
         page: currentPage - 1,
         size: PAGE_SIZE,
         signal: controller.signal,

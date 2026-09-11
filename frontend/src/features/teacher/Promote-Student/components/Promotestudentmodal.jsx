@@ -14,8 +14,10 @@ function formatGradeLevel(gradeLevel) {
 
 function nextGradeLevels(currentGradeLevel) {
   const currentIndex = GRADE_LEVEL_ORDER.indexOf(currentGradeLevel);
-  if (currentIndex === -1) return [];
-  return GRADE_LEVEL_ORDER.slice(currentIndex + 1);
+  const nextIndex = currentIndex + 1;
+  // Only the immediate next level - students can't skip a grade level.
+  if (currentIndex === -1 || nextIndex >= GRADE_LEVEL_ORDER.length) return [];
+  return [GRADE_LEVEL_ORDER[nextIndex]];
 }
 
 function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmitting }) {
@@ -44,7 +46,13 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
     }
 
     setTargetLevel(availableLevels[0] ?? "");
-    // targetSection gets picked once real sections load below
+    // Section must stay blank ("Select Section") until the user
+    // actively picks one - it is NOT auto-selected from the loaded
+    // list, unlike targetLevel which is a computed value with no real
+    // choice. See the targetSections-loading effect below: it now only
+    // keeps this value if it's still valid, it never defaults to
+    // sections[0].
+    setTargetSection("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentGradeLevel, isGraduating]);
 
@@ -67,9 +75,11 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
     getTargetSections(targetLevel)
       .then((sections) => {
         setTargetSections(sections);
-        setTargetSection((prev) =>
-          sections.some((s) => String(s.id) === prev) ? prev : sections[0] ? String(sections[0].id) : ""
-        );
+        // Only keep the user's existing pick if it's still in the
+        // freshly loaded list - never fall back to sections[0]. The
+        // user must actively choose a section; it's never
+        // auto-selected on their behalf.
+        setTargetSection((prev) => (sections.some((s) => String(s.id) === prev) ? prev : ""));
       })
       .catch((error) => setSectionsError(error.message));
   }, [isOpen, targetLevel, isGraduating]);
@@ -93,6 +103,15 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
       targetLevel,
       targetSectionId: Number(targetSection),
     });
+  }
+
+  // Resets the Section pick back to blank ("Select Section") without
+  // closing the modal - the X icon already handles closing/cancelling,
+  // same reasoning as SchoolYearFormModal's Clear. targetLevel isn't
+  // touched: it's a read-only computed value, not a user edit, so
+  // there's nothing to reset there.
+  function handleClear() {
+    setTargetSection("");
   }
 
   const canConfirm = !isSubmitting && (isGraduating || Boolean(targetSection));
@@ -150,19 +169,15 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-2">
                   <label className="text-xs font-semibold text-gray-500">Level</label>
-                  <div className="relative">
-                    <select
-                      value={targetLevel}
-                      onChange={(event) => setTargetLevel(event.target.value)}
-                      className="w-full appearance-none rounded-lg border border-gray-300 py-2 pl-3 pr-10 text-sm text-gray-700 outline-none focus:border-primary"
-                    >
-                      {availableLevels.map((level) => (
-                        <option key={level} value={level}>
-                          {formatGradeLevel(level)}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  {/* Read-only, not a <select>: with skip-level promotion
+                      disallowed, this is always exactly one computed
+                      value (currentGradeLevel + 1) - there's no real
+                      choice for the user to make here, so a dropdown
+                      would just be misleading. targetLevel is still
+                      driven by the same useEffect below and still used
+                      for getTargetSections()/the promote payload. */}
+                  <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                    {formatGradeLevel(targetLevel)}
                   </div>
                 </div>
 
@@ -208,10 +223,11 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
           </button>
           <button
             type="button"
-            onClick={onClose}
-            className="flex-1 rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+            onClick={handleClear}
+            disabled={isSubmitting || isGraduating}
+            className="flex-1 rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Close
+            Clear
           </button>
         </div>
       </div>
