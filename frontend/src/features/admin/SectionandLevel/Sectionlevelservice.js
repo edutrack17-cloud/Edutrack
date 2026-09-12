@@ -110,13 +110,11 @@ export async function getTeachers() {
   }
 }
 
-// status now takes a param ("active" | "planning" | "closed") instead of
-// being hardcoded, since callers need more than just "active": the New
-// School Year flow pulls "closed" for its source dropdown and "active"
-// for its target, while the Add/Edit Section form separately pulls
-// "planning" so sections can be built ahead of a year officially
-// starting. Existing callers that don't pass anything keep getting
-// "active", same as before.
+// status now takes a param ("active" | "planning" | ...) instead of being
+// hardcoded, since the New School Year flow needs both: "active" for the
+// source dropdown, "planning" for the target dropdown (matches the
+// SchoolYearNotPlanning check on the backend). Existing callers that don't
+// pass anything keep getting "active", same as before.
 // NOTE: params/response shape here are assumed from how the section service
 // already calls this endpoint - adjust once the SchoolYear controller is
 // shared.
@@ -176,6 +174,26 @@ export async function getSectionDropdown(gradeLevel) {
   }
 }
 
+// CONNECT: POST /api/section/school-year/new-school-year
+// Closes the source school year, sets the target as active, and clones
+// the source's sections (optionally filtered by gradeLevel) into it.
+// Returns the newly created SectionResponse list.
+//
+// Only ever call this when the chosen source IS the currently-active
+// school year - the backend looks up "the" active year to close via its
+// own status query, independent of whatever sourceSchoolYearId is sent,
+// so calling this with a Closed year as the source would still end up
+// closing whatever unrelated year happens to be active right now. For a
+// Closed source, use cloneSectionsAcrossSchoolYears() below instead.
+export async function startNewSchoolYear(data) {
+  try {
+    const response = await sectionApi.post("/section/school-year/new-school-year", data);
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to start new school year"));
+  }
+}
+
 // How many section rows to pull per lookup below. GET /api/section has no
 // schoolYearId query param (see the matching comment in
 // Sectionlevelpage.jsx), so both the "does the target already have
@@ -186,16 +204,16 @@ export async function getSectionDropdown(gradeLevel) {
 // undercounted.
 const CLONE_FETCH_SIZE = 300;
 
-// Client-side stand-in for the backend's newSchoolYear() clone step.
-// Source is always a Closed (past) school year and target is always the
-// currently Active one (see newSchoolYearSourceOptions in
-// Sectionlevelpage.jsx) - this composes the already-public section
-// endpoints instead (GET /section, POST /section) so no school year's
-// status is ever touched, only the sections themselves get copied, with
-// their schoolYear reference pointed at the target. The backend's own
-// POST /section/school-year/new-school-year (which used to close the
-// source and activate a Planning target) is no longer called from this
-// page.
+// Client-side stand-in for the backend's newSchoolYear() clone step, used
+// specifically when the source is a Closed (past) school year rather than
+// the currently-active one. startNewSchoolYear() can't be reused for this
+// case (see the note on it above) since it always closes "the" active
+// year and activates the target, and neither of those should happen when
+// someone is just pulling sections forward from an old year as a
+// template. This composes the already-public section endpoints instead
+// (GET /section, POST /section) so no school year's status is touched -
+// only the sections themselves get copied, with their schoolYear
+// reference pointed at the target.
 //
 // LIMITATION: SectionResponse only exposes each section's adviser as a
 // display name string, not a userId, so re-creating a section under the
@@ -207,8 +225,9 @@ const CLONE_FETCH_SIZE = 300;
 // wrong person.
 //
 // Returns { created, failed } - `created` is the list of successfully
-// cloned SectionResponses, `failed` is `{ sectionName, reason }` entries
-// for anything that couldn't be copied.
+// cloned SectionResponses (mirrors startNewSchoolYear()'s return shape),
+// `failed` is `{ sectionName, reason }` entries for anything that
+// couldn't be copied.
 //
 // RATE LIMIT: every getSections()/createSection() call below goes
 // through sectionApi, so the request interceptor's local bucket now
@@ -227,14 +246,14 @@ export async function cloneSectionsAcrossSchoolYears({
   // gradeLevel below is cloned, same as before this was selectable.
   sectionIds,
 }) {
-  // Deliberately does NOT mirror the backend's SchoolYearAlreadyHasSections
-  // guard, which blocks the WHOLE clone the moment the target has any
-  // section at all. That guard made sense for a freshly-created
-  // "Planning" year with nothing in it yet, but the target here is always
-  // the current ACTIVE school year, which normally already has its own
-  // sections - a blanket "already has sections" block would make cloning
-  // into it impossible. Instead, only skip the individual sections that
-  // would collide BY NAME with something already under the target -
+  // Used to mirror the backend's SchoolYearAlreadyHasSections guard and
+  // block the WHOLE clone the moment the target had any section at all.
+  // That made sense when the target could only ever be a freshly-created
+  // "Planning" year with nothing in it yet. Now that the target can also
+  // be the current ACTIVE school year (which normally already has its
+  // own sections), a blanket "already has sections" block would make
+  // that case impossible. Instead, only skip the individual sections
+  // that would collide BY NAME with something already under the target -
   // everything else still gets cloned in alongside what's already there.
   const targetBatch = await getSections({ page: 0, size: CLONE_FETCH_SIZE });
   const existingTargetNames = new Set(

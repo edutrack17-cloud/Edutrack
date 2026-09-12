@@ -524,7 +524,7 @@ function Sectionformmodal({
                   <button
                     type="button"
                     onClick={handleClear}
-                    className="flex-1 cursor-pointer rounded-lg bg-danger py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                    className="flex-1 cursor-pointer rounded-lg bg-slate-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-600"
                   >
                     {mode === "edit" ? "Undo Changes" : "Clear"}
                   </button>

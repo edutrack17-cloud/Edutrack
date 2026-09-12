@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Users, UserCheck, UserX, ClipboardX, DoorOpen, Percent, UserRound, Layers } from "lucide-react";
+import { Users, UserCheck, UserX, ClipboardX, DoorOpen, UserRound, Layers } from "lucide-react";
 import StatCard from "./components/Statcard";
 import AttendanceChart from "./components/Attendancechart";
 import DailyLogsTable from "./components/Dailylogstable";
@@ -10,10 +10,6 @@ import { useAuth } from "../../../Context/Authcontext";
 // Maps Attendancechart's "Show:" labels to DashboardPeriod.java's enum values.
 const LABEL_TO_PERIOD = { Daily: "daily", Week: "weekly", Month: "monthly", Year: "yearly" };
 
-
-function formatAttendanceRate(rate) {
-  return rate === undefined || rate === null ? undefined : `${rate}%`;
-}
 
 function DashboardPage() {
   const { role } = useAuth();
@@ -74,7 +70,6 @@ function DashboardPage() {
           { id: 5, icon: DoorOpen, label: "On School Today", count: summary?.onSchoolToday, colorClass: "text-primary" },
           { id: 6, icon: UserX, label: "Absent Today", count: summary?.absentToday, colorClass: "text-danger" },
           { id: 7, icon: ClipboardX, label: "Incomplete Attendance", count: summary?.incompleteAttendance, colorClass: "text-warning" },
-          { id: 8, icon: Percent, label: "Attendance Rate", count: formatAttendanceRate(summary?.attendanceRate), colorClass: "text-primary" },
         ]
       : [
           { id: 1, icon: Users, label: "My Students", count: summary?.myStudents, colorClass: "text-primary" },
@@ -82,7 +77,6 @@ function DashboardPage() {
           { id: 3, icon: DoorOpen, label: "On School Today", count: summary?.onSchoolToday, colorClass: "text-primary" },
           { id: 4, icon: UserX, label: "Absent Today", count: summary?.absentToday, colorClass: "text-danger" },
           { id: 5, icon: ClipboardX, label: "Incomplete Attendance", count: summary?.incompleteAttendance, colorClass: "text-warning" },
-          { id: 6, icon: Percent, label: "Attendance Rate", count: formatAttendanceRate(summary?.attendanceRate), colorClass: "text-primary" },
         ];
 
   const showSectionSwitcher = role === "teacher" && (data?.mySections?.length ?? 0) > 1;

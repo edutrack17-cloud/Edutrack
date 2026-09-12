@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  timeInAttendance,
   markAttendancePresent,
   timeOutAttendance,
   closeAttendanceForSection,
@@ -272,6 +273,43 @@ function RFIDAttendancePage() {
     }
     lastTapRef.current = { rfid, atMs: nowMs };
 
+    // GUARD taps the gate scanner, not the classroom one - PATCH
+    // /api/attendance/present is TEACHER/ADMIN only on the backend
+    // (see AttendanceController.markAsPresent's @PreAuthorize), so a
+    // guard's tap has to go through POST /api/attendance (time-in)
+    // instead, falling back to time-out for a student's second gate tap
+    // of the day (leaving campus). timeInAttendance already existed in
+    // Attendanceservice.js but was never called from here - every guard
+    // tap used to go straight into the present/time-out branch below,
+    // so a student's very first tap of the day always resolved to
+    // "no-record" (present -> 404 no assignment/record, then time-out
+    // -> 404 same reason, and 404 isn't the 400 that "already-done"
+    // checks for).
+    if (role === "guard") {
+      try {
+        // POST /api/attendance (gate time-in)
+        const timedIn = await timeInAttendance(rfid);
+        setLastScan({ ...timedIn, action: "timed-in" });
+        applyAttendanceUpdate(rfid, timedIn);
+      } catch (timeInError) {
+        if (timeInError.status === 409) {
+          // AlreadyHasARecord - already tapped in once today, so this
+          // second gate tap means the student is leaving campus.
+          try {
+            // PATCH /api/attendance/time-out
+            const timedOut = await timeOutAttendance(rfid);
+            setLastScan({ ...timedOut, action: "timed-out" });
+            applyAttendanceUpdate(rfid, timedOut);
+          } catch (timeOutError) {
+            setLastScan({ action: timeOutError.status === 400 ? "already-done" : "no-record" });
+          }
+        } else {
+          setLastScan({ action: "no-record" });
+        }
+      }
+      return;
+    }
+
     try {
       // PATCH /api/attendance/present
       const markedPresent = await markAttendancePresent(rfid);
@@ -280,6 +318,14 @@ function RFIDAttendancePage() {
     } catch (presentError) {
       if (presentError.status === 404) {
         setLastScan({ action: "no-record" });
+      } else if (presentError.status === 400 && /marked absent/i.test(presentError.message || "")) {
+        // AlreadyMarkedAbsent - deliberately NOT falling through to
+        // time-out here. The backend's timeOut() only guards against an
+        // on_school status and an existing dateTimeOut, not against an
+        // "absent" status, so treating this the same as "already
+        // present" and retrying time-out would silently clock an
+        // already-absent student back in with a dateTimeOut.
+        setLastScan({ action: "already-absent" });
       } else {
         try {
           // PATCH /api/attendance/time-out
@@ -432,7 +478,22 @@ function RFIDAttendancePage() {
 
               {lastScan.action === "no-record" && (
                 <p className="mt-6 text-sm font-semibold text-gray-500">
-                  No guard tap recorded yet today
+                  {role === "guard" ? "Card not recognized" : "No guard tap recorded yet today"}
+                </p>
+              )}
+
+              {lastScan.action === "timed-in" && (
+                <>
+                  <p className="mt-6 text-sm font-semibold text-warning">Tapped In</p>
+                  <p className="text-2xl font-bold text-gray-800">
+                    {formatDisplayTime(lastScan.timeIn)}
+                  </p>
+                </>
+              )}
+
+              {lastScan.action === "already-absent" && (
+                <p className="mt-6 text-sm font-semibold text-danger">
+                  Already marked absent today
                 </p>
               )}
 

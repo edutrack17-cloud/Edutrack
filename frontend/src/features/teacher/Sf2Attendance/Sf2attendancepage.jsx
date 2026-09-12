@@ -2,16 +2,31 @@ import React, { useMemo, useState } from "react";
 import { ChevronDown, FileSpreadsheet } from "lucide-react";
 import SearchInput from "./Componetns/SearchInput";
 import Pagination from "./Componetns/Pagiantion";
-import Sf2AttendanceTable, { STATUS_STYLES } from "./Componetns/Sf2attendancetable";
+import Sf2AttendanceTable from "./Componetns/Sf2attendancetable";
 import ConfirmExportModal from "./Componetns/Confirmexportmodal";
-import { exportSf2ToExcel } from "./Componetns/Sf2exportexcel";
+import { exportSf2Report } from "./Componetns/Sf2exportexcel";
 
 // TODO: BACKEND CONNECTION
 // GET /api/grade-levels, GET /api/sections
 // Same mock lists used by the Enrollment feature - swap these for the
 // real API calls once they're ready.
+//
+// Sections now need a real numeric id (matches Section.sectionId /
+// SF2ReportRequest.sectionId on the backend) since the export endpoint
+// is GET /api/schoolform/sf2/{sectionId}?period=yyyy-MM - it exports
+// exactly one section at a time, not "All Sections" combined.
 const GRADE_LEVELS = ["Grade 4", "Grade 5", "Grade 6"];
-const SECTIONS = ["Apple", "Rose", "Jade"];
+const SECTIONS = [
+  { id: 1, name: "Apple", gradeLevel: "Grade 4" },
+  { id: 2, name: "Rose", gradeLevel: "Grade 4" },
+  { id: 3, name: "Jade", gradeLevel: "Grade 5" },
+];
+
+// A handful of nearby school years, since SF2ReportRequest.period is a
+// plain YearMonth (any year), not locked to the current one.
+function buildYearOptions(currentYear) {
+  return [currentYear - 1, currentYear, currentYear + 1];
+}
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -51,7 +66,8 @@ function SF2AttendancePage() {
   const today = new Date();
 
   const [gradeLevel, setGradeLevel] = useState("");
-  const [section, setSection] = useState("");
+  const [sectionId, setSectionId] = useState(""); // Section.sectionId, not the display name
+  const [year, setYear] = useState(today.getFullYear());
   const [monthIndex, setMonthIndex] = useState(today.getMonth());
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -59,22 +75,32 @@ function SF2AttendancePage() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   // Gate for the actual download - clicking "Export SF2 Report" now only
-  // opens this confirmation. exportSf2ToExcel (the thing that actually
+  // opens this confirmation. exportSf2Report (the thing that actually
   // triggers the browser download) only runs once the person hits
   // "Export" inside ConfirmExportModal.
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-  const year = today.getFullYear();
+  const yearOptions = buildYearOptions(today.getFullYear());
   const daysInMonth = getDaysInMonth(monthIndex, year);
   const dayNumbers = Array.from({ length: daysInMonth }, (_, index) => index + 1);
 
+  const sectionsForGradeLevel = gradeLevel
+    ? SECTIONS.filter((s) => s.gradeLevel === gradeLevel)
+    : SECTIONS;
+  const selectedSection = SECTIONS.find((s) => String(s.id) === String(sectionId)) || null;
+
+  // TODO: BACKEND CONNECTION - still missing.
+  // There's no endpoint yet for reading attendance records for on-screen
+  // display (the only SF2 endpoint the backend exposes right now is the
+  // export one, which returns a finished .xlsx file, not JSON). This
+  // page still needs something like:
+  //   GET /api/attendance/sf2?sectionId={sectionId}&period=yyyy-MM
+  // returning one row per student with a "days" map ({ 1: "present", ... })
+  // so the table below reflects real data instead of this mock.
   // Recomputed whenever the month changes, so switching months actually
   // changes how many day-columns show up (28-31 depending on month).
   const records = useMemo(() => buildMockRecords(daysInMonth), [daysInMonth]);
 
-  // Computed ONCE here, then handed to both the table (for display) and
-  // the export (for the exported workbook) - so the exported file
-  // always matches exactly what's on screen.
   const filteredRecords = records.filter((record) => {
     const matchesSearch =
       !search ||
@@ -82,12 +108,16 @@ function SF2AttendancePage() {
       record.lrn.includes(search);
 
     const matchesLevel = !gradeLevel || record.gradeLevel === gradeLevel;
-    const matchesSection = !section || record.section === section;
+    const matchesSection = !selectedSection || record.section === selectedSection.name;
 
     return matchesSearch && matchesLevel && matchesSection;
   });
 
   function handleOpenExportConfirm() {
+    if (!sectionId) {
+      setExportError("Select a section first - SF2 is exported one section at a time.");
+      return;
+    }
     setExportError("");
     setIsExportModalOpen(true);
   }
@@ -98,29 +128,17 @@ function SF2AttendancePage() {
     setExportError("");
   }
 
-  // TODO: BACKEND CONNECTION (future upgrade)
-  // Once a real GET /api/attendance/sf2/export?format=xlsx endpoint
-  // exists (e.g. rendered server-side with the official DepEd SF2
-  // template), this could just download that file directly instead.
-  // For now, exportSf2ToExcel (see Sf2exportexcel.js) builds the .xlsx
-  // client-side with ExcelJS and triggers the browser download - only
-  // called from here, after explicit confirmation.
+  // Downloads the actual DepEd-template .xlsx straight from the backend
+  // (SF2ReportController -> SF2ReportService renders it server-side).
+  // See Sf2exportexcel.js for the fetch + blob-download + error mapping.
   async function handleConfirmExport() {
     try {
       setIsExporting(true);
       setExportError("");
-      await exportSf2ToExcel({
-        gradeLevel,
-        section,
-        monthName: MONTH_NAMES[monthIndex],
-        year,
-        dayNumbers,
-        filteredRecords,
-        statusStyles: STATUS_STYLES,
-      });
+      await exportSf2Report({ sectionId, year, monthIndex });
       setIsExportModalOpen(false);
     } catch (error) {
-      console.error("SF2 Excel export failed:", error);
+      console.error("SF2 export failed:", error);
       setExportError(error?.message || "Failed to export SF2 report. Please try again.");
     } finally {
       setIsExporting(false);
@@ -149,7 +167,10 @@ function SF2AttendancePage() {
           <div className={wrapperClass}>
             <select
               value={gradeLevel}
-              onChange={(event) => setGradeLevel(event.target.value)}
+              onChange={(event) => {
+                setGradeLevel(event.target.value);
+                setSectionId(""); // previously picked section may not belong to this level anymore
+              }}
               className={selectClass}
             >
               <option value="">Grade Level</option>
@@ -164,14 +185,14 @@ function SF2AttendancePage() {
 
           <div className={wrapperClass}>
             <select
-              value={section}
-              onChange={(event) => setSection(event.target.value)}
+              value={sectionId}
+              onChange={(event) => setSectionId(event.target.value)}
               className={selectClass}
             >
               <option value="">Section</option>
-              {SECTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+              {sectionsForGradeLevel.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -192,6 +213,21 @@ function SF2AttendancePage() {
             </select>
             <ChevronDown size={16} className={iconClass} />
           </div>
+
+          <div className={wrapperClass}>
+            <select
+              value={year}
+              onChange={(event) => setYear(Number(event.target.value))}
+              className={selectClass}
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} className={iconClass} />
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -200,7 +236,9 @@ function SF2AttendancePage() {
           <button
             type="button"
             onClick={handleOpenExportConfirm}
-            className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-auto sm:text-sm"
+            disabled={!sectionId}
+            title={!sectionId ? "Select a section first" : undefined}
+            className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary sm:w-auto sm:text-sm"
           >
             <FileSpreadsheet size={15} strokeWidth={2.5} />
             Export SF2 Report
@@ -220,7 +258,7 @@ function SF2AttendancePage() {
         isExporting={isExporting}
         errorMessage={exportError}
         gradeLevel={gradeLevel}
-        section={section}
+        section={selectedSection?.name}
         monthName={MONTH_NAMES[monthIndex]}
         year={year}
         recordCount={filteredRecords.length}

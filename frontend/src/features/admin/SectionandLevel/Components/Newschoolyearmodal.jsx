@@ -10,15 +10,15 @@ import {
 
 const PREVIEW_FETCH_SIZE = 300;
 
-// Selection is always available now - the source here is always a Closed
-// (past) school year, so cloning always goes through
-// cloneSectionsAcrossSchoolYears() (client-side, per-section) rather than
-// the old server-side "close active / activate target" endpoint, which
-// couldn't be narrowed per-section. `onSelectionChange` reports the
-// current selection up to the modal on every change so handleFormSubmit
-// can read it at submit time without this component needing to know
-// anything about Formik.
-function SectionCarryOverPreview({ sourceLabel, gradeLevel, onSelectionChange }) {
+// `selectable` is only true for a Closed/Archived (past) source - cloning
+// off the currently Active source still carries every section over
+// automatically (that path clones server-side via the dedicated
+// new-school-year endpoint and can't be narrowed per-section without a
+// backend change), so this stays a plain read-only list in that case.
+// `onSelectionChange` reports the current selection up to the modal on
+// every change so handleFormSubmit can read it at submit time without
+// this component needing to know anything about Formik.
+function SectionCarryOverPreview({ sourceLabel, gradeLevel, selectable, onSelectionChange }) {
   const [previewSections, setPreviewSections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -39,7 +39,8 @@ function SectionCarryOverPreview({ sourceLabel, gradeLevel, onSelectionChange })
         if (isCancelled) return;
         const matched = response.content.filter((section) => section.schoolYear === sourceLabel);
         setPreviewSections(matched);
-        // Default to "everything selected" each time a fresh list loads,
+        // Default to "everything selected" each time a fresh list loads -
+        // matches the old (pre-selection) behavior of cloning everything
         // unless the admin deliberately unchecks something.
         setSelectedIds(matched.map((section) => section.sectionId));
         setIsLoading(false);
@@ -88,26 +89,41 @@ function SectionCarryOverPreview({ sourceLabel, gradeLevel, onSelectionChange })
     );
   }
 
-  const allSelected = selectedIds.length === previewSections.length;
+  const allSelected = selectable && selectedIds.length === previewSections.length;
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-gray-600">
-          {selectedIds.length} of {previewSections.length} section{previewSections.length === 1 ? "" : "s"} selected to copy:
+          {selectable
+            ? `${selectedIds.length} of ${previewSections.length} section${previewSections.length === 1 ? "" : "s"} selected to copy:`
+            : `${previewSections.length} section${previewSections.length === 1 ? "" : "s"} will be copied over:`}
         </p>
 
-        <button
-          type="button"
-          onClick={toggleSelectAll}
-          className="shrink-0 text-xs font-semibold text-primary hover:underline"
-        >
-          {allSelected ? "Deselect all" : "Select all"}
-        </button>
+        {selectable && (
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="shrink-0 text-xs font-semibold text-primary hover:underline"
+          >
+            {allSelected ? "Deselect all" : "Select all"}
+          </button>
+        )}
       </div>
 
       <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-2">
         {previewSections.map((section) => {
+          if (!selectable) {
+            return (
+              <span
+                key={section.sectionId}
+                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm"
+              >
+                {section.sectionName}
+              </span>
+            );
+          }
+
           const isSelected = selectedIds.includes(section.sectionId);
 
           return (
@@ -138,28 +154,22 @@ const inputClass = (hasError, textColorClass = "text-gray-700") =>
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
 const errorClass = "mt-1 text-xs text-danger";
 
-// sourceSchoolYears: Closed (past) school years only - Active is never a
-// valid source anymore (see newSchoolYearSourceOptions in
-// Sectionlevelpage.jsx). targetSchoolYears: the currently Active school
-// year(s) - normally exactly one, so this renders the same "locked, no
-// dropdown needed" treatment as the source used to get when it was the
-// only candidate. There's no more Planning-year target and no more
-// "close the source / activate the target" behavior - this modal only
-// ever copies sections, never touches a school year's status.
 function Newschoolyearmodal({
   isOpen,
   sourceSchoolYears = [],
   targetSchoolYears = [],
+  activeSchoolYears = [],
   onClose,
   onSubmit,
 }) {
   const [submitError, setSubmitError] = useState("");
   const [isBusy, setIsBusy] = useState(false);
-  // Which of the previewed sections are checked to actually be cloned -
-  // reported up from SectionCarryOverPreview via its onSelectionChange
-  // prop. Kept as plain state here (not a Formik field) since
-  // SectionCarryOverPreview owns the fetch/toggle logic and this is just
-  // where handleFormSubmit reads the result from.
+  // Which of the previewed sections (Closed/Archived-source flow only)
+  // are checked to actually be cloned - reported up from
+  // SectionCarryOverPreview via its onSelectionChange prop. Kept as plain
+  // state here (not a Formik field) since SectionCarryOverPreview owns
+  // the fetch/toggle logic and this is just where handleFormSubmit reads
+  // the result from.
   const [selectedSectionIds, setSelectedSectionIds] = useState([]);
 
   useEffect(() => {
@@ -178,6 +188,10 @@ function Newschoolyearmodal({
     return () => document.removeEventListener("keydown", handleEscapeKey);
   }, [isOpen, isBusy, onClose]);
 
+  // sourceSchoolYears contains the currently Active year(s) PLUS any
+  // Closed/Archived (past) years - see newSchoolYearSourceOptions in
+  // Sectionlevelpage.jsx. Which behavior applies (quick-start vs.
+  // clone-select) is derived below from whichever one gets picked.
   const sortedSourceYears = useMemo(
     () =>
       [...sourceSchoolYears].sort((a, b) =>
@@ -194,35 +208,49 @@ function Newschoolyearmodal({
     [targetSchoolYears]
   );
 
+  const sortedActiveYears = useMemo(
+    () =>
+      [...activeSchoolYears].sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { numeric: true })
+      ),
+    [activeSchoolYears]
+  );
+
   if (!isOpen) return null;
 
   const hasNoSourceYear = sortedSourceYears.length === 0;
+
   const isSourceLocked = sortedSourceYears.length === 1;
 
-  const hasNoTargetYear = sortedTargetYears.length === 0;
-  const isTargetLocked = sortedTargetYears.length === 1;
-  // More than one school year marked "Active" at once shouldn't happen -
-  // when it does, don't silently lock onto whichever one happens to be
-  // first. Fall back to a dropdown and flag it so it gets fixed on the
-  // School Year Management page instead.
-  const hasMultipleActiveYears = sortedTargetYears.length > 1;
+  const activeSourceYears = sortedSourceYears.filter((sy) => sy.status === "active");
+  const hasMultipleActiveYears = activeSourceYears.length > 1;
 
   const initialValues = {
     ...emptyNewSchoolYearForm,
     sourceSchoolYear: isSourceLocked ? String(sortedSourceYears[0].id) : "",
-    targetSchoolYear: isTargetLocked ? String(sortedTargetYears[0].id) : "",
   };
 
   async function handleFormSubmit(values, { setSubmitting }) {
     setSubmitError("");
     setIsBusy(true);
 
+    // Re-derive the source's status here (same lookup as isSelectedSourcePast
+    // below, in the render-prop scope) since handleFormSubmit only gets
+    // `values`, not that scope's derived variables. sectionIds is only
+    // meaningful to the Closed/Archived-source clone path (see
+    // cloneSectionsAcrossSchoolYears) - the Active-source path clones
+    // server-side and ignores it.
+    const submittedSource = sortedSourceYears.find(
+      (sy) => String(sy.id) === values.sourceSchoolYear
+    );
+    const isPastSource = submittedSource?.status === "closed" || submittedSource?.status === "archived";
+
     try {
       await onSubmit({
         sourceSchoolYearId: Number(values.sourceSchoolYear),
         targetSchoolYearId: Number(values.targetSchoolYear),
         gradeLevel: values.gradeLevel || undefined,
-        sectionIds: selectedSectionIds,
+        sectionIds: isPastSource ? selectedSectionIds : undefined,
       });
 
       onClose();
@@ -241,7 +269,7 @@ function Newschoolyearmodal({
           <div className="w-6" />
 
           <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
-            New School Year
+            Start New School Year
           </h2>
 
           <button
@@ -264,13 +292,29 @@ function Newschoolyearmodal({
             const selectedSource = sortedSourceYears.find(
               (sy) => String(sy.id) === values.sourceSchoolYear
             );
+            const isSelectedSourceActive = selectedSource?.status === "active";
+            const isSelectedSourcePast =
+              selectedSource?.status === "closed" || selectedSource?.status === "archived";
+            const isArchivedSource = selectedSource?.status === "archived";
+
+            const targetOptions = isSelectedSourcePast
+              ? [
+                  ...sortedTargetYears.map((sy) => ({ ...sy, status: "planning" })),
+                  ...sortedActiveYears.map((sy) => ({ ...sy, status: "active" })),
+                ]
+              : sortedTargetYears.map((sy) => ({ ...sy, status: "planning" }));
+
+            const selectedTarget = targetOptions.find(
+              (sy) => String(sy.id) === values.targetSchoolYear
+            );
+            const hasNoTargetOptions = targetOptions.length === 0;
 
             const isStartDisabled =
               isSubmitting ||
               hasNoSourceYear ||
-              hasNoTargetYear ||
-              hasMultipleActiveYears ||
-              selectedSectionIds.length === 0;
+              hasNoTargetOptions ||
+              (isSelectedSourceActive && hasMultipleActiveYears) ||
+              (isSelectedSourcePast && selectedSectionIds.length === 0);
 
             function handleClear() {
               resetForm();
@@ -284,11 +328,22 @@ function Newschoolyearmodal({
                       background info, not a warning, so it shouldn't
                       compete visually with the actual form fields below. */}
                   <p className="text-xs leading-snug text-gray-500">
-                    Copies sections from a past (Closed) school year into
-                    the current Active school year. Only each section's
-                    school year changes - name, grade level, and adviser
-                    stay the same. Duplicate names in the target are
-                    skipped, not overwritten.
+                    {isSelectedSourcePast ? (
+                      <>
+                        Copies sections from a past year into a Planning year
+                        or the current Active year. Only each section's
+                        school year changes - name, grade level, and adviser
+                        stay the same. Duplicate names in the target are
+                        skipped, not overwritten. The original sections stay
+                        exactly where they are.
+                      </>
+                    ) : (
+                      <>
+                        Copies sections from the current school year into a
+                        Planning year, then closes the current one and makes
+                        the new year <span className="font-semibold text-success">Active</span>.
+                      </>
+                    )}
                   </p>
 
                   <div className="flex flex-col">
@@ -306,7 +361,7 @@ function Newschoolyearmodal({
 
                     {hasNoSourceYear && (
                       <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
-                        No closed school years available to copy from yet.
+                        No school years available to copy from yet.
                       </p>
                     )}
 
@@ -327,7 +382,9 @@ function Newschoolyearmodal({
 
                             {sortedSourceYears.map((sy) => (
                               <option key={sy.id} value={sy.id} className="text-gray-700">
-                                {sy.label}
+                                {sy.label} (
+                                {sy.status === "active" ? "Active" : sy.status === "closed" ? "Closed" : "Archived"}
+                                )
                               </option>
                             ))}
                           </Field>
@@ -339,68 +396,88 @@ function Newschoolyearmodal({
                         </div>
 
                         <ErrorMessage name="sourceSchoolYear" component="p" className={errorClass} />
+
+                        {isSelectedSourcePast && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            {isArchivedSource ? "Archived year" : "Past year"} - its status won't change after cloning.
+                          </p>
+                        )}
+
+                        {isSelectedSourceActive && (
+                          <p className="mt-1 text-xs text-warning">
+                            Current Active year - it will be Closed once the new
+                            year starts.
+                          </p>
+                        )}
                       </>
+                    )}
+
+                    {hasMultipleActiveYears && (
+                      <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                        <p>
+                          {activeSourceYears.length} school years are marked "Active" at
+                          once - this shouldn't happen. Picking one of them as the
+                          source isn't safe until it's fixed: go to School Year
+                          Management and set all but one back to a different status
+                          first. A Closed or Archived year can still be picked as the
+                          source in the meantime.
+                        </p>
+                      </div>
                     )}
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="flex flex-col">
-                      <label className={labelClass}>New School Year</label>
+                      <label className={labelClass}>
+                        {isSelectedSourcePast ? "Copy Sections Into" : "New School Year"}
+                      </label>
 
-                      {isTargetLocked && !hasNoTargetYear && (
-                        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-700">
-                          <CheckCircle2 size={15} className="shrink-0 text-success" />
-                          {sortedTargetYears[0].label}
-                        </div>
-                      )}
+                      <div className="relative">
+                        <Field
+                          as="select"
+                          name="targetSchoolYear"
+                          className={`${inputClass(
+                            errors.targetSchoolYear && touched.targetSchoolYear,
+                            values.targetSchoolYear ? "text-gray-700" : "text-gray-500"
+                          )} appearance-none pr-9`}
+                        >
+                          <option value="" className="text-gray-500">
+                            Select year
+                          </option>
 
-                      {hasNoTargetYear && (
-                        <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
-                          No Active school year found.
+                          {targetOptions.map((sy) => (
+                            <option key={sy.id} value={sy.id} className="text-gray-700">
+                              {sy.label}
+                              {isSelectedSourcePast ? (sy.status === "active" ? " (Active)" : " (Planning)") : ""}
+                            </option>
+                          ))}
+                        </Field>
+
+                        <ChevronDown
+                          size={16}
+                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                        />
+                      </div>
+
+                      <ErrorMessage name="targetSchoolYear" component="p" className={errorClass} />
+
+                      {hasNoTargetOptions && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          {isSelectedSourcePast
+                            ? "No Planning or Active school year to copy into yet."
+                            : 'None marked "Planning" yet.'}
                         </p>
                       )}
 
-                      {!isTargetLocked && !hasNoTargetYear && (
-                        <>
-                          <div className="relative">
-                            <Field
-                              as="select"
-                              name="targetSchoolYear"
-                              className={`${inputClass(
-                                errors.targetSchoolYear && touched.targetSchoolYear,
-                                values.targetSchoolYear ? "text-gray-700" : "text-gray-500"
-                              )} appearance-none pr-9`}
-                            >
-                              <option value="" className="text-gray-500">
-                                Select year
-                              </option>
-
-                              {sortedTargetYears.map((sy) => (
-                                <option key={sy.id} value={sy.id} className="text-gray-700">
-                                  {sy.label}
-                                </option>
-                              ))}
-                            </Field>
-
-                            <ChevronDown
-                              size={16}
-                              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                            />
-                          </div>
-
-                          <ErrorMessage name="targetSchoolYear" component="p" className={errorClass} />
-                        </>
-                      )}
-
-                      {hasMultipleActiveYears && (
-                        <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
-                          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                          <p>
-                            {sortedTargetYears.length} school years are marked "Active" at
-                            once - this shouldn't happen. Fix it on School Year
-                            Management, then reopen this modal.
-                          </p>
-                        </div>
+                      {values.targetSchoolYear && (
+                        <p className="mt-1 text-xs text-success">
+                          {!isSelectedSourcePast
+                            ? "Will become the new Active school year."
+                            : selectedTarget?.status === "active"
+                              ? "Sections are added into the current Active school year."
+                              : 'Stays "Planning" - sections are just copied in.'}
+                        </p>
                       )}
                     </div>
 
@@ -440,6 +517,7 @@ function Newschoolyearmodal({
                   <SectionCarryOverPreview
                     sourceLabel={selectedSource?.label}
                     gradeLevel={values.gradeLevel}
+                    selectable={isSelectedSourcePast}
                     onSelectionChange={setSelectedSectionIds}
                   />
 
@@ -452,13 +530,19 @@ function Newschoolyearmodal({
                     disabled={isStartDisabled}
                     className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSubmitting ? "Cloning..." : "Clone Sections"}
+                    {isSubmitting
+                      ? isSelectedSourcePast
+                        ? "Cloning..."
+                        : "Starting..."
+                      : isSelectedSourcePast
+                        ? "Clone Sections"
+                        : "Start New School Year"}
                   </button>
 
                   <button
                     type="button"
                     onClick={handleClear}
-                    className="flex-1 cursor-pointer rounded-lg bg-danger py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                    className="flex-1 cursor-pointer rounded-lg bg-slate-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-600"
                   >
                     Clear
                   </button>
