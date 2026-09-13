@@ -151,7 +151,7 @@ function HistoryTimeline({ entries, studentStatus }) {
   );
 }
 
-function ViewStudentModal({ isOpen, onClose, student }) {
+function ViewStudentModal({ isOpen, onClose, student, role }) {
   // BACKEND NOTE: there is still no GET /api/student/{id} single-record
   // endpoint, so the Details tab below displays whatever StudentResponse
   // object is already sitting in StudentTable's local state (from the
@@ -213,6 +213,19 @@ function ViewStudentModal({ isOpen, onClose, student }) {
   const admissionTypeLabel =
     ADMISSION_TYPE_LABELS[student.admissionType] || student.admissionType;
 
+  // GET /api/student/{id}/history only allows ADMIN, or the TEACHER who
+  // currently advises this student (see getStudentHistory() in
+  // enrollmentService.js). Once a student graduates, that closes out
+  // their assignment and the teacher no longer counts as their adviser,
+  // so the request 403s - the "You're not allowed to access this
+  // feature" error under the History tab isn't a bug the teacher can do
+  // anything about, it's the backend correctly denying access every
+  // time. Rather than let a teacher open a tab that's guaranteed to
+  // fail for a graduated student, hide it up front for them. Admin
+  // keeps seeing History regardless of status, and a teacher still sees
+  // it for dropped/transferred_out students.
+  const canViewHistory = role !== "teacher" || student.studentStatus !== "graduated";
+
   const tabClass = (tab) =>
     `flex-1 cursor-pointer border-b-2 py-2.5 text-center text-sm font-semibold transition-colors ${
       activeTab === tab
@@ -237,9 +250,11 @@ function ViewStudentModal({ isOpen, onClose, student }) {
           <button type="button" onClick={() => setActiveTab("details")} className={tabClass("details")}>
             Details
           </button>
-          <button type="button" onClick={() => setActiveTab("history")} className={tabClass("history")}>
-            History
-          </button>
+          {canViewHistory && (
+            <button type="button" onClick={() => setActiveTab("history")} className={tabClass("history")}>
+              History
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
@@ -302,7 +317,20 @@ function ViewStudentModal({ isOpen, onClose, student }) {
               )}
 
               {!isLoadingHistory && !historyError && history !== null && (
-                <HistoryTimeline entries={history} studentStatus={student.studentStatus} />
+                <HistoryTimeline
+                  // Grade-level promotion is a bulk/admin-driven action
+                  // (the separate Promote Student page) - a teacher
+                  // isn't the one who initiates it and doesn't need
+                  // visibility into it here, so "Promoted" rows are
+                  // hidden from a teacher's History tab. Admin still
+                  // sees every entry, unfiltered.
+                  entries={
+                    role === "teacher"
+                      ? history.filter((entry) => entry.exitType !== "promoted")
+                      : history
+                  }
+                  studentStatus={student.studentStatus}
+                />
               )}
             </>
           )}

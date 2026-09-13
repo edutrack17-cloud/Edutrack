@@ -31,7 +31,7 @@ const TEACHER_NAV_ITEMS = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { name: "Attendance", path: "/attendance", icon: ClipboardCheck },
   { name: "SF2 Attendance", path: "/sf2-attendance", icon: FileSpreadsheet },
-  { name: "Enrollment", path: "/enrollment", icon: UserPlus },
+  { name: "Student Management", path: "/enrollment", icon: UserPlus },
   { name: "Promote Student", path: "/promote-student", icon: GraduationCap },
 ];
 
@@ -40,7 +40,7 @@ const ADMIN_NAV_ITEMS = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { name: "Attendance", path: "/attendance", icon: ClipboardCheck },
   { name: "SF2 Attendance", path: "/sf2-attendance", icon: FileSpreadsheet },
-  { name: "Enrollment", path: "/enrollment", icon: UserPlus },
+  { name: "Student Management", path: "/enrollment", icon: UserPlus },
   { name: "Promote Student", path: "/promote-student", icon: GraduationCap },
   { name: "School Year", path: "/school-year", icon: CalendarRange },
   { name: "Section & Level", path: "/section-level", icon: Layers },

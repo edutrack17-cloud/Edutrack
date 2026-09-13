@@ -77,6 +77,12 @@ function Sectionlevelpage() {
   const [schoolYearFilter, setSchoolYearFilter] = useState("");
   const [allSchoolYears, setAllSchoolYears] = useState([]);
 
+  // Teacher filter - stores the selected adviser's id (string, same
+  // convention as schoolYearFilter) and reuses the `advisers` list that's
+  // already loaded for the Add/Edit Section modal's Adviser field, so no
+  // extra fetch is needed just for this dropdown.
+  const [teacherFilter, setTeacherFilter] = useState("");
+
   // BUG FIX: loadSections() used to depend on `allSchoolYears` directly
   // (the whole array) so it could react once the id->label list caught up
   // after a filter was picked before that list was ready. But
@@ -99,6 +105,17 @@ function Sectionlevelpage() {
     if (!schoolYearFilter) return null;
     return allSchoolYears.find((sy) => String(sy.id) === schoolYearFilter)?.label ?? null;
   }, [schoolYearFilter, allSchoolYears]);
+
+  // GET /api/section already accepts a `fullName` param (SectionSpecification
+  // .hasAdviserName) - that's the same param the free-text search box's
+  // "adviser" half sends. So unlike the School Year filter (no backend
+  // param at all), this dropdown can just resolve the picked id to that
+  // adviser's exact name and pass it straight through as a normal AND'd
+  // filter - no client-side fetch-all-and-match workaround needed.
+  const selectedTeacherName = useMemo(() => {
+    if (!teacherFilter) return null;
+    return advisers.find((adviser) => String(adviser.id) === teacherFilter)?.name ?? null;
+  }, [teacherFilter, advisers]);
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -143,44 +160,66 @@ function Sectionlevelpage() {
         let combined;
 
         if (debouncedSearch) {
-          // Fetch section-name matches and adviser-name matches in parallel
-          // and merge them, instead of only falling back to adviser-name
-          // matches when section-name matches are completely empty. The old
-          // "if zero section-name hits, try adviser" approach silently hid
-          // real adviser matches any time the term also happened to match
-          // any section name at all.
-          const [bySectionName, byAdviserName] = await Promise.all([
-            getSections({
+          if (selectedTeacherName) {
+            // A specific teacher is already pinned via the dropdown, so
+            // the free-text box's "OR match on adviser name" behavior
+            // doesn't apply anymore - `fullName` is spoken for by the
+            // selected teacher instead. The search term just narrows
+            // that teacher's sections by name, and since sectionName +
+            // fullName are AND'd on the backend already, one fetch
+            // covers it - no parallel adviser-name fetch to merge in.
+            const response = await getSections({
               sectionSearch: debouncedSearch,
+              search: selectedTeacherName,
               gradeLevel,
               status,
               page: 0,
               size: SEARCH_FETCH_SIZE,
               signal: controller.signal,
-            }),
-            getSections({
-              search: debouncedSearch,
-              gradeLevel,
-              status,
-              page: 0,
-              size: SEARCH_FETCH_SIZE,
-              signal: controller.signal,
-            }),
-          ]);
+            });
+            combined = response.content;
+          } else {
+            // Fetch section-name matches and adviser-name matches in parallel
+            // and merge them, instead of only falling back to adviser-name
+            // matches when section-name matches are completely empty. The old
+            // "if zero section-name hits, try adviser" approach silently hid
+            // real adviser matches any time the term also happened to match
+            // any section name at all.
+            const [bySectionName, byAdviserName] = await Promise.all([
+              getSections({
+                sectionSearch: debouncedSearch,
+                gradeLevel,
+                status,
+                page: 0,
+                size: SEARCH_FETCH_SIZE,
+                signal: controller.signal,
+              }),
+              getSections({
+                search: debouncedSearch,
+                gradeLevel,
+                status,
+                page: 0,
+                size: SEARCH_FETCH_SIZE,
+                signal: controller.signal,
+              }),
+            ]);
 
-          const mergedById = new Map();
-          [...bySectionName.content, ...byAdviserName.content].forEach((section) => {
-            mergedById.set(section.sectionId, section);
-          });
+            const mergedById = new Map();
+            [...bySectionName.content, ...byAdviserName.content].forEach((section) => {
+              mergedById.set(section.sectionId, section);
+            });
 
-          combined = Array.from(mergedById.values());
+            combined = Array.from(mergedById.values());
+          }
         } else {
-          // No search term - the School Year filter alone is why we're
-          // here, so one fetch (still narrowed by whatever the backend
-          // supports: gradeLevel/status) is enough to filter locally.
+          // No search term - the School Year and/or Teacher filter is why
+          // we're here, so one fetch (narrowed by whatever the backend
+          // supports: gradeLevel/status/fullName) is enough to filter
+          // locally for school year.
           const response = await getSections({
             gradeLevel,
             status,
+            search: selectedTeacherName || undefined,
             page: 0,
             size: SCHOOL_YEAR_FETCH_SIZE,
             signal: controller.signal,
@@ -217,6 +256,7 @@ function Sectionlevelpage() {
         const response = await getSections({
           gradeLevel,
           status,
+          search: selectedTeacherName || undefined,
           page: currentPage - 1,
           size: PAGE_SIZE,
           signal: controller.signal,
@@ -252,13 +292,23 @@ function Sectionlevelpage() {
 
   useEffect(() => {
     loadSections();
-    // selectedSchoolYearLabel (not allSchoolYears) is the dependency here
-    // on purpose - see the BUG FIX comment where it's derived above. It
-    // still re-runs this effect if a filter is picked before the id->label
-    // list has caught up (the label goes from unresolved to resolved),
-    // but it does NOT re-run just because the dropdown was reopened and
-    // refetched the same list of years into a new array reference.
-  }, [debouncedSearch, gradeLevel, status, schoolYearFilter, selectedSchoolYearLabel, currentPage]);
+    // selectedSchoolYearLabel/selectedTeacherName (not allSchoolYears/
+    // advisers) are the dependencies here on purpose - see the BUG FIX
+    // comment where selectedSchoolYearLabel is derived above; the same
+    // reasoning applies to selectedTeacherName. Both still re-run this
+    // effect if a filter is picked before their id->label/name list has
+    // caught up, but do NOT re-run just because a dropdown was reopened
+    // and refetched the same underlying list into a new array reference.
+  }, [
+    debouncedSearch,
+    gradeLevel,
+    status,
+    schoolYearFilter,
+    selectedSchoolYearLabel,
+    teacherFilter,
+    selectedTeacherName,
+    currentPage,
+  ]);
 
   // Hits GET /api/school-year for each status this page needs: active (the
   // section form's school-year field, the "target" list alongside
@@ -370,6 +420,11 @@ function Sectionlevelpage() {
 
   function handleSchoolYearFilterChange(event) {
     setSchoolYearFilter(event.target.value);
+    setCurrentPage(1);
+  }
+
+  function handleTeacherFilterChange(event) {
+    setTeacherFilter(event.target.value);
     setCurrentPage(1);
   }
 
@@ -570,10 +625,14 @@ function Sectionlevelpage() {
             status={status}
             schoolYear={schoolYearFilter}
             schoolYearOptions={allSchoolYears}
+            teacher={teacherFilter}
+            teacherOptions={advisers}
             onGradeLevelChange={handleGradeLevelChange}
             onStatusChange={handleStatusChange}
             onSchoolYearChange={handleSchoolYearFilterChange}
             onSchoolYearDropdownOpen={loadAllSchoolYears}
+            onTeacherChange={handleTeacherFilterChange}
+            onTeacherDropdownOpen={loadAdvisers}
           />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">

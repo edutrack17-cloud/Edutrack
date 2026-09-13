@@ -321,6 +321,7 @@ function EnrollmentPage() {
               onChanged={loadStudents}
               onRefreshSections={loadSections}
               showToast={showToast}
+              role={role}
             />
             <Pagination
               currentPage={currentPage}

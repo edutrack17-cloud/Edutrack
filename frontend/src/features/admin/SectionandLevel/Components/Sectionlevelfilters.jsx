@@ -26,6 +26,10 @@ const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w
 // Grade Level/Status too.
 const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-[8.5rem] md:w-[8.5rem]";
 
+// Teacher names tend to run longer than a school year label, so this gets
+// its own (wider) width too, same reasoning as schoolYearWidthClass above.
+const teacherWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
+
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
     if (!isOpen) return;
@@ -124,15 +128,24 @@ function Sectionlevelfilters({
   status,
   schoolYear,
   schoolYearOptions,
+  teacher,
+  teacherOptions,
   onGradeLevelChange,
   onStatusChange,
   onSchoolYearChange,
   onSchoolYearDropdownOpen,
+  onTeacherChange,
+  onTeacherDropdownOpen,
 }) {
   // School Year filter is optional - only rendered once a page wires up
   // schoolYearOptions + onSchoolYearChange, so this component stays a
   // drop-in for any existing callers that haven't added that prop yet.
   const showSchoolYearFilter = Array.isArray(schoolYearOptions) && !!onSchoolYearChange;
+
+  // Same opt-in pattern for the Teacher filter, so any existing caller
+  // that hasn't wired up teacherOptions + onTeacherChange still gets the
+  // component exactly as it worked before this filter existed.
+  const showTeacherFilter = Array.isArray(teacherOptions) && !!onTeacherChange;
 
   const schoolYearMenuOptions = showSchoolYearFilter
     ? [
@@ -140,6 +153,20 @@ function Sectionlevelfilters({
         ...schoolYearOptions.map((sy) => ({
           value: String(sy.id),
           label: sy.label,
+          textClass: "text-gray-700",
+        })),
+      ]
+    : [];
+
+  // teacherOptions is expected to be the same { id, name } shape already
+  // returned by getTeachers() / used by the Add/Edit Section modal's
+  // Adviser field - no separate fetch needed just for this filter.
+  const teacherMenuOptions = showTeacherFilter
+    ? [
+        { value: "", label: "All Teachers", textClass: "text-gray-700" },
+        ...teacherOptions.map((t) => ({
+          value: String(t.id),
+          label: t.name,
           textClass: "text-gray-700",
         })),
       ]
@@ -169,6 +196,17 @@ function Sectionlevelfilters({
           ariaLabel="Filter by school year"
           onOpen={onSchoolYearDropdownOpen}
           widthClass={schoolYearWidthClass}
+        />
+      )}
+
+      {showTeacherFilter && (
+        <FilterDropdown
+          options={teacherMenuOptions}
+          value={teacher}
+          onChange={onTeacherChange}
+          ariaLabel="Filter by teacher"
+          onOpen={onTeacherDropdownOpen}
+          widthClass={teacherWidthClass}
         />
       )}
     </div>

@@ -441,7 +441,7 @@ function Sectionformmodal({
                           {mode === "edit"
                             ? initialData?.schoolYear
                               ? `Keep current (${initialData.schoolYear})`
-                              : "Keep current school year"
+                              : "Select school year"
                             : "Select school year"}
                         </option>
 
@@ -486,7 +486,7 @@ function Sectionformmodal({
                         mode === "edit"
                           ? initialData?.adviser
                             ? `Keep current (${initialData.adviser})`
-                            : "Keep current adviser"
+                            : "Select adviser"
                           : "Select adviser"
                       }
                       hasError={

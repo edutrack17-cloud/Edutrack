@@ -126,7 +126,7 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onTrans
 // GET /api/student - this component no longer owns mock data or does
 // client-side search/level/section/status filtering, since those
 // filters are applied server-side via enrollmentService.getStudents().
-function StudentTable({ students = [], sections = [], onChanged, onRefreshSections, showToast }) {
+function StudentTable({ students = [], sections = [], onChanged, onRefreshSections, showToast, role }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
@@ -434,6 +434,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
         isOpen={viewingStudent !== null}
         onClose={() => setViewingStudent(null)}
         student={viewingStudent}
+        role={role}
       />
 
       <EditStudentModal

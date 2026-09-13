@@ -10,7 +10,7 @@ const pageTitles = {
   "/dashboard": "Dashboard",
   "/attendance": "Attendance",
   "/sf2-attendance": "SF2 Attendance",
-  "/enrollment": "Enrollment",
+  "/enrollment": "Student Management",
   "/promote-student": "Promote Student",
   "/school-year": "School Year",
   "/section-level": "Section & Level",

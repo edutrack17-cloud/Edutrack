@@ -11,7 +11,7 @@ export function getSectionStatusColorClass(status) {
 }
 
 function formatGradeLevel(gradeLevel) {
-  if (!gradeLevel) return "—";
+  if (!gradeLevel) return "";
   return gradeLevel
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -90,10 +90,10 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
               </td>
               <td className={tdClass}>{formatGradeLevel(section.gradeLevel)}</td>
               <td className={tdClass} title={section.schoolYear || undefined}>
-                {section.schoolYear || "—"}
+                {section.schoolYear || ""}
               </td>
               <td className={tdClass} title={section.adviser || undefined}>
-                {section.adviser || "—"}
+                {section.adviser || ""}
               </td>
               <td className={tdClass}>
                 <span className={`text-sm font-semibold ${getSectionStatusColorClass(section.sectionStatus)}`}>

@@ -53,10 +53,16 @@ function mapLogEntry(entry) {
 // GET /api/activity-log?page&size&sort&logHeader
 // - path is singular "activity-log" to match @RequestMapping("api/activity-log")
 //   on ActivityLogController - NOT "activity-logs".
-// - `logHeader` (not `search`) is the only filter param the backend accepts;
-//   ActivityLogSpecification.hasHeader() does an exact match against it, so
-//   this is meant to be fed exact values (see Activitylogheaderfilter.jsx),
-//   not arbitrary free text.
+// - `logHeader` (not `search`) is the only filter param the backend accepts.
+//   ActivityLogSpecification.hasHeader() builds a SQL LIKE predicate
+//   (criteriaBuilder.like(...), not .equal()) against it - NOT a true exact
+//   match. It behaves like one today only because every value fed in comes
+//   from Activitylogheaderfilter.jsx's dropdown options, which are plain
+//   literals with no `%`/`_` wildcard characters. Still meant to be fed
+//   exact values, not arbitrary free text - just don't assume the backend
+//   would safely handle a value containing `%` or `_` literally, since
+//   those would be interpreted as SQL wildcards unless/until the backend
+//   switches this to .equal().
 // - `sort=createdAt,desc` is passed explicitly because Pageable has no
 //   default ordering - without it, "newest first" isn't guaranteed.
 // - Requires an ADMIN-role session (@PreAuthorize("hasRole('ADMIN')") on the
