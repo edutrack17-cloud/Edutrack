@@ -32,6 +32,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.format.TextStyle;
 import java.util.*;
 
@@ -76,14 +77,13 @@ public class SF2ReportService {
         List<StudentSectionAssignment> roster = assignmentRepository
                 .findActiveDuringPeriod(section.getSectionId(), periodStart, periodEnd);
 
-        List<LocalDate> schoolDays = attendanceRepository
-                .findDistinctAttendanceDatesForSection(section.getSectionId(), periodStart, periodEnd);
-
-        if (schoolDays.size() > FIRST_DAY_COLUMN + 32) { // sanity guard, template has room to ~AL
+        List<LocalDate> schoolDays = weekdaysInMonth(request.period());
+        if (schoolDays.size() > 31) {
             throw new SF2CapacityExceeded("day columns", schoolDays.size());
         }
 
-        Map<Long, Map<LocalDate, AttendanceStatus>> attendanceByAssignment = loadAttendance(roster, periodStart, periodEnd);
+        Map<Long, Map<LocalDate, AttendanceStatus>> attendanceByAssignment =
+                loadAttendance(roster, periodStart, periodEnd);
 
         List<StudentSectionAssignment> maleRoster = filterAndSort(roster, Sex.Male);
         List<StudentSectionAssignment> femaleRoster = filterAndSort(roster, Sex.Female);
@@ -117,6 +117,19 @@ public class SF2ReportService {
         }
     }
 
+    private List<LocalDate> weekdaysInMonth(YearMonth period) {
+        List<LocalDate> days = new ArrayList<>();
+        LocalDate date = period.atDay(1);
+        LocalDate end = period.atEndOfMonth();
+        while (!date.isAfter(end)) {
+            if (date.getDayOfWeek() != DayOfWeek.SATURDAY && date.getDayOfWeek() != DayOfWeek.SUNDAY) {
+                days.add(date);
+            }
+            date = date.plusDays(1);
+        }
+        return days;
+    }
+
     private Map<Long, Map<LocalDate, AttendanceStatus>> loadAttendance(
             List<StudentSectionAssignment> roster, LocalDate periodStart, LocalDate periodEnd) {
 
@@ -142,12 +155,15 @@ public class SF2ReportService {
                 .toList();
     }
 
-    private void writeHeader(Sheet sheet, Section section, java.time.YearMonth period, int schoolDayCount) {
+    private void writeHeader(Sheet sheet, Section section, YearMonth period, int schoolDayCount) {
+        String monthLabel = period.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH).toUpperCase();
         setCell(sheet, "M3", section.getSchoolYear().getSchoolYearName());
-        setCell(sheet, "AA3", period.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH).toUpperCase());
+        setCell(sheet, "AA3", monthLabel);
         setCell(sheet, "AA4", gradeLevelLabel(section.getGradeLevel()));
         setCell(sheet, "AM4", section.getSectionName());
         setCell(sheet, "AW4", schoolDayCount);
+        setCell(sheet, "AM63", "Month :              " + monthLabel);
+        setCell(sheet, "AP63", "No. of Days of Classes: " + schoolDayCount);
     }
 
     private void writeDayHeaders(Sheet sheet, List<LocalDate> schoolDays) {
@@ -173,9 +189,9 @@ public class SF2ReportService {
                     .getOrDefault(assignment.getAssignmentId(), Map.of());
 
             for (int i = 0; i < schoolDays.size(); i++) {
-                if (byDate.get(schoolDays.get(i)) == AttendanceStatus.absent) {
-                    setCell(sheet, row, FIRST_DAY_COLUMN + i, "X");
-                }
+                AttendanceStatus status = byDate.get(schoolDays.get(i));
+                String mark = (status == AttendanceStatus.absent) ? "A" : "P";
+                setCell(sheet, row, FIRST_DAY_COLUMN + i, mark);
             }
             row++;
         }

@@ -38,7 +38,7 @@ public class Section {
     private SectionStatus sectionStatus = SectionStatus.active;
 
     @ManyToOne
-    @JoinColumn(name = "adviser_id", nullable = false)
+    @JoinColumn(name = "adviser_id")
     private User user;
 
     public int getSectionId() {

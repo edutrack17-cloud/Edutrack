@@ -26,7 +26,9 @@ import com.edutrack.user.exception.UserNotFoundException;
 import com.edutrack.user.repository.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -104,7 +106,12 @@ public class SectionService {
                 .and(SectionSpecification.hasGradeLevel(gradeLevel))
                 .and(SectionSpecification.hasStatus(sectionStatus))
                 .and(SectionSpecification.hasSectionName(sectionName));
-        return sectionRepository.findAll(filters ,pageable).map(sectionMapper::toResponseDTO);
+
+        Pageable sortedPageable = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(Sort.Direction.DESC, "sectionId"));
+
+        return sectionRepository.findAll(filters, sortedPageable).map(sectionMapper::toResponseDTO);
     }
 
     //READ BY ADVISER
@@ -272,7 +279,7 @@ public class SectionService {
                     Section newSection = new Section();
                     newSection.setSectionName(oldSection.getSectionName());
                     newSection.setGradeLevel(oldSection.getGradeLevel());
-                    newSection.setUser(oldSection.getUser());
+                    newSection.setUser(null);
                     newSection.setSchoolYear(targetSchoolYear);
                     newSection.setSectionStatus(SectionStatus.active);
                     return newSection;
