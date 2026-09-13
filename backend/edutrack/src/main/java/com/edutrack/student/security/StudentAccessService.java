@@ -23,9 +23,17 @@ public class StudentAccessService {
 
     public boolean isAdviserOfStudent(Long studentId) {
         Long currentUserId = SecurityUtils.getCurrentUserId();
-
         return studentSectionAssignmentRepository
                 .findByStudent_StudentIdAndLeftAtIsNull(studentId)
+                .map(a -> a.getSection().getUser().getUserId())
+                .map(currentUserId::equals)
+                .orElse(false);
+    }
+
+    public boolean hasAdvisedStudent(Long studentId) {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        return studentSectionAssignmentRepository
+                .findFirstByStudent_StudentIdOrderByAssignmentIdDesc(studentId)
                 .map(a -> a.getSection().getUser().getUserId())
                 .map(currentUserId::equals)
                 .orElse(false);

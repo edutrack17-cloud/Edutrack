@@ -49,4 +49,6 @@ public interface StudentSectionAssignmentRepository
     long countBySectionAndLeftAtIsNull(Section section);
 
     Long student(Student student);
+
+    Optional<StudentSectionAssignment> findFirstByStudent_StudentIdOrderByAssignmentIdDesc(Long studentId);
 }

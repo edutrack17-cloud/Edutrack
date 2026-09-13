@@ -99,7 +99,7 @@ public class DashboardService {
 
         List<Section> mySections = sectionRepository.findByUser_UserIdAndSchoolYear(teacherUserId, currentSchoolYear);
         if (mySections.isEmpty()) {
-            throw new NoSectionAssignedException(teacherUserId);
+            return emptyTeacherDashboard();
         }
 
         Section selectedSection = sectionId != null
@@ -136,6 +136,11 @@ public class DashboardService {
                 .toList();
 
         return new TeacherDashboardResponse(summary, overview, todayAttendance, sectionOptions, selectedSection.getSectionId());
+    }
+
+    private TeacherDashboardResponse emptyTeacherDashboard() {
+        TeacherDashboardSummaryResponse summary = new TeacherDashboardSummaryResponse(0, 0, 0, 0, 0.0, 0);
+        return new TeacherDashboardResponse(summary, List.of(), List.of(), List.of(), null);
     }
 
     private SchoolYear getCurrentSchoolYear() {

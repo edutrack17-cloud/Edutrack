@@ -45,7 +45,7 @@ public class StudentController {
     }
 
     //GET STUDENT HISTORY
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.hasAdvisedStudent(#studentId))")
     @GetMapping("{studentId}/history")
     public ResponseEntity<List<StudentSectionAssignmentHistoryResponse>> getStudentHistory(@PathVariable Long studentId){
         return ResponseEntity.ok(studentService.getStudentHistory(studentId));

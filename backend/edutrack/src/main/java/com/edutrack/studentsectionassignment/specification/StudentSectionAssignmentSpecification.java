@@ -183,20 +183,13 @@ public class StudentSectionAssignmentSpecification {
     }
 
     // FILTER BY ADVISER
-    public static Specification<StudentSectionAssignment> hasAdviserId(
-            Long adviserId
-    ) {
+    // StudentSectionAssignmentSpecification.java — revert to matching the rest of the class
+    public static Specification<StudentSectionAssignment> hasAdviserId(Long adviserId) {
         return (root, query, criteriaBuilder) -> {
             if (adviserId == null) {
                 return criteriaBuilder.conjunction();
             }
-
-            return criteriaBuilder.equal(
-                    root.get("section")
-                            .get("user")
-                            .get("userId"),
-                    adviserId
-            );
+            return criteriaBuilder.equal(root.get("section").get("user").get("userId"), adviserId);
         };
     }
 }
