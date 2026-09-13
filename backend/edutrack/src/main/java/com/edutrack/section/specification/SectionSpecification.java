@@ -85,4 +85,12 @@ public class SectionSpecification {
             return criteriaBuilder.equal(root.get("schoolYear").get("schoolYearStatus"), SchoolYearStatus.active);
         };
     }
+
+    // SectionSpecification.java
+    public static Specification<Section> hasAdviserId(Long userId) {
+        return (root, query, criteriaBuilder) -> {
+            if (userId == null) return criteriaBuilder.conjunction();
+            return criteriaBuilder.equal(root.get("user").get("userId"), userId);
+        };
+    }
 }

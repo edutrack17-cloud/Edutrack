@@ -200,15 +200,15 @@ public class StudentService {
     }
 
     //READ
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     public Page<StudentResponse> getStudents(GradeLevel gradeLevel, String sectionName, StudentStatus studentStatus,
-                                             String search, Pageable pageable, CustomUserDetails principal){
+                                             String search, Long schoolYearId, Pageable pageable, CustomUserDetails principal){
 
         Specification<StudentSectionAssignment> filters = Specification
                 .where(StudentSectionAssignmentSpecification.isLatestAssignment())
                 .and(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
                 .and(StudentSectionAssignmentSpecification.hasSection(sectionName))
                 .and(StudentSectionAssignmentSpecification.hasStudentStatus(studentStatus))
+                .and(StudentSectionAssignmentSpecification.hasSchoolYear(schoolYearId))
                 .and(StudentSectionAssignmentSpecification.matchesSearch(search));
 
         if (principal.getUser().getUserRole() == UserRole.teacher){

@@ -192,4 +192,18 @@ public class StudentSectionAssignmentSpecification {
             return criteriaBuilder.equal(root.get("section").get("user").get("userId"), adviserId);
         };
     }
+
+    // FILTER BY SCHOOL YEAR
+    public static Specification<StudentSectionAssignment> hasSchoolYear(Long schoolYearId) {
+        return (root, query, criteriaBuilder) -> {
+            if (schoolYearId == null) {
+                return criteriaBuilder.conjunction();
+            }
+
+            return criteriaBuilder.equal(
+                    root.get("section").get("schoolYear").get("schoolYearId"),
+                    schoolYearId
+            );
+        };
+    }
 }

@@ -116,7 +116,12 @@ public class SectionService {
 
     //READ BY ADVISER
     public List<SectionResponse> readSectionByAdviser(Long userId){
-        List<Section> listOfSections = sectionRepository.findAllByUser_UserId(userId);
+        Specification<Section> filters = Specification
+                .where(SectionSpecification.hasAdviserId(userId))
+                .and(SectionSpecification.hasStatus(SectionStatus.active))
+                .and(SectionSpecification.hasSchoolYearStatus());
+
+        List<Section> listOfSections = sectionRepository.findAll(filters);
 
         if (listOfSections.isEmpty()){
             throw new AdvisorySectionNotFound();

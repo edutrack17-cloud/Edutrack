@@ -228,7 +228,7 @@ class StudentServiceTest {
             StudentResponse mapped = mock(StudentResponse.class);
             when(studentMapper.toStudentResponseDTO(student, section)).thenReturn(mapped);
 
-            Page<StudentResponse> result = studentService.getStudents(null, null, null, null, pageable, principal);
+            Page<StudentResponse> result = studentService.getStudents(null, null, null, null, 1, pageable, principal);
 
             assertThat(result.getContent()).containsExactly(mapped);
         }

@@ -57,7 +57,7 @@ public class SectionController {
     }
 
     //SECTION DROPDOWN
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("dropdown")
     public ResponseEntity<List<SectionResponse>> sectionDropdown(@RequestParam(required = false) GradeLevel gradeLevel){
         return ResponseEntity.ok(sectionService.sectionDropDown(gradeLevel));
