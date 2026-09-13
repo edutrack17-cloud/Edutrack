@@ -292,6 +292,7 @@ public class SectionService {
                 .toList();
 
         try {
+            targetSchoolYear.setSchoolYearStatus(SchoolYearStatus.active);
             List<Section> savedSections = sectionRepository.saveAll(newSections);
             return savedSections.stream()
                     .map(sectionMapper::toResponseDTO)

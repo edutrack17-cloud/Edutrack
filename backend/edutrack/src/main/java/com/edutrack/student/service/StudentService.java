@@ -201,7 +201,8 @@ public class StudentService {
 
     //READ
     public Page<StudentResponse> getStudents(GradeLevel gradeLevel, String sectionName, StudentStatus studentStatus,
-                                             String search, Long schoolYearId, Pageable pageable, CustomUserDetails principal){
+                                             String search, Long schoolYearId, Long adviserId,
+                                             Pageable pageable, CustomUserDetails principal){
 
         Specification<StudentSectionAssignment> filters = Specification
                 .where(StudentSectionAssignmentSpecification.isLatestAssignment())
@@ -211,9 +212,9 @@ public class StudentService {
                 .and(StudentSectionAssignmentSpecification.hasSchoolYear(schoolYearId))
                 .and(StudentSectionAssignmentSpecification.matchesSearch(search));
 
-        if (principal.getUser().getUserRole() == UserRole.teacher){
-            filters = filters.and(StudentSectionAssignmentSpecification.hasAdviserId(principal.getUser().getUserId()));
-        }
+        filters = principal.getUser().getUserRole() == UserRole.teacher
+                ? filters.and(StudentSectionAssignmentSpecification.hasAdviserId(principal.getUser().getUserId()))
+                : filters.and(StudentSectionAssignmentSpecification.hasAdviserId(adviserId));
 
         return studentSectionAssignmentRepository
                 .findAll(filters, pageable)

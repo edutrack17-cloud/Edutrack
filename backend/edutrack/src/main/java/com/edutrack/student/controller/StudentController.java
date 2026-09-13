@@ -59,6 +59,7 @@ public class StudentController {
             @RequestParam(required = false) String sectionName,
             @RequestParam(required = false) StudentStatus studentStatus,
             @RequestParam(required = false) Long schoolYearId,
+            @RequestParam(required = false) Long adviserId,
             @RequestParam(required = false) String search,
             Pageable pageable,
             @AuthenticationPrincipal CustomUserDetails principal) {
@@ -70,6 +71,7 @@ public class StudentController {
                         studentStatus,
                         search,
                         schoolYearId,
+                        adviserId,
                         pageable,
                         principal
                 ));
