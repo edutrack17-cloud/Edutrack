@@ -6,6 +6,21 @@ const MOBILE_REGEX = /^09\d{9}$/;
 
 const LRN_REGEX = /^\d{12}$/;
 
+// Minimum age per grade level - was previously a flat "9 years old" for
+// ANY selected Level, which meant a 9-year-old could be entered under
+// Grade 5 or Grade 6 too, not just Grade 4. Exported so StudentForm.jsx
+// can point the Birthdate calendar's own `max` bound at the SAME numbers
+// (per selected Level) instead of the two ever drifting apart.
+export const MIN_AGE_BY_LEVEL = {
+  Grade_4: 9,
+  Grade_5: 10,
+  Grade_6: 11,
+};
+
+function formatLevel(level) {
+  return level ? level.replace("_", " ") : "Grade 4";
+}
+
 function calculateAge(birthdateValue) {
   const today = new Date();
   const birth = new Date(birthdateValue);
@@ -93,22 +108,31 @@ const enrollSchema = Yup.object({
     .max(new Date(), "Birthdate can't be in the future")
     .test(
       "min-age",
-      "Student must be at least 9 years old to enroll",
-      (value) => {
+      "Student is too young for the selected grade level",
+      function (value) {
         if (!value) return false;
 
-        return calculateAge(value) >= 9;
-      }
-    )
-    .test(
-      "max-age",
-      "Student must be under 19 years old to enroll",
-      (value) => {
-        if (!value) return false;
+        // "this.parent" is the rest of the object this field lives in
+        // (Yup's way of reading a sibling field from inside a .test()) -
+        // falls back to Grade 4's bracket (the youngest) if Level hasn't
+        // been picked yet, same fallback StudentForm's calendar bound uses.
+        const level = this.parent.level;
+        const minAge = MIN_AGE_BY_LEVEL[level] ?? MIN_AGE_BY_LEVEL.Grade_4;
 
-        return calculateAge(value) < 19;
+        if (calculateAge(value) >= minAge) return true;
+
+        return this.createError({
+          message: `Student must be at least ${minAge} years old for ${formatLevel(level)}`,
+        });
       }
     ),
+    // NOTE: no upper "max-age"/under-19 test here (removed). Grade 5/6
+    // elementary sections can genuinely include overage/older learners
+    // (returning or transferred-in students), so birthdate is only
+    // bounded by "can't be in the future" (the .max() above) and the
+    // per-level minimum age (the "min-age" test above) - there's no
+    // grade-level ceiling on how old a student is allowed to be, and no
+    // separate plausibility floor either.
 
 
   guardian: Yup.string()

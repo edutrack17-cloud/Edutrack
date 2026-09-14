@@ -204,37 +204,19 @@ function Sectionformmodal({
   }, [isOpen, isBusy, onClose]);
 
   // Keep school years in a predictable (ascending) order instead of
-  // whatever order the API happens to return. In edit mode we also drop
-  // the section's own current school year from the list: the "Keep
-  // current (...)" placeholder option already covers that case, so
-  // leaving the same year in as a second, separately-selectable option
-  // just duplicates it - picking that second one is a silent no-op
-  // (same schoolYear id gets sent either way), which reads as "the
-  // dropdown isn't doing anything" even though nothing is actually broken.
-  // NOTE: SectionResponse only exposes the school year as a display
-  // label (initialData.schoolYear), not its id, so this can only match
-  // by label. That's fine as long as school year labels stay unique;
-  // if the backend ever adds initialData.schoolYearId, prefer matching
-  // on that instead.
-  // Sectionlevelpage appends " (Planning)" to planning-year labels before
-  // passing this list down, so a section currently sitting in a Planning
-  // year won't match initialData.schoolYear (the raw, unsuffixed name)
-  // on a plain equality check - strip the suffix before comparing so the
-  // current year is excluded regardless of its status.
+  // whatever order the API happens to return. This list is only shown in
+  // "add" mode now - Edit Section no longer has a School Year field, since
+  // a section's school year always stays as-is when editing - so this no
+  // longer needs the old edit-mode filtering that excluded the section's
+  // own current year from the options.
   const sortedSchoolYears = useMemo(
     () =>
-      [...schoolYears]
-        .filter((sy) =>
-          mode === "edit" && initialData?.schoolYear
-            ? sy.label.replace(/ \(Planning\)$/, "") !== initialData.schoolYear
-            : true
-        )
-        .sort((a, b) =>
-          a.label.localeCompare(b.label, undefined, {
-            numeric: true,
-          })
-        ),
-    [schoolYears, mode, initialData]
+      [...schoolYears].sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, {
+          numeric: true,
+        })
+      ),
+    [schoolYears]
   );
 
   if (!isOpen) return null;
@@ -276,7 +258,7 @@ function Sectionformmodal({
   }
 
   return (
-    <div className="font-primary fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16 pb-8">
+    <div className="font-primary fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
       <div className="flex w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
         <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
           <div className="w-6" />
@@ -321,10 +303,10 @@ function Sectionformmodal({
             //  - sectionName: compare trimmed + lowercased, same as the
             //    backend's equalsIgnoreCase
             //  - gradeLevel: plain equality, same as the backend
-            //  - schoolYear / userId: any non-empty selection here is
-            //    already guaranteed to differ from the current one, since
-            //    sortedSchoolYears / sortedAdvisers exclude the section's
-            //    current school year and adviser from their option lists
+            //  - userId: any non-empty selection here is already
+            //    guaranteed to differ from the current one, since
+            //    sortedAdvisers excludes the section's current adviser
+            //    from its option list
             const isSectionNameChanged =
               mode === "edit" &&
               (values.sectionName?.trim().toLowerCase() || "") !==
@@ -333,7 +315,6 @@ function Sectionformmodal({
             const hasRealChanges =
               isSectionNameChanged ||
               values.gradeLevel !== initialValues.gradeLevel ||
-              Boolean(values.schoolYear) ||
               Boolean(values.userId);
 
             const isSaveDisabled =
@@ -420,54 +401,49 @@ function Sectionformmodal({
                     />
                   </div>
 
-                  <div className="flex flex-col">
-                    <label className={labelClass}>
-                      School Year
-                    </label>
+                  {mode !== "edit" && (
+                    <div className="flex flex-col">
+                      <label className={labelClass}>
+                        School Year
+                      </label>
 
-                    <div className="relative">
-                      <Field
-                        as="select"
-                        name="schoolYear"
-                        className={`${inputClass(
-                          errors.schoolYear && touched.schoolYear,
-                          values.schoolYear ? "text-gray-700" : "text-gray-500"
-                        )} appearance-none pr-9`}
-                      >
-                        <option
-                          value=""
-                          className="text-gray-500"
+                      <div className="relative">
+                        <Field
+                          as="select"
+                          name="schoolYear"
+                          className={`${inputClass(
+                            errors.schoolYear && touched.schoolYear,
+                            values.schoolYear ? "text-gray-700" : "text-gray-500"
+                          )} appearance-none pr-9`}
                         >
-                          {mode === "edit"
-                            ? initialData?.schoolYear
-                              ? `Keep current (${initialData.schoolYear})`
-                              : "Select school year"
-                            : "Select school year"}
-                        </option>
-
-                        {sortedSchoolYears.map((sy) => (
-                          <option
-                            key={sy.id}
-                            value={sy.id}
-                            className="text-gray-700"
-                          >
-                            {sy.label}
+                          <option value="" className="text-gray-500">
+                            Select school year
                           </option>
-                        ))}
-                      </Field>
 
-                      <ChevronDown
-                        size={16}
-                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                          {sortedSchoolYears.map((sy) => (
+                            <option
+                              key={sy.id}
+                              value={sy.id}
+                              className="text-gray-700"
+                            >
+                              {sy.label}
+                            </option>
+                          ))}
+                        </Field>
+
+                        <ChevronDown
+                          size={16}
+                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                        />
+                      </div>
+
+                      <ErrorMessage
+                        name="schoolYear"
+                        component="p"
+                        className={errorClass}
                       />
                     </div>
-
-                    <ErrorMessage
-                      name="schoolYear"
-                      component="p"
-                      className={errorClass}
-                    />
-                  </div>
+                  )}
 
                   <div className="flex flex-col">
                     <label className={labelClass}>

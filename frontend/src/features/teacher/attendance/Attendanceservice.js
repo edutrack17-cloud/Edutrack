@@ -47,6 +47,7 @@ function mapAttendanceRecord(record) {
     id: record.attendanceId,
     name: record.studentName ?? "",
     gradeAndSection: record.gradeAndSection ?? "",
+    rfid: record.rfid ?? "",
     date: formatDate(record.dateTimeIn),
     timeIn: formatTime(record.dateTimeIn),
     timeOut: formatTime(record.dateTimeOut),
@@ -174,6 +175,26 @@ export async function fetchStudentRecords({
     return await request;
   } finally {
     studentRecordsInFlight.delete(queryString);
+  }
+}
+
+// GET /api/attendance?sectionName={sectionName}
+//
+// Backend now returns today's attendance for every currently-enrolled
+// assignment in a section (see AttendanceController.getTodaysAttendanceForSection).
+// Each record carries `rfid`, which is the only field the roster rows
+// (from fetchStudentRecords) and this response actually share - there's
+// no shared numeric id between them (fetchStudentRecords' `assignmentId`
+// is really just studentId, not the backend's real StudentSectionAssignment
+// id), so callers should merge these into a roster by rfid, the same way
+// RFIDAttendancePage's own live-tap handler (applyAttendanceUpdate)
+// already does.
+export async function fetchTodaysAttendanceForSection(sectionName) {
+  try {
+    const { data } = await attendanceApi.get("/attendance", { params: { sectionName } });
+    return (Array.isArray(data) ? data : []).map(mapAttendanceRecord);
+  } catch (error) {
+    throw buildAttendanceError(error, "GET /api/attendance");
   }
 }
 

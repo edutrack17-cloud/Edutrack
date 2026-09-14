@@ -25,18 +25,21 @@ function splitFullName(fullName) {
   };
 }
 
-function mapTeacherResponse(teacher) {
-  const { firstName, middleName, lastName } = splitFullName(teacher.fullName);
+// Guard accounts can show up now that getUsers() hits /api/user instead of /api/user/teachers
+const ROLE_LABELS = { admin: "Admin", teacher: "Teacher", guard: "Guard" };
+
+function mapTeacherResponse(user) {
+  const { firstName, middleName, lastName } = splitFullName(user.fullName);
   return {
-    id: teacher.userId,
-    username: teacher.username,
-    fullName: teacher.fullName,
+    id: user.userId,
+    username: user.username,
+    fullName: user.fullName,
     firstName,
     middleName,
     lastName,
 
-    role: teacher.userRole === "admin" ? "Admin" : "Teacher",
-    status: teacher.accountStatus === "active" ? "Active" : "Disabled",
+    role: ROLE_LABELS[user.userRole] ?? user.userRole,
+    status: user.accountStatus === "active" ? "Active" : "Disabled",
 
     // Filled in by the section-matching stopgap in getUsers(), if a match is found
     assignedGradeLevel: undefined,
@@ -44,7 +47,7 @@ function mapTeacherResponse(teacher) {
   };
 }
 
-// TEMPORARY STOPGAP - remove once the backend adds real section-assignment data to GET /api/user/teachers.
+// TEMPORARY STOPGAP - remove once the backend adds real section-assignment data to GET /api/user.
 // sections.adviser_id is a one-way FK, so there's no reverse lookup from a teacher to their section -
 // this matches by adviser NAME string against GET /api/section (sectionStatus=active) instead.
 // Known risks: name collisions, whitespace/casing mismatches, and a teacher matching more than one
@@ -61,11 +64,19 @@ async function getActiveSectionsByAdviserName() {
   }
 }
 
-// CONNECTED: GET /api/user/teachers
+// CONNECTED: GET /api/user
 export async function getUsers({ status, search, page = 1, size = 10 } = {}) {
   try {
-    const { data } = await userApi.get("/user/teachers");
-    let mapped = data.map(mapTeacherResponse);
+    const { data } = await userApi.get("/user", {
+      params: {
+        page: page - 1, 
+        size,
+        accountStatus: status ? status.toLowerCase() : undefined,
+        searchEntry: search || undefined,
+      },
+    });
+
+    let mapped = data.content.map(mapTeacherResponse);
 
     // Section-assignment stopgap - skipped gracefully (stays "Not yet assigned") if it fails
     const activeSections = await getActiveSectionsByAdviserName();
@@ -85,25 +96,7 @@ export async function getUsers({ status, search, page = 1, size = 10 } = {}) {
       });
     }
 
-    if (search) {
-      const term = normalizeWhitespace(search);
-      mapped = mapped.filter((u) => {
-        const searchableName = normalizeWhitespace(
-          u.fullName || [u.firstName, u.middleName, u.lastName].filter(Boolean).join(" ")
-        );
-        return searchableName.includes(term) || u.username.toLowerCase().includes(term);
-      });
-    }
-
-    if (status) {
-      mapped = mapped.filter((u) => u.status.toLowerCase() === status.toLowerCase());
-    }
-
-    const totalPages = Math.max(1, Math.ceil(mapped.length / size));
-    const start = (page - 1) * size;
-    const content = mapped.slice(start, start + size);
-
-    return { content, totalPages };
+    return { content: mapped, totalPages: data.totalPages ?? 1 };
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to load users"));
   }
@@ -159,8 +152,6 @@ export async function toggleUserStatus(userId, nextStatus) {
 }
 
 // CONNECTED: PATCH /api/user/{userId}/reset-password
-// Backend just returns a plain "Password reset successful" string, not a UserResponse -
-// nothing to remap here, unlike the other endpoints.
 export async function resetPassword(userId) {
   try {
     await userApi.patch(`/user/${userId}/reset-password`);

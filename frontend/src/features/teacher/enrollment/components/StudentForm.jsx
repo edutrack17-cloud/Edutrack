@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronDown, Rss } from "lucide-react";
 import Input from "../../../../components/ui/Input";
+import { MIN_AGE_BY_LEVEL } from "../enrollmentSchema";
 
 
 // Canonical display order, so the dropdown always lists whichever
@@ -63,25 +64,42 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
   // blocking today/future), which meant the calendar happily browsed
   // through the entire current year and most of the previous decade
   // before reaching a birthdate that could actually pass the schema's
-  // min-age(9) test below - an admin picking a Grade 4 student's
-  // birthdate had to click "back" a dozen+ times past years that were
-  // never going to be valid anyway. Locking `max` to the youngest
-  // birthdate that still turns out to be exactly 9 today makes the
-  // picker's own upper bound match the validation rule, so it opens
-  // right around 2016/2017 instead of the current year.
-  const today = new Date();
-  const nineYearsAgo = new Date(today.getFullYear() - 9, today.getMonth(), today.getDate());
-  const maxBirthdate = nineYearsAgo.toISOString().split("T")[0];
+  // min-age test below - an admin picking a Grade 4 student's birthdate
+  // had to click "back" a dozen+ times past years that were never going
+  // to be valid anyway. Locking `max` to the youngest birthdate that
+  // still turns out to be exactly [minimum age for the SELECTED level]
+  // today makes the picker's own upper bound match the validation rule.
+  //
+  // MIN_AGE_BY_LEVEL (Grade_4: 9, Grade_5: 10, Grade_6: 11) comes from
+  // enrollmentSchema.js - the same map the Yup min-age test reads from -
+  // so a 9-year-old only ever clears the calendar/clamp for Grade 4, not
+  // Grade 5 or 6 too. Falls back to Grade 4's bracket (the youngest)
+  // before a level is even picked yet, so the field isn't needlessly
+  // locked down before Level has a value.
+  // toISOString() converts to UTC first - in any timezone ahead of UTC
+  // (e.g. PH/UTC+8), local midnight on day D is still "day D-1" in UTC,
+  // so .toISOString().split("T")[0] silently returns the day BEFORE the
+  // one actually intended, making the boundary one day too strict. Pull
+  // the local year/month/day directly instead so the string matches the
+  // calendar date this component actually meant.
+  function formatLocalDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
 
-  // Earliest selectable day - a student already 19 or older shouldn't be
-  // pickable either (this is an elementary Grade 4-6 enrollment; the
-  // schema's own min-age(9) test above already covers the "too young"
-  // end - this is the "too old" end). One day after the date exactly 19
-  // years ago is the oldest birthdate that still keeps them under 19
-  // today; the date input's min attribute blocks/grays out everything
-  // earlier than that directly in the calendar itself.
-  const nineteenYearsAgo = new Date(today.getFullYear() - 19, today.getMonth(), today.getDate() + 1);
-  const minBirthdate = nineteenYearsAgo.toISOString().split("T")[0];
+  const today = new Date();
+  const minAgeForSelectedLevel = MIN_AGE_BY_LEVEL[formik.values.level] ?? MIN_AGE_BY_LEVEL.Grade_4;
+  const minAgeYearsAgo = new Date(today.getFullYear() - minAgeForSelectedLevel, today.getMonth(), today.getDate());
+  const maxBirthdate = formatLocalDate(minAgeYearsAgo);
+
+  // NOTE: no lower bound here on purpose - Grade 5/6 can genuinely
+  // include older learners (returning/overage/transferred-in students),
+  // so maxBirthdate above is the only real bound tied to eligibility.
+  // (This also means the year segment will accept an implausible typed
+  // year like "1321" with nothing to stop it - there's no floor left to
+  // catch that.)
 
   function handleLevelChange(event) {
     formik.setFieldValue("level", event.target.value);
@@ -96,6 +114,28 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
 
   function handleGuardianPhoneNumberChange(event) {
     formik.setFieldValue("guardianPhoneNumber", sanitizeDigits(event.target.value, 11));
+  }
+
+  // The `max` attribute on the Birthdate input below only grays out days
+  // in the CALENDAR POPUP and flips the input's own :invalid state - it
+  // doesn't stop someone from typing a year straight into the year
+  // segment (e.g. "4112"), which then just sits there until Yup's
+  // min-age test catches it on blur/submit. This clamps the value back
+  // to maxBirthdate the moment a complete date lands in the field, so a
+  // too-recent/future year snaps back to the nearest valid birthdate
+  // instead of being allowed to sit there showing an error underneath
+  // it. Native date inputs only fire onChange once year/month/day are
+  // ALL filled in, so this never fights the admin mid-keystroke (e.g.
+  // after typing just the first digit of the year) - by the time this
+  // runs, the typed date is already whole.
+  function handleBirthDateChange(event) {
+    const value = event.target.value;
+    if (!value) {
+      formik.setFieldValue("birthDate", value);
+      return;
+    }
+    const nextValue = value > maxBirthdate ? maxBirthdate : value;
+    formik.setFieldValue("birthDate", nextValue);
   }
 
   function handleNameChange(fieldName) {
@@ -326,14 +366,13 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             name="birthDate"
             type="date"
             value={formik.values.birthDate}
-            onChange={formik.handleChange}
+            onChange={handleBirthDateChange}
             onBlur={formik.handleBlur}
             error={formik.errors.birthDate}
             touched={formik.touched.birthDate}
             labelClassName={inputLabelClass}
             inputClassName="[&::-webkit-calendar-picker-indicator]:opacity-40"
             max={maxBirthdate}
-            min={minBirthdate}
           />
         </div>
       </div>

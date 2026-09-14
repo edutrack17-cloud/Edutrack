@@ -83,8 +83,16 @@ function EnrollStudentModal({
     formik.resetForm();
   }
 
-  function handleRfidConfirm(uid) {
-    formik.setFieldValue("rfid", uid);
+  async function handleRfidConfirm(uid) {
+    // formik.setFieldValue() re-validates internally but doesn't finish
+    // synchronously - calling setFieldTouched() right after it (without
+    // waiting) makes that touched-triggered validation pass run against
+    // the OLD value (still "" at that point), so the "required" error
+    // from before the tap sticks around even though the field already
+    // shows the new uid. Awaiting setFieldValue first lets the new value
+    // land (and validation re-run against it) before rfid gets marked
+    // touched, so the error clears in step with the value appearing.
+    await formik.setFieldValue("rfid", uid);
     formik.setFieldTouched("rfid", true);
     setIsRfidModalOpen(false);
   }

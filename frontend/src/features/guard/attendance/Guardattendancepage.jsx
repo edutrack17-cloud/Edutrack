@@ -12,11 +12,43 @@ const thClass =
 const tdClass =
   "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
 
-// Dev-only, just to give the "Simulate RFID Tap" button something to
-// tap with. NOT the source of truth for the roster - real rfids live
-// on Student rows in the actual DB. Remove once a real reader is
-// wired up.
-const DEV_TEST_RFIDS = ["090941037", "090941038", "090941040", "090941041", "090941042"];
+// PERSISTENCE: "Today's Activity" used to live only in React state, so
+// an F5/refresh on the kiosk (which happens - browsers crash, someone
+// bumps the machine) wiped the whole list even though the actual
+// attendance records were saved fine on the backend. Stashing it in
+// localStorage keyed by today's date means a refresh restores the same
+// list instead of starting empty, while a stale list from a PREVIOUS
+// day (kiosk left on overnight) still gets thrown away on the next tap.
+const STORAGE_KEY = "guard-todays-taps";
+
+function getTodayKey() {
+  return new Date().toDateString();
+}
+
+function loadStoredTaps() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (parsed.date !== getTodayKey()) return [];
+    return Array.isArray(parsed.taps) ? parsed.taps : [];
+  } catch {
+    return [];
+  }
+}
+
+// DEFENSIVE FORMATTING: mapAttendanceRecord() (in Attendaceserviceguard.js)
+// already swaps the underscore for a space on FRESH taps, but "Today's
+// Activity" also restores entries straight from localStorage (see
+// loadStoredTaps() above) - any tap recorded and cached BEFORE that fix
+// shipped is still sitting in a browser's storage in the old raw
+// "Grade_6 - Sampaguita" shape, and reloading it doesn't run it back
+// through mapAttendanceRecord(). Formatting again here means it displays
+// correctly either way, fresh tap or old cached one, without needing to
+// clear out anyone's already-stored taps.
+function formatGradeAndSection(value) {
+  return (value ?? "").replace(/_/g, " ");
+}
 
 // PAGE
 
@@ -108,12 +140,27 @@ function LiveClock() {
 // same badge styling as the teacher screen, not because the guard
 // tracks status transitions.
 function GuardAttendancePage() {
-  const [todaysTaps, setTodaysTaps] = useState([]);
+  const [todaysTaps, setTodaysTaps] = useState(loadStoredTaps);
   const [activityPage, setActivityPage] = useState(1);
   const [lastScan, setLastScan] = useState(null);
   const [scanBuffer, setScanBuffer] = useState("");
 
   const hiddenInputRef = useRef(null);
+
+  // Keep localStorage in sync every time the list changes (a new tap,
+  // or the initial load itself) so a refresh right after a tap still
+  // picks up that latest tap.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ date: getTodayKey(), taps: todaysTaps })
+      );
+    } catch {
+      // Storage full/unavailable (private browsing, quota) - the kiosk
+      // still works, it just won't survive a refresh this time.
+    }
+  }, [todaysTaps]);
 
   // BUG FIX / HARDWARE QUIRK: some cheap USB HID RFID readers fire the
   // UID + Enter keystroke sequence TWICE for a single physical tap
@@ -181,13 +228,6 @@ function GuardAttendancePage() {
     }
   }
 
-  // Dev-only helper so the flow can be tested without a physical
-  // reader connected. Remove once real hardware is wired up.
-  function simulateTap() {
-    const rfid = DEV_TEST_RFIDS[Math.floor(Math.random() * DEV_TEST_RFIDS.length)];
-    recordTap(rfid);
-  }
-
   const totalActivityPages = Math.max(1, Math.ceil(todaysTaps.length / ACTIVITY_PAGE_SIZE));
   const clampedActivityPage = Math.min(activityPage, totalActivityPages);
   const pagedTaps = todaysTaps.slice(
@@ -210,7 +250,8 @@ function GuardAttendancePage() {
         autoFocus
       />
 
-      <div className="flex w-full flex-col justify-between text-center bg-primary p-4 text-white rounded-2xl shadow-md lg:w-70 lg:shrink-0">
+      {/* Widened from lg:w-70 to lg:w-96 so the scan/status panel has more room. */}
+      <div className="flex w-full flex-col justify-between text-center bg-primary p-4 text-white rounded-2xl shadow-md lg:w-96 lg:shrink-0">
         <LiveClock />
 
         <div className="flex min-h-52 flex-col items-center justify-center rounded-lg bg-white border border-gray shadow-sm px-4 py-8 text-center text-gray-800">
@@ -220,7 +261,7 @@ function GuardAttendancePage() {
               {lastScan.name && (
                 <>
                   <p className="text-lg font-bold text-primary">{lastScan.name}</p>
-                  <p className="mt-1 text-sm text-gray-500">{lastScan.gradeAndSection}</p>
+                  <p className="mt-1 text-sm text-gray-500">{formatGradeAndSection(lastScan.gradeAndSection)}</p>
                 </>
               )}
 
@@ -262,14 +303,6 @@ function GuardAttendancePage() {
         <div>
           <p className="text-sm font-semibold">{SCHOOL_NAME}</p>
           <p className="text-xs text-white/70">Attendance Management System</p>
-
-          <button
-            type="button"
-            onClick={simulateTap}
-            className="mt-4 w-full cursor-pointer rounded-lg border border-white/40 py-2 text-xs font-semibold text-white/80 transition-colors hover:border-white hover:text-white"
-          >
-            Simulate RFID Tap (dev only)
-          </button>
         </div>
       </div>
 
@@ -308,7 +341,7 @@ function GuardAttendancePage() {
                     <td className={tdClass} title={tap.name}>
                       {tap.name}
                     </td>
-                    <td className={tdClass}>{tap.gradeAndSection}</td>
+                    <td className={tdClass}>{formatGradeAndSection(tap.gradeAndSection)}</td>
                     <td className={tdClass}>
                       <AttendanceStatus status="On School" />
                     </td>

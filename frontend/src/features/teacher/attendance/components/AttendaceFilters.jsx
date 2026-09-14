@@ -207,6 +207,8 @@ function AttendaceFilters({
 
         if (section && !sections.some((s) => s.value === section)) {
           onSectionChange({ target: { value: "" } });
+        } else if (role === "teacher" && !section && sections.length === 1) {
+          onSectionChange({ target: { value: sections[0].value } });
         }
       } catch (error) {
         if (!ignore) setSectionOptions([DEFAULT_SECTION_OPTION]);

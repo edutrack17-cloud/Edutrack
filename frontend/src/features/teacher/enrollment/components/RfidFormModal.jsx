@@ -1,21 +1,88 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { X, Rss, Check } from "lucide-react";
+
+// REAL SCANNER CONNECTION (replaces the old simulateTap() mock)
+//
+// The USB RFID readers we're targeting don't need any special driver,
+// WebUSB/WebHID permission prompt, or backend endpoint - they're
+// "keyboard wedge" devices. To the browser they look exactly like
+// someone typing on a keyboard: tapping a card makes the reader type
+// out the card's UID character-by-character, then press Enter, all
+// within a few milliseconds. A person can't type anywhere near that
+// fast, so we tell a real tap apart from real typing purely by timing
+// the gap between keydown events - no hardware API needed, as long as
+// this modal has focus somewhere on the page (which it always does
+// while it's the open modal).
+//
+// If your specific reader behaves differently (e.g. it needs Web
+// Serial/Web HID because it does NOT emulate a keyboard, or it sends a
+// prefix character before the UID, or its digits arrive slower than
+// SCAN_KEY_GAP_MS apart), this is the one place to adjust - everything
+// below just needs onScan(uid) to eventually get called.
+const SCAN_KEY_GAP_MS = 50; // max ms between characters that still counts as "one tap" rather than a human typing
+const SCAN_MIN_LENGTH = 4; // ignore anything shorter than this - stray/accidental keypresses, not a real UID
+
+function useRfidScanner(isActive, onScan) {
+  const bufferRef = useRef("");
+  const lastKeyTimeRef = useRef(0);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    function handleKeyDown(event) {
+      const now = Date.now();
+      const gapSinceLastKey = now - lastKeyTimeRef.current;
+      lastKeyTimeRef.current = now;
+
+      if (event.key === "Enter") {
+        const scannedUid = bufferRef.current;
+        bufferRef.current = "";
+        if (scannedUid.length >= SCAN_MIN_LENGTH) {
+          // Stop that Enter from doing anything else (e.g. "clicking"
+          // whatever element the browser thinks has default focus).
+          event.preventDefault();
+          onScan(scannedUid);
+        }
+        return;
+      }
+
+      // event.key is a multi-character string for anything that isn't
+      // a single printable character - "Shift", "Tab", "Backspace",
+      // "ArrowLeft", etc. Skip those; only real characters count
+      // towards a UID.
+      if (event.key.length !== 1) return;
+
+      // A gap this big means this keystroke isn't part of the same
+      // fast burst a reader produces - start a fresh buffer instead of
+      // gluing unrelated keypresses (e.g. two separate stray taps, or
+      // someone genuinely typing on the keyboard) together.
+      if (gapSinceLastKey > SCAN_KEY_GAP_MS) {
+        bufferRef.current = "";
+      }
+
+      bufferRef.current += event.key;
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isActive, onScan]);
+}
 
 function RfidFormModal({ isOpen, onClose, onConfirm }) {
   const [uid, setUid] = useState("");
 
-  if (!isOpen) return null;
+  // Clear out whatever was left over from the last time this modal was
+  // opened, so a stale UID from a previous student doesn't carry over.
+  useEffect(() => {
+    if (isOpen) setUid("");
+  }, [isOpen]);
 
-  // TODO: BACKEND / HARDWARE CONNECTION
-  // Replace this with a real listener for the RFID reader. Most USB
-  // RFID readers act like a keyboard — they "type" the UID + Enter
-  // very fast into whatever input is focused. For now, this button
-  // just fakes a random 9-digit UID so the flow can be tested without
-  // physical hardware connected.
-  function simulateTap() {
-    const fakeUid = String(Math.floor(100000000 + Math.random() * 900000000));
-    setUid(fakeUid);
-  }
+  // Listens the whole time this modal is open - tapping a different
+  // card just overwrites "uid" with the new one, same as the old
+  // simulateTap() button did when clicked more than once.
+  useRfidScanner(isOpen, setUid);
+
+  if (!isOpen) return null;
 
   function handleClear() {
     setUid("");
@@ -48,34 +115,36 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
             RFID Information
           </h3>
 
-          <button
-            type="button"
-            onClick={simulateTap}
-            className={`flex h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border transition-colors sm:h-40 ${
+          {/* No longer a clickable button - there's nothing to trigger
+              by hand anymore, this is just a live status indicator
+              while we wait for useRfidScanner() to catch a real tap. */}
+          <div
+            className={`flex h-32 flex-col items-center justify-center gap-2 rounded-lg border transition-colors sm:h-40 ${
               uid
                 ? "border-success text-success"
-                : "border-gray-300 text-gray-500  hover:border-gray"
+                : "border-gray-300 text-gray-500"
             }`}
           >
-            {uid ? <Check size={40} /> : <Rss size={40} />}
+            {uid ? <Check size={40} /> : <Rss size={40} className="animate-pulse" />}
             <span className="text-sm font-semibold">
               {uid ? "Card Detected" : "Tap RFID card on the Scanner"}
             </span>
-          </button>
+          </div>
 
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary ">
               RFID UID
             </label>
-            <input
-              type="text"
-              value={uid}
-              readOnly
-              placeholder="Waiting for tap..."
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none ${
-                uid ? "border-success text-success font-semibold" : "border-gray-500 text-gray-700"
+            {/* Plain display, not an <input> - there's nothing here to
+                click into, focus, or type on. The only way this value
+                changes is useRfidScanner() catching a real tap. */}
+            <div
+              className={`w-full select-none rounded-lg border px-3 py-2.5 text-sm ${
+                uid ? "border-success text-success font-semibold" : "border-gray-500 text-gray-500"
               }`}
-            />
+            >
+              {uid || "Waiting for tap..."}
+            </div>
           </div>
         </div>
 
@@ -91,7 +160,7 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
           <button
             type="button"
             onClick={handleClear}
-            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:opacity-90"
+            className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
           >
             Clear
           </button>

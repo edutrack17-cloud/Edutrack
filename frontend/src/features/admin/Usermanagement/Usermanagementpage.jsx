@@ -51,7 +51,7 @@ function Usermanagementpage() {
     setCurrentPage(1);
   }, [status, debouncedSearch]);
 
-  // CONNECTED: GET /api/user/teachers - see getUsers() in Usermanagementservice.js
+  // CONNECTED: GET /api/user - see getUsers() in Usermanagementservice.js
   const loadUsers = useCallback(async () => {
     try {
       setErrorMessage("");

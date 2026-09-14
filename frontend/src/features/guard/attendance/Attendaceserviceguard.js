@@ -24,7 +24,10 @@ function mapAttendanceRecord(record) {
   return {
     id: record.attendanceId,
     name: record.studentName ?? "",
-    gradeAndSection: record.gradeAndSection ?? "",
+    // Backend sends this as one pre-combined string, e.g. "Grade_6 - Sampaguita"
+    // (underscore instead of space in the grade level part) - swap underscores
+    // for spaces so it displays as "Grade 6 - Sampaguita".
+    gradeAndSection: (record.gradeAndSection ?? "").replace(/_/g, " "),
     timeIn: timeIn ? timeIn.slice(0, 5) : "", // "07:00:00" -> "07:00"
   };
 }

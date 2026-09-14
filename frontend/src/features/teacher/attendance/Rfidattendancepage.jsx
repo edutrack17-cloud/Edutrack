@@ -5,6 +5,7 @@ import {
   timeOutAttendance,
   closeAttendanceForSection,
   fetchStudentRecords,
+  fetchTodaysAttendanceForSection,
   markPresentManual,
   manualTimeOut,
 } from "./Attendanceservice";
@@ -185,8 +186,32 @@ function RFIDAttendancePage() {
           section,
           search: debouncedSearch,
         });
+
+        // GET /api/attendance?sectionName= - only meaningful once a
+        // section is picked (same constraint "Mark Absent" already has).
+        // Matched by rfid, not assignmentId - see the comment on
+        // fetchTodaysAttendanceForSection in Attendanceservice.js for
+        // why. A failure here is non-fatal: the roster itself already
+        // loaded fine above, it just won't have today's status filled
+        // in until a live tap patches it via applyAttendanceUpdate.
+        let merged = fetched;
+        if (section) {
+          try {
+            const todaysAttendance = await fetchTodaysAttendanceForSection(section);
+            const byRfid = new Map(todaysAttendance.map((a) => [a.rfid, a]));
+            merged = fetched.map((r) => {
+              const a = byRfid.get(r.rfid);
+              return a
+                ? { ...r, todayAttendance: { id: a.id, status: a.status, timeIn: a.timeIn, timeOut: a.timeOut } }
+                : r;
+            });
+          } catch (attendanceError) {
+            // swallow - roster still usable, just without today's status
+          }
+        }
+
         if (!ignore) {
-          setRecords(fetched);
+          setRecords(merged);
           setTotalPages(fetchedTotalPages);
         }
       } catch (error) {
