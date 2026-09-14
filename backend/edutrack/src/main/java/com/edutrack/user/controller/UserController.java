@@ -3,9 +3,12 @@ package com.edutrack.user.controller;
 import com.edutrack.user.dto.request.AdminCreateUserRequest;
 import com.edutrack.user.dto.request.UpdateUserRequest;
 import com.edutrack.user.dto.response.UserResponse;
+import com.edutrack.user.enums.AccountStatus;
 import com.edutrack.user.repository.UserRepository;
 import com.edutrack.user.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +33,15 @@ public class UserController {
     public ResponseEntity<UserResponse> createTeacher(@Valid @RequestBody AdminCreateUserRequest clientRequest){
         UserResponse createdUser = userService.createTeacher(clientRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
+    }
+
+    //READ
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping
+    public ResponseEntity<Page<UserResponse>> getUsers(Pageable pageable,
+                                                       @RequestParam(required = false) AccountStatus accountStatus,
+                                                       @RequestParam(required = false) String searchEntry){
+        return ResponseEntity.ok(userService.getUsers(pageable, accountStatus, searchEntry));
     }
 
     //TEACHER DROPDOWN

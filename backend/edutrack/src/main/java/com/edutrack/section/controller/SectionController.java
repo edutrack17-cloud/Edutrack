@@ -93,7 +93,7 @@ public class SectionController {
     //START NEW SCHOOL YEAR
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("school-year/new-school-year")
-    public ResponseEntity<List<SectionResponse>> startNewSchoolYear(@RequestBody NewSchoolYearRequest request){
+    public ResponseEntity<List<SectionResponse>> startNewSchoolYear(@Valid @RequestBody NewSchoolYearRequest request){
         return ResponseEntity.ok(sectionService.newSchoolYear(request));
     }
 

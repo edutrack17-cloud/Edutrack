@@ -245,10 +245,6 @@ public class SectionService {
         schoolYearLockRepository.acquireActivationLock()
                 .orElseThrow(ActiveSchoolYearLockUnavailable::new);
 
-        SchoolYear currentSchoolYear = schoolYearRepository
-                .findBySchoolYearStatus(SchoolYearStatus.active)
-                .orElseThrow(ActiveSchoolYearNotFound::new);
-
         SchoolYear sourceSchoolYear = getBySchoolYearId(request.sourceSchoolYearId());
         SchoolYear targetSchoolYear = getBySchoolYearId(request.targetSchoolYearId());
 
@@ -256,28 +252,41 @@ public class SectionService {
             throw new SameSchoolYearNotAllowed();
         }
 
-        if (targetSchoolYear.getSchoolYearStatus() != SchoolYearStatus.planning) {
+        boolean sourceEligible = sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active
+                || sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.closed;
+        if (!sourceEligible) {
+            throw new SourceSchoolYearNotEligible();
+        }
+
+        boolean targetEligible = targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.planning
+                || targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active;
+        if (!targetEligible) {
             throw new SchoolYearNotPlanning();
+        }
+
+        if (sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active
+                && targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active) {
+            throw new ActiveSchoolYearAlreadyExists(); // shouldn't happen given the single-active invariant, but guard anyway
         }
 
         if (sectionRepository.countBySchoolYear(targetSchoolYear) > 0) {
             throw new SchoolYearAlreadyHasSections();
         }
 
-        List<Section> sectionsToClone;
-
-        if (request.gradeLevel() == null){
-            sectionsToClone = sectionRepository.findAllBySchoolYear_SchoolYearId(sourceSchoolYear.getSchoolYearId());
-        } else {
-            sectionsToClone = sectionRepository.findAllBySchoolYear_SchoolYearIdAndGradeLevel(sourceSchoolYear.getSchoolYearId(), request.gradeLevel());
-        }
+        List<Section> sectionsToClone = request.gradeLevel() == null
+                ? sectionRepository.findAllBySchoolYear_SchoolYearId(sourceSchoolYear.getSchoolYearId())
+                : sectionRepository.findAllBySchoolYear_SchoolYearIdAndGradeLevel(sourceSchoolYear.getSchoolYearId(), request.gradeLevel());
 
         if (sectionsToClone.isEmpty()) {
             throw new SchoolYearSectionsNotFound();
         }
 
-        currentSchoolYear.setSchoolYearStatus(SchoolYearStatus.closed);
-        targetSchoolYear.setSchoolYearStatus(SchoolYearStatus.active);
+        if (sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active) {
+            sourceSchoolYear.setSchoolYearStatus(SchoolYearStatus.closed);
+        }
+        if (targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.planning) {
+            targetSchoolYear.setSchoolYearStatus(SchoolYearStatus.active);
+        }
 
         List<Section> newSections = sectionsToClone.stream()
                 .map(oldSection -> {
@@ -292,7 +301,6 @@ public class SectionService {
                 .toList();
 
         try {
-            targetSchoolYear.setSchoolYearStatus(SchoolYearStatus.active);
             List<Section> savedSections = sectionRepository.saveAll(newSections);
             return savedSections.stream()
                     .map(sectionMapper::toResponseDTO)

@@ -11,7 +11,11 @@ import com.edutrack.user.enums.UserRole;
 import com.edutrack.user.exception.*;
 import com.edutrack.user.mapper.UserMapper;
 import com.edutrack.user.repository.UserRepository;
+import com.edutrack.user.specification.UserSpecification;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.parameters.P;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -62,6 +66,17 @@ public class UserService {
 
         User savedUser = userRepository.save(userToBeSaved);
         return userMapper.toResponseDTO(savedUser);
+    }
+
+    //READ
+    public Page<UserResponse> getUsers(Pageable pageable, AccountStatus accountStatus, String searchEntry){
+        Specification<User> filters = Specification
+                .where(UserSpecification.notAnAdmin())
+                .and(UserSpecification.hasStatus(accountStatus))
+                .and(UserSpecification.searchField(searchEntry));
+
+        return userRepository.findAll(filters, pageable)
+                .map(userMapper::toResponseDTO);
     }
 
     //TEACHER DROPDOWN
