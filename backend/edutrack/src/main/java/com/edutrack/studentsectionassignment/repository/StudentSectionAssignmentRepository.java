@@ -51,4 +51,15 @@ public interface StudentSectionAssignmentRepository
     Long student(Student student);
 
     Optional<StudentSectionAssignment> findFirstByStudent_StudentIdOrderByAssignmentIdDesc(Long studentId);
+
+    @Query("""
+    SELECT a FROM StudentSectionAssignment a
+    WHERE a.section.sectionId = :sectionId
+    AND a.assignedAt <= :asOfDate
+    AND (a.leftAt IS NULL OR a.leftAt >= :asOfDate)
+    ORDER BY a.student.lastName, a.student.firstName
+    """)
+    List<StudentSectionAssignment> findActiveAsOfDate(
+            @Param("sectionId") int sectionId,
+            @Param("asOfDate") LocalDate asOfDate);
 }

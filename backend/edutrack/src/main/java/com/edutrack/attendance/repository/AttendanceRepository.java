@@ -12,9 +12,26 @@ import java.util.List;
 
 
 @Repository
-public interface AttendanceRepository extends JpaRepository<Attendance, Long>, JpaSpecificationExecutor<Attendance> {
+public interface AttendanceRepository
+        extends JpaRepository<Attendance, Long>,
+        JpaSpecificationExecutor<Attendance> {
+
     @Query("""
-        SELECT DISTINCT a.createdAt FROM Attendance a
+        SELECT a
+        FROM Attendance a
+        WHERE a.studentSectionAssignment.assignmentId IN :assignmentIds
+        AND a.createdAt BETWEEN :periodStart AND :periodEnd
+        ORDER BY a.createdAt
+        """)
+    List<Attendance> findForAssignmentsAndPeriod(
+            @Param("assignmentIds") List<Long> assignmentIds,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd
+    );
+
+    @Query("""
+        SELECT DISTINCT a.createdAt
+        FROM Attendance a
         WHERE a.studentSectionAssignment.section.sectionId = :sectionId
         AND a.createdAt BETWEEN :periodStart AND :periodEnd
         ORDER BY a.createdAt
@@ -22,5 +39,6 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long>, J
     List<LocalDate> findDistinctAttendanceDatesForSection(
             @Param("sectionId") int sectionId,
             @Param("periodStart") LocalDate periodStart,
-            @Param("periodEnd") LocalDate periodEnd);
+            @Param("periodEnd") LocalDate periodEnd
+    );
 }
