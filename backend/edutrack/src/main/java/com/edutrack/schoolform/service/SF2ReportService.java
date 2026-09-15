@@ -57,17 +57,47 @@ public class SF2ReportService {
     private static final int NAME_COLUMN = 3;           // C
     private static final int REMARKS_COLUMN = 44;       // AR
 
-    // ---- Header cells we WRITE (F3/F4 are hardcoded in template) ----
+    // ---- Header cells ----
     private static final String SCHOOL_YEAR_CELL = "M3";
     private static final String REPORT_MONTH_CELL = "AA3";
     private static final String GRADE_LEVEL_CELL = "AA4";
     private static final String SECTION_CELL = "AM4";
     private static final String SCHOOL_DAYS_CELL = "AW4";
 
-    // ---- Enrollment summary (row 65 of Summary block) ----
-    private static final String ENROLLMENT_MALE_CELL   = "AR65";
-    private static final String ENROLLMENT_FEMALE_CELL = "AS65";
-    private static final String ENROLLMENT_TOTAL_CELL  = "AT65";
+    // ---- Summary block: cell coordinates (M, F, TOTAL) ----
+    // Row 65: Enrolment as of 1st Friday
+    private static final String ROW1_M = "AR65", ROW1_F = "AS65", ROW1_T = "AT65";
+    // Row 66: Late enrolment during the month
+    private static final String ROW2_M = "AR66", ROW2_F = "AS66", ROW2_T = "AT66";
+    // Row 67: Registered Learners as of end of month
+    private static final String ROW3_M = "AR67", ROW3_F = "AS67", ROW3_T = "AT67";
+    // Row 73: Percentage of Enrolment as of end of month
+    private static final String ROW4_M = "AR73", ROW4_F = "AS73", ROW4_T = "AT73";
+    // Row 75: Average Daily Attendance
+    private static final String ROW5_M = "AR75", ROW5_F = "AS75", ROW5_T = "AT75";
+    // Row 77: Percentage of Attendance for the month
+    private static final String ROW6_M = "AR77", ROW6_F = "AS77", ROW6_T = "AT77";
+    // Row 78: Number of students absent for 5 consecutive days
+    private static final String ROW7_M = "AR78", ROW7_F = "AS78", ROW7_T = "AT78";
+    // Row 79: NLS
+    private static final String ROW8_M = "AR79", ROW8_F = "AS79", ROW8_T = "AT79";
+    // Row 81: Transferred out
+    private static final String ROW9_M = "AR81", ROW9_F = "AS81", ROW9_T = "AT81";
+    // Row 83: Transferred in
+    private static final String ROW10_M = "AR83", ROW10_F = "AS83", ROW10_T = "AT83";
+    // ---- NLS exit types ----
+    // Any exit that removes the student from school.
+    // promoted & section_transfer are excluded — student is still in school.
+    // NOTE: EnumSet.of is null-safe in contains() unlike Set.of.
+    private static final Set<ExitType> NLS_EXIT_TYPES = EnumSet.of(
+            ExitType.dropped,
+            ExitType.transferred_out,
+            ExitType.graduated
+    );
+
+    private static final Set<ExitType> TRANSFERRED_OUT_TYPES = EnumSet.of(
+            ExitType.transferred_out
+    );
 
     private final SectionRepository sectionRepository;
     private final StudentSectionAssignmentRepository assignmentRepository;
@@ -112,8 +142,10 @@ public class SF2ReportService {
 
         SchoolYear schoolYear = section.getSchoolYear();
         LocalDate firstFriday = calculateFirstFriday(schoolYear.getStartDate());
-        EnrollmentCounts enrollmentCounts =
-                calculateEnrollmentSinceFirstFriday(section.getSectionId(), firstFriday);
+
+        SummaryMetrics summary = computeSummary(
+                section.getSectionId(), periodStart, periodEnd, firstFriday,
+                schoolDays.size(), attendanceByAssignment, roster);
 
         try (InputStream template = new ClassPathResource(TEMPLATE_PATH).getInputStream();
              Workbook workbook = new XSSFWorkbook(template)) {
@@ -129,7 +161,7 @@ public class SF2ReportService {
                     schoolDays, attendanceByAssignment);
             writeRoster(sheet, femaleRoster, FEMALE_FIRST_ROW, FEMALE_LAST_ROW,
                     schoolDays, attendanceByAssignment);
-            writeEnrollmentSummary(sheet, enrollmentCounts);
+            writeSummary(sheet, summary);
 
             workbook.setForceFormulaRecalculation(true);
 
@@ -141,9 +173,203 @@ public class SF2ReportService {
         }
     }
 
-    // ---------------------------------------------------------------
-    // Enrollment since 1st Friday
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // Summary computation
+    // ===============================================================
+
+    private SummaryMetrics computeSummary(int sectionId,
+                                          LocalDate periodStart,
+                                          LocalDate periodEnd,
+                                          LocalDate firstFriday,
+                                          int schoolDayCount,
+                                          Map<Long, Map<LocalDate, AttendanceStatus>> attendanceByAssignment,
+                                          List<StudentSectionAssignment> roster) {
+
+        // Row 1: Enrolment as of 1st Friday
+        List<StudentSectionAssignment> ffRoster = assignmentRepository
+                .findActiveAsOfDate(sectionId, firstFriday);
+        MetricValue enrolmentFf = countBySex(ffRoster);
+
+        // Row 2: Late enrolment during the month
+        List<StudentSectionAssignment> lateEnrolees = assignmentRepository
+                .findAssignedDuringPeriod(sectionId, firstFriday.plusDays(1), periodEnd);
+        MetricValue lateEnrolment = countBySex(lateEnrolees);
+
+        // Row 3: Registered Learners as of end of month
+        List<StudentSectionAssignment> eomRoster = assignmentRepository
+                .findActiveAsOfDate(sectionId, periodEnd);
+        MetricValue registeredEom = countBySex(eomRoster);
+
+        // Row 4: Percentage of Enrolment as of EOM
+        double pctEnrolM = percent(registeredEom.male(), enrolmentFf.male());
+        double pctEnrolF = percent(registeredEom.female(), enrolmentFf.female());
+        double pctEnrolT = percent(registeredEom.total(), enrolmentFf.total());
+        MetricValue pctEnrolment = new MetricValue(pctEnrolM, pctEnrolF, pctEnrolT);
+
+        // Row 5: Average Daily Attendance
+        AttendanceCounts attCounts = countPresentsAndAbsents(roster, attendanceByAssignment);
+        double avgM = schoolDayCount == 0 ? 0.0
+                : Math.round((double) attCounts.presentsMale() / schoolDayCount * 100.0) / 100.0;
+        double avgF = schoolDayCount == 0 ? 0.0
+                : Math.round((double) attCounts.presentsFemale() / schoolDayCount * 100.0) / 100.0;
+        double avgT = schoolDayCount == 0 ? 0.0
+                : Math.round((double) (attCounts.presentsMale() + attCounts.presentsFemale())
+                / schoolDayCount * 100.0) / 100.0;
+        MetricValue avgDailyAttendance = new MetricValue(avgM, avgF, avgT);
+
+        // Row 6: Percentage of Attendance for the month
+        double pctAttM = percent(avgM, registeredEom.male());
+        double pctAttF = percent(avgF, registeredEom.female());
+        double pctAttT = percent(avgT, registeredEom.total());
+        MetricValue pctAttendance = new MetricValue(pctAttM, pctAttF, pctAttT);
+
+        // Row 7: Students absent for 5+ consecutive days
+        ConsecutiveAbsenceCounts abs5 = countConsecutiveAbsences(
+                roster, attendanceByAssignment, 5);
+        MetricValue absent5 = new MetricValue(
+                abs5.male(), abs5.female(), abs5.male() + abs5.female());
+
+        // Row 8: NLS — dropped + transferred_out + graduated
+        MetricValue nls = countExitsMatching(
+                roster, periodStart, periodEnd, NLS_EXIT_TYPES);
+
+        // Row 9: Transferred out — specific exit type only
+        MetricValue transferredOut = countExitsMatching(
+                roster, periodStart, periodEnd, TRANSFERRED_OUT_TYPES);
+
+        // Row 10: Transferred in
+        MetricValue transferredIn = countTransferredIn(sectionId, periodStart, periodEnd);
+
+        return new SummaryMetrics(
+                enrolmentFf, lateEnrolment, registeredEom,
+                pctEnrolment, avgDailyAttendance, pctAttendance,
+                absent5, nls, transferredOut, transferredIn);
+    }
+
+    private MetricValue countBySex(List<StudentSectionAssignment> list) {
+        long m = list.stream().filter(a -> a.getStudent().getSex() == Sex.Male).count();
+        long f = list.stream().filter(a -> a.getStudent().getSex() == Sex.Female).count();
+        return new MetricValue(m, f, m + f);
+    }
+
+    private double percent(double numerator, double denominator) {
+        if (denominator == 0) return 0.0;
+        return Math.round((numerator / denominator) * 10000.0) / 100.0;
+    }
+
+    private AttendanceCounts countPresentsAndAbsents(
+            List<StudentSectionAssignment> roster,
+            Map<Long, Map<LocalDate, AttendanceStatus>> attendanceByAssignment) {
+
+        long pM = 0, pF = 0, aM = 0, aF = 0;
+        for (StudentSectionAssignment a : roster) {
+            Map<LocalDate, AttendanceStatus> byDate = attendanceByAssignment
+                    .getOrDefault(a.getAssignmentId(), Map.of());
+            long p = byDate.values().stream().filter(s -> s == AttendanceStatus.present).count();
+            long abs = byDate.values().stream().filter(s -> s == AttendanceStatus.absent).count();
+            if (a.getStudent().getSex() == Sex.Male) { pM += p; aM += abs; }
+            else { pF += p; aF += abs; }
+        }
+        return new AttendanceCounts(pM, pF, aM, aF);
+    }
+
+    private ConsecutiveAbsenceCounts countConsecutiveAbsences(
+            List<StudentSectionAssignment> roster,
+            Map<Long, Map<LocalDate, AttendanceStatus>> attendanceByAssignment,
+            int threshold) {
+
+        long male = 0, female = 0;
+        for (StudentSectionAssignment a : roster) {
+            Map<LocalDate, AttendanceStatus> byDate = attendanceByAssignment
+                    .getOrDefault(a.getAssignmentId(), Map.of());
+            if (hasConsecutiveAbsences(byDate, threshold)) {
+                if (a.getStudent().getSex() == Sex.Male) male++;
+                else female++;
+            }
+        }
+        return new ConsecutiveAbsenceCounts(male, female);
+    }
+
+    private boolean hasConsecutiveAbsences(Map<LocalDate, AttendanceStatus> byDate, int threshold) {
+        if (byDate.isEmpty()) return false;
+        List<LocalDate> sortedDates = new ArrayList<>(byDate.keySet());
+        Collections.sort(sortedDates);
+
+        int run = 0;
+        LocalDate prev = null;
+        for (LocalDate d : sortedDates) {
+            boolean isAbsent = byDate.get(d) == AttendanceStatus.absent;
+            boolean adjacent = prev == null || d.toEpochDay() - prev.toEpochDay() <= 3;
+
+            if (isAbsent && adjacent) {
+                run++;
+                if (run >= threshold) return true;
+            } else if (isAbsent) {
+                run = 1;
+            } else {
+                run = 0;
+            }
+            prev = d;
+        }
+        return false;
+    }
+
+    /**
+     * Count students whose exit type matches any of {@code exitTypes}
+     * AND whose {@code leftAt} falls within [periodStart, periodEnd].
+     *
+     * NOTE: We filter out null exitType BEFORE calling contains(),
+     * because some immutable sets (like Set.of) throw NPE on contains(null).
+     */
+    private MetricValue countExitsMatching(List<StudentSectionAssignment> roster,
+                                           LocalDate periodStart,
+                                           LocalDate periodEnd,
+                                           Set<ExitType> exitTypes) {
+        long m = roster.stream()
+                .filter(a -> a.getExitType() != null)
+                .filter(a -> exitTypes.contains(a.getExitType()))
+                .filter(a -> a.getLeftAt() != null
+                        && !a.getLeftAt().isBefore(periodStart)
+                        && !a.getLeftAt().isAfter(periodEnd))
+                .filter(a -> a.getStudent().getSex() == Sex.Male)
+                .count();
+        long f = roster.stream()
+                .filter(a -> a.getExitType() != null)
+                .filter(a -> exitTypes.contains(a.getExitType()))
+                .filter(a -> a.getLeftAt() != null
+                        && !a.getLeftAt().isBefore(periodStart)
+                        && !a.getLeftAt().isAfter(periodEnd))
+                .filter(a -> a.getStudent().getSex() == Sex.Female)
+                .count();
+        return new MetricValue(m, f, m + f);
+    }
+
+    private MetricValue countTransferredIn(int sectionId,
+                                           LocalDate periodStart,
+                                           LocalDate periodEnd) {
+        List<StudentSectionAssignment> newAssignments = assignmentRepository
+                .findAssignedDuringPeriod(sectionId, periodStart, periodEnd);
+
+        long m = 0, f = 0;
+        for (StudentSectionAssignment a : newAssignments) {
+            List<StudentSectionAssignment> prev = assignmentRepository
+                    .findOtherAssignmentsForStudent(
+                            a.getStudent().getStudentId(),
+                            sectionId,
+                            a.getAssignmentId());
+            boolean cameFromTransfer = prev.stream()
+                    .anyMatch(p -> p.getExitType() == ExitType.transferred_out);
+            if (cameFromTransfer) {
+                if (a.getStudent().getSex() == Sex.Male) m++;
+                else f++;
+            }
+        }
+        return new MetricValue(m, f, m + f);
+    }
+
+    // ===============================================================
+    // Writers
+    // ===============================================================
 
     private LocalDate calculateFirstFriday(LocalDate schoolYearStart) {
         LocalDate date = schoolYearStart;
@@ -152,26 +378,6 @@ public class SF2ReportService {
         }
         return date;
     }
-
-    private EnrollmentCounts calculateEnrollmentSinceFirstFriday(
-            int sectionId, LocalDate firstFriday) {
-
-        List<StudentSectionAssignment> enrollmentRoster = assignmentRepository
-                .findActiveAsOfDate(sectionId, firstFriday);
-
-        long male = enrollmentRoster.stream()
-                .filter(a -> a.getStudent().getSex() == Sex.Male)
-                .count();
-        long female = enrollmentRoster.stream()
-                .filter(a -> a.getStudent().getSex() == Sex.Female)
-                .count();
-
-        return new EnrollmentCounts((int) male, (int) female);
-    }
-
-    // ---------------------------------------------------------------
-    // Days and attendance
-    // ---------------------------------------------------------------
 
     private List<LocalDate> weekdaysInMonth(YearMonth period) {
         List<LocalDate> days = new ArrayList<>();
@@ -222,17 +428,12 @@ public class SF2ReportService {
                 .toList();
     }
 
-    // ---------------------------------------------------------------
-    // Writers
-    // ---------------------------------------------------------------
-
     private void writeHeader(Sheet sheet, Section section, YearMonth period,
                              int schoolDayCount) {
         SchoolYear schoolYear = section.getSchoolYear();
         String monthLabel = period.getMonth()
                 .getDisplayName(TextStyle.FULL, Locale.ENGLISH).toUpperCase();
 
-        // School ID (F3) and Name of School (F4) are hardcoded in the template.
         setCell(sheet, SCHOOL_YEAR_CELL, schoolYear.getSchoolYearName());
         setCell(sheet, REPORT_MONTH_CELL, monthLabel);
         setCell(sheet, GRADE_LEVEL_CELL, gradeLevelLabel(section.getGradeLevel()));
@@ -272,7 +473,6 @@ public class SF2ReportService {
                 if (mark != null) {
                     setCell(sheet, row, FIRST_DAY_COLUMN + i, mark);
                 }
-                // else: leave cell untouched — it stays blank but keeps template styling
             }
 
             String remarks = buildRemarks(assignment);
@@ -283,19 +483,11 @@ public class SF2ReportService {
             row++;
         }
 
-        // Blank out unused roster rows (values only, keep styles)
         for (int emptyRow = firstRow + assignments.size(); emptyRow <= lastRow; emptyRow++) {
             clearRowData(sheet, emptyRow, schoolDays.size());
         }
     }
 
-    /**
-     * SF2 attendance mark.
-     *   absent    → "A"  (explicit record of absence)
-     *   present   → "P"
-     *   on_school → "P"  (transient; student is on campus)
-     *   null      → "P"  (no record = not flagged as absent)
-     */
     private String toSf2Mark(AttendanceStatus status) {
         if (status == null) return null;
         if (status == AttendanceStatus.absent) return "A";
@@ -306,14 +498,10 @@ public class SF2ReportService {
         if (assignment.getLeftAt() == null && assignment.getExitType() == null) {
             return null;
         }
-
         ExitType exitType = assignment.getExitType();
-        if (exitType == null) {
-            return null;
-        }
+        if (exitType == null) return null;
 
         String note = assignment.getRemarks();
-
         return switch (exitType) {
             case dropped         -> "NLS: " + remarkOr(note, "Dropped");
             case transferred_out -> "NLS (Transferred Out): " + remarkOr(note, "School name not specified");
@@ -326,9 +514,6 @@ public class SF2ReportService {
         return (value != null && !value.isBlank()) ? value : fallback;
     }
 
-    /**
-     * Blank cell VALUES only (preserve borders/styles from template).
-     */
     private void clearRowData(Sheet sheet, int rowNum, int schoolDayCount) {
         Row row = sheet.getRow(rowNum - 1);
         if (row == null) return;
@@ -338,22 +523,34 @@ public class SF2ReportService {
             Cell cell = row.getCell(col - 1);
             if (cell != null) cell.setBlank();
         }
-
         for (int i = 0; i < schoolDayCount; i++) {
             Cell cell = row.getCell(FIRST_DAY_COLUMN + i - 1);
             if (cell != null) cell.setBlank();
         }
     }
 
-    private void writeEnrollmentSummary(Sheet sheet, EnrollmentCounts counts) {
-        setCell(sheet, ENROLLMENT_MALE_CELL, counts.male());
-        setCell(sheet, ENROLLMENT_FEMALE_CELL, counts.female());
-        setCell(sheet, ENROLLMENT_TOTAL_CELL, counts.total());
+    private void writeSummary(Sheet sheet, SummaryMetrics s) {
+        writeMetric(sheet, ROW1_M, ROW1_F, ROW1_T, s.enrolmentFirstFriday());
+        writeMetric(sheet, ROW2_M, ROW2_F, ROW2_T, s.lateEnrolment());
+        writeMetric(sheet, ROW3_M, ROW3_F, ROW3_T, s.registeredEndOfMonth());
+        writeMetric(sheet, ROW4_M, ROW4_F, ROW4_T, s.percentEnrolment());
+        writeMetric(sheet, ROW5_M, ROW5_F, ROW5_T, s.averageDailyAttendance());
+        writeMetric(sheet, ROW6_M, ROW6_F, ROW6_T, s.percentAttendance());
+        writeMetric(sheet, ROW7_M, ROW7_F, ROW7_T, s.absentFiveConsecutive());
+        writeMetric(sheet, ROW8_M, ROW8_F, ROW8_T, s.nls());
+        writeMetric(sheet, ROW9_M, ROW9_F, ROW9_T, s.transferredOut());
+        writeMetric(sheet, ROW10_M, ROW10_F, ROW10_T, s.transferredIn());
     }
 
-    // ---------------------------------------------------------------
+    private void writeMetric(Sheet sheet, String mCell, String fCell, String tCell, MetricValue v) {
+        setCell(sheet, mCell, v.male());
+        setCell(sheet, fCell, v.female());
+        setCell(sheet, tCell, v.total());
+    }
+
+    // ===============================================================
     // Helpers
-    // ---------------------------------------------------------------
+    // ===============================================================
 
     private String formatSF2Name(Student student) {
         StringBuilder name = new StringBuilder()
@@ -405,7 +602,30 @@ public class SF2ReportService {
         }
     }
 
-    private record EnrollmentCounts(int male, int female) {
-        int total() { return male + female; }
+    // ===============================================================
+    // Internal records
+    // ===============================================================
+
+    private record MetricValue(double male, double female, double total) {
+        MetricValue(long male, long female, long total) {
+            this((double) male, (double) female, (double) total);
+        }
     }
+
+    private record AttendanceCounts(long presentsMale, long presentsFemale,
+                                    long absentsMale, long absentsFemale) { }
+
+    private record ConsecutiveAbsenceCounts(long male, long female) { }
+
+    private record SummaryMetrics(
+            MetricValue enrolmentFirstFriday,
+            MetricValue lateEnrolment,
+            MetricValue registeredEndOfMonth,
+            MetricValue percentEnrolment,
+            MetricValue averageDailyAttendance,
+            MetricValue percentAttendance,
+            MetricValue absentFiveConsecutive,
+            MetricValue nls,
+            MetricValue transferredOut,
+            MetricValue transferredIn) { }
 }

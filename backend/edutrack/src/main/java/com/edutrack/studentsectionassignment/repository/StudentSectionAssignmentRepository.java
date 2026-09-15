@@ -62,4 +62,27 @@ public interface StudentSectionAssignmentRepository
     List<StudentSectionAssignment> findActiveAsOfDate(
             @Param("sectionId") int sectionId,
             @Param("asOfDate") LocalDate asOfDate);
+
+    @Query("""
+    SELECT a FROM StudentSectionAssignment a
+    WHERE a.section.sectionId = :sectionId
+    AND a.assignedAt BETWEEN :periodStart AND :periodEnd
+    ORDER BY a.student.lastName, a.student.firstName
+    """)
+    List<StudentSectionAssignment> findAssignedDuringPeriod(
+            @Param("sectionId") int sectionId,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
+
+    @Query("""
+    SELECT a FROM StudentSectionAssignment a
+    WHERE a.student.studentId = :studentId
+    AND a.assignmentId <> :excludeAssignmentId
+    AND a.section.sectionId <> :sectionId
+    ORDER BY a.assignedAt DESC
+    """)
+    List<StudentSectionAssignment> findOtherAssignmentsForStudent(
+            @Param("studentId") long studentId,
+            @Param("sectionId") int sectionId,
+            @Param("excludeAssignmentId") long excludeAssignmentId);
 }
