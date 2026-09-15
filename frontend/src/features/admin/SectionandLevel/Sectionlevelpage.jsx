@@ -24,27 +24,10 @@ import { logActivity } from "../ActivityLogs/Activitylogservice";
 
 const PAGE_SIZE = 10;
 
-// How many rows to pull per field when a search term is active. The
-// backend can only filter by section name OR adviser name in a single
-// request (it ANDs the two params together, it can't OR them), so a
-// search fetches both matches separately and merges them client-side -
-// see loadSections() below. This cap keeps both requests bounded; if a
-// single school somehow has more than this many matches for one search
-// term, results past the cap won't be included (acceptable trade-off
-// without a combined search endpoint on the backend).
+// The backend can only AND section-name and adviser-name filters (never OR them), so an active search fetches both matches separately and merges them client-side - see loadSections() below; results past this cap per field are dropped.
 const SEARCH_FETCH_SIZE = 200;
 
-// GET /api/section has no schoolYearId query param - SectionController /
-// SectionSpecification only support fullName, gradeLevel, sectionStatus,
-// and sectionName. Spring silently drops unknown params instead of
-// erroring, so sending schoolYearId does nothing server-side. Until the
-// backend adds real support for it, the School Year filter is applied
-// client-side: fetch a larger unpaginated-ish batch (filtered by whatever
-// the backend CAN filter on - gradeLevel/status/search), then match each
-// section's `schoolYear` label against the selected year and paginate
-// locally. Same trade-off as SEARCH_FETCH_SIZE above: if a single school
-// year + grade + status combo somehow has more matches than this cap,
-// results past it won't show up.
+// GET /api/section has no schoolYearId param (Spring silently drops unknown params), so the School Year filter fetches a larger batch filtered by whatever the backend CAN filter on, matches each section's `schoolYear` label client-side, then paginates locally; results past this cap won't show up.
 const SCHOOL_YEAR_FETCH_SIZE = 300;
 
 function Sectionlevelpage() {
@@ -52,12 +35,7 @@ function Sectionlevelpage() {
   const [advisers, setAdvisers] = useState([]);
   const [schoolYears, setSchoolYears] = useState([]);
   const [planningSchoolYears, setPlanningSchoolYears] = useState([]);
-  // Closed and Archived (past) school years are valid CLONE sources for
-  // "Start New School Year" - see newSchoolYearSourceOptions below -
-  // alongside the currently Active year (the quick-start path: closes it
-  // and activates the target). Neither list is a valid target, and
-  // neither is offered on the Add/Edit Section form, so both stay
-  // separate from schoolYears/planningSchoolYears.
+  // Closed and Archived (past) school years are valid CLONE sources for "Start New School Year" (see newSchoolYearSourceOptions below), alongside the currently Active year - but neither is a valid target or offered on the Add/Edit form, so both stay separate from schoolYears/planningSchoolYears.
   const [closedSchoolYears, setClosedSchoolYears] = useState([]);
   const [archivedSchoolYears, setArchivedSchoolYears] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,49 +47,20 @@ function Sectionlevelpage() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
 
-  // Separate from schoolYears/planningSchoolYears above (those two only
-  // ever hold "active" and "planning" years, for the Add/Edit and New
-  // School Year form dropdowns). The filter bar should let you look back
-  // at sections under closed/archived years too, so it gets its own
-  // unfiltered list.
+  // Separate from schoolYears/planningSchoolYears above (those only ever hold "active"/"planning" years for the Add/Edit and New School Year dropdowns) - the filter bar should look back at closed/archived years too, so it gets its own unfiltered list.
   const [schoolYearFilter, setSchoolYearFilter] = useState("");
   const [allSchoolYears, setAllSchoolYears] = useState([]);
 
-  // Teacher filter - stores the selected adviser's id (string, same
-  // convention as schoolYearFilter) and reuses the `advisers` list that's
-  // already loaded for the Add/Edit Section modal's Adviser field, so no
-  // extra fetch is needed just for this dropdown.
+  // Teacher filter - stores the selected adviser's id (string, same convention as schoolYearFilter) and reuses the `advisers` list already loaded for the Add/Edit Section modal's Adviser field, so no extra fetch is needed.
   const [teacherFilter, setTeacherFilter] = useState("");
 
-  // BUG FIX: loadSections() used to depend on `allSchoolYears` directly
-  // (the whole array) so it could react once the id->label list caught up
-  // after a filter was picked before that list was ready. But
-  // loadAllSchoolYears() is re-run every time the School Year dropdown is
-  // OPENED (see onSchoolYearDropdownOpen below), not just once - and each
-  // call produces a brand-new array reference even when the actual years
-  // haven't changed. That made `allSchoolYears` change identity on every
-  // dropdown open, which re-triggered the sections effect below and
-  // reloaded the whole table (visible "Loading sections..." flicker) just
-  // from opening the dropdown, plus a redundant double-fetch on mount
-  // (once immediately, once again the moment the initial
-  // loadAllSchoolYears() call resolved).
-  //
-  // Depending on this derived, primitive label instead fixes both: it's
-  // `null` whenever no school year is selected (so reopening/refreshing
-  // the dropdown without picking anything never changes it), and it only
-  // changes when the label that a selected id resolves to actually
-  // changes - not every time the backing array is refetched.
+  // BUG FIX: loadSections() used to depend on `allSchoolYears` directly, but that array gets a new reference every time the School Year dropdown is opened (see onSchoolYearDropdownOpen), which re-triggered the sections effect and reloaded the whole table just from opening the dropdown. Depending on this derived, primitive label instead fixes it: it's `null` when nothing's selected, and only changes when the resolved label itself actually changes.
   const selectedSchoolYearLabel = useMemo(() => {
     if (!schoolYearFilter) return null;
     return allSchoolYears.find((sy) => String(sy.id) === schoolYearFilter)?.label ?? null;
   }, [schoolYearFilter, allSchoolYears]);
 
-  // GET /api/section already accepts a `fullName` param (SectionSpecification
-  // .hasAdviserName) - that's the same param the free-text search box's
-  // "adviser" half sends. So unlike the School Year filter (no backend
-  // param at all), this dropdown can just resolve the picked id to that
-  // adviser's exact name and pass it straight through as a normal AND'd
-  // filter - no client-side fetch-all-and-match workaround needed.
+  // GET /api/section already accepts a `fullName` param (SectionSpecification.hasAdviserName), the same one the search box's "adviser" half sends - so unlike the School Year filter, this just resolves the picked id to a name and passes it straight through as a normal AND'd filter.
   const selectedTeacherName = useMemo(() => {
     if (!teacherFilter) return null;
     return advisers.find((adviser) => String(adviser.id) === teacherFilter)?.name ?? null;
@@ -132,10 +81,7 @@ function Sectionlevelpage() {
 
   const { toasts, showToast, dismissToast } = useToasts();
 
-  // Holds the AbortController for whichever /api/section request(s) are
-  // currently in flight, so that if filters/search/page change again
-  // before they resolve, we cancel them instead of letting a slower, older
-  // response arrive after (and overwrite the table with) a newer one.
+  // Holds the AbortController for whichever /api/section request(s) are currently in flight, so a filter/search/page change before they resolve cancels them instead of letting a slower, older response overwrite the table.
   const abortControllerRef = useRef(null);
 
   // CONNECT: GET /api/section
@@ -151,9 +97,7 @@ function Sectionlevelpage() {
       let pageContent;
       let newTotalPages;
 
-      // Either the search box or the School Year filter (or both) force
-      // us off the normal server-paginated path and into fetch-a-batch,
-      // filter/merge locally, then paginate locally.
+      // Either the search box or the School Year filter (or both) force us off the normal server-paginated path and into fetch-a-batch, filter/merge locally, then paginate locally.
       const needsClientSideFiltering = Boolean(debouncedSearch) || Boolean(schoolYearFilter);
 
       if (needsClientSideFiltering) {
@@ -161,13 +105,7 @@ function Sectionlevelpage() {
 
         if (debouncedSearch) {
           if (selectedTeacherName) {
-            // A specific teacher is already pinned via the dropdown, so
-            // the free-text box's "OR match on adviser name" behavior
-            // doesn't apply anymore - `fullName` is spoken for by the
-            // selected teacher instead. The search term just narrows
-            // that teacher's sections by name, and since sectionName +
-            // fullName are AND'd on the backend already, one fetch
-            // covers it - no parallel adviser-name fetch to merge in.
+            // A specific teacher is already pinned via the dropdown, so the free-text box's "OR match on adviser name" behavior doesn't apply anymore - fullName is spoken for by the selected teacher, and since sectionName + fullName are AND'd on the backend already, one fetch covers it.
             const response = await getSections({
               sectionSearch: debouncedSearch,
               search: selectedTeacherName,
@@ -179,12 +117,7 @@ function Sectionlevelpage() {
             });
             combined = response.content;
           } else {
-            // Fetch section-name matches and adviser-name matches in parallel
-            // and merge them, instead of only falling back to adviser-name
-            // matches when section-name matches are completely empty. The old
-            // "if zero section-name hits, try adviser" approach silently hid
-            // real adviser matches any time the term also happened to match
-            // any section name at all.
+            // Fetch section-name matches and adviser-name matches in parallel and merge them, instead of only falling back to adviser matches when section-name matches are empty - the old approach silently hid real adviser matches whenever the term also matched a section name.
             const [bySectionName, byAdviserName] = await Promise.all([
               getSections({
                 sectionSearch: debouncedSearch,
@@ -212,10 +145,7 @@ function Sectionlevelpage() {
             combined = Array.from(mergedById.values());
           }
         } else {
-          // No search term - the School Year and/or Teacher filter is why
-          // we're here, so one fetch (narrowed by whatever the backend
-          // supports: gradeLevel/status/fullName) is enough to filter
-          // locally for school year.
+          // No search term - the School Year and/or Teacher filter is why we're here, so one fetch (narrowed by whatever the backend supports) is enough to filter locally for school year.
           const response = await getSections({
             gradeLevel,
             status,
@@ -228,12 +158,7 @@ function Sectionlevelpage() {
         }
 
         if (schoolYearFilter) {
-          // SectionResponse only exposes the school year as a display
-          // name (no id), so matching has to go through the resolved
-          // label (see selectedSchoolYearLabel above). If it somehow isn't
-          // resolvable yet (shouldn't happen - you can only pick an id
-          // that's already in the dropdown's own options), fail open
-          // rather than hiding everything.
+          // SectionResponse only exposes the school year as a display name (no id), so matching goes through the resolved label (see selectedSchoolYearLabel) - fails open rather than hiding everything if it's somehow not resolvable yet.
           if (selectedSchoolYearLabel) {
             combined = combined.filter((section) => section.schoolYear === selectedSchoolYearLabel);
           }
@@ -292,13 +217,7 @@ function Sectionlevelpage() {
 
   useEffect(() => {
     loadSections();
-    // selectedSchoolYearLabel/selectedTeacherName (not allSchoolYears/
-    // advisers) are the dependencies here on purpose - see the BUG FIX
-    // comment where selectedSchoolYearLabel is derived above; the same
-    // reasoning applies to selectedTeacherName. Both still re-run this
-    // effect if a filter is picked before their id->label/name list has
-    // caught up, but do NOT re-run just because a dropdown was reopened
-    // and refetched the same underlying list into a new array reference.
+    // selectedSchoolYearLabel/selectedTeacherName (not allSchoolYears/advisers) are the dependencies here on purpose - see the BUG FIX comment above; this still re-runs if a filter is picked before its list has caught up, but not just because a dropdown was reopened and refetched into a new array reference.
   }, [
     debouncedSearch,
     gradeLevel,
@@ -310,16 +229,7 @@ function Sectionlevelpage() {
     currentPage,
   ]);
 
-  // Hits GET /api/school-year for each status this page needs: active (the
-  // section form's school-year field, the "target" list alongside
-  // planning, and also a "source" option), planning (a "target" option),
-  // and closed/archived (also "source" options - see
-  // newSchoolYearSourceOptions below). Pulled into its own function
-  // (instead of an inline effect) so it can be re-run on demand - see
-  // handleOpenAdd/handleOpenEdit/handleOpenNewSchoolYear below - and not
-  // just once on page load. Without that, a school year created or
-  // status-changed on the School Year Management page wouldn't show up
-  // here until a full page reload.
+  // Hits GET /api/school-year for every status this page needs (active/planning/closed/archived - see newSchoolYearSourceOptions below); kept as its own function so it can be re-run on demand (handleOpenAdd/Edit/NewSchoolYear) instead of only once on page load.
   async function loadSchoolYearOptions() {
     try {
       const [activeYears, planningYears, closedYears, archivedYears] = await Promise.all([
@@ -337,33 +247,16 @@ function Sectionlevelpage() {
     }
   }
 
-  // Pulled into its own function for the same reason as
-  // loadSchoolYearOptions above - so the Adviser field in Sectionformmodal
-  // can be refreshed on demand (a teacher added/removed elsewhere
-  // shouldn't require a full page reload to show up here).
+  // Own function, same reasoning as loadSchoolYearOptions above - lets the Adviser field in Sectionformmodal refresh on demand instead of needing a full page reload.
   async function loadAdvisers() {
     const teachers = await getTeachers(); // safe: getTeachers() already catches its own errors and falls back to []
     setAdvisers(teachers);
   }
 
-  // Pulled into its own function, same reasoning as loadSchoolYearOptions/
-  // loadAdvisers above: a fetch made once on mount goes stale the moment
-  // someone creates or edits a school year on the School Year Management
-  // page and comes back here, which broke the School Year filter two
-  // different ways - the id->label lookup in loadSections() would fail
-  // open (silently showing all years) for a year picked before this list
-  // caught up, and the filter dropdown itself wouldn't even list the new
-  // year to pick in the first place. Re-run this on demand (see
-  // onSchoolYearDropdownOpen below) instead of relying on the one-time
-  // mount fetch.
+  // Own function, same reasoning as loadSchoolYearOptions/loadAdvisers above - a one-time mount fetch went stale the moment a school year was added/edited elsewhere, breaking the School Year filter (fail-open lookup, or the new year missing from the dropdown); re-run on demand instead (see onSchoolYearDropdownOpen below).
   async function loadAllSchoolYears() {
     try {
-      // Dedicated /school-year/dropdown endpoint - returns every year,
-      // no size ceiling, unlike getSchoolYears() above (hardcoded
-      // size:100 on the paginated GET /school-year, fine for the
-      // active/planning/closed pulls but wrong for "every year regardless
-      // of status," which is what this filter needs). See
-      // getSchoolYearDropdown() in Sectionlevelservice.js.
+      // Dedicated /school-year/dropdown endpoint - returns every year with no size ceiling, unlike getSchoolYears() above (hardcoded size:100, fine for active/planning/closed pulls but wrong for "every year regardless of status").
       const years = await getSchoolYearDropdown();
       setAllSchoolYears(years);
     } catch (error) {
@@ -377,11 +270,7 @@ function Sectionlevelpage() {
     loadAllSchoolYears();
   }, []);
 
-  // Re-fetches school years and advisers right before opening the
-  // Add Section modal, so its School Year / Adviser dropdowns always
-  // reflect whatever was last changed elsewhere (e.g. a school year
-  // archived/activated, or a teacher added) - not whatever was true when
-  // this page happened to load or was last opened.
+  // Re-fetches school years and advisers right before opening the Add Section modal, so its dropdowns always reflect whatever was last changed elsewhere - not whatever was true when this page loaded.
   function handleOpenAdd() {
     setModalMode("add");
     setSelectedSection(null);
@@ -399,10 +288,7 @@ function Sectionlevelpage() {
     loadAdvisers();
   }
 
-  // Re-fetches source/target school year options right before opening
-  // the modal, so it always reflects whatever was last created/changed
-  // on the School Year Management page - not whatever was true when
-  // THIS page happened to load.
+  // Re-fetches source/target school year options right before opening the modal, so it always reflects whatever was last changed on the School Year Management page.
   function handleOpenNewSchoolYear() {
     setIsNewSchoolYearModalOpen(true);
     loadSchoolYearOptions();
@@ -475,20 +361,10 @@ function Sectionlevelpage() {
     }
   }
 
-  // CONNECT: POST /api/section/school-year/new-school-year (active source)
-  // or cloneSectionsAcrossSchoolYears() (closed/archived source - see that
-  // function in Sectionlevelservice.js for why it can't reuse the
-  // endpoint above).
-  //
-  // Which path runs depends entirely on the STATUS of whichever source the
-  // person picked in the modal, not anything the modal itself decides -
-  // newSchoolYearSourceOptions (below) is the single source of truth for
-  // that, since it's the same list that populated the modal's dropdown.
+  // CONNECT: POST /api/section/school-year/new-school-year (active source) or cloneSectionsAcrossSchoolYears() (closed/archived source - see that function in Sectionlevelservice.js for why it can't reuse the endpoint above). Which path runs depends entirely on the source's status - newSchoolYearSourceOptions (below) is the single source of truth, since it's the same list that populated the modal's dropdown.
   async function handleStartNewSchoolYear(payload) {
     const sourceYear = newSchoolYearSourceOptions.find((sy) => sy.id === payload.sourceSchoolYearId);
-    // A Closed/Archived source can target either a "Planning" year or the
-    // current Active year, so the lookup has to check both lists, not
-    // just planning.
+    // A Closed/Archived source can target either a "Planning" year or the current Active year, so the lookup has to check both lists, not just planning.
     const targetYear = [...planningSchoolYears, ...schoolYears].find(
       (sy) => sy.id === payload.targetSchoolYearId
     );
@@ -497,11 +373,7 @@ function Sectionlevelpage() {
       if (sourceYear?.status === "active") {
         const clonedSections = await startNewSchoolYear(payload);
 
-        // The target came from planningSchoolYears in the first place
-        // (that's what populated the modal's dropdown), so its label is
-        // already available here without an extra fetch - used to spell
-        // out exactly which year is now Active instead of leaving that
-        // implicit.
+        // The target came from planningSchoolYears in the first place (that's what populated the modal's dropdown), so its label is already available here without an extra fetch - used to spell out exactly which year is now Active instead of leaving that implicit.
         const targetYearLabel = targetYear?.label ? `"${targetYear.label}" is now Active. ` : "";
 
         showToast(`${targetYearLabel}${clonedSections.length} section(s) carried over.`);
@@ -516,17 +388,11 @@ function Sectionlevelpage() {
           targetSchoolYearId: payload.targetSchoolYearId,
           gradeLevel: payload.gradeLevel,
           advisers,
-          // Which specific sections the admin checked in the modal's
-          // preview list - see cloneSectionsAcrossSchoolYears() for how
-          // this narrows the clone down instead of copying everything
-          // under the source year.
+          // Which specific sections the admin checked in the modal's preview list - see cloneSectionsAcrossSchoolYears() for how this narrows the clone down instead of copying everything under the source year.
           sectionIds: payload.sectionIds,
         });
 
-        // All-failed is treated as a real error (nothing to show for it,
-        // and the person should see why) - anything else is best-effort:
-        // whatever copied over did copy over, so surface the partial
-        // shortfall as a toast rather than discarding the successful ones.
+        // All-failed is treated as a real error (nothing to show for it, and the person should see why) - anything else is best-effort: whatever copied over did copy over, so surface the partial shortfall as a toast rather than discarding the successful ones.
         if (created.length === 0 && failed.length > 0) {
           throw new Error(failed.map((item) => `${item.sectionName}: ${item.reason}`).join(" "));
         }
@@ -546,33 +412,11 @@ function Sectionlevelpage() {
       }
 
       try {
-        // The clone always CREATES new Section rows under the target year -
-        // it never rewrites the originals (see cloneSectionsAcrossSchoolYears
-        // / SectionService.newSchoolYear, both call create/save, never an
-        // update). That's deliberate: a Section is tied to one specific
-        // school year (unique constraint on section_name + school_year_id),
-        // and past enrollment/attendance records point at that exact
-        // sectionId. Rewriting a section's schoolYear in place would silently
-        // rewrite history for whoever was enrolled in it before - so the
-        // source year's sections must stay exactly where they are, and the
-        // target year gets its own new rows instead.
+        // The clone always CREATES new Section rows under the target year - it never rewrites the originals (both cloneSectionsAcrossSchoolYears and SectionService.newSchoolYear call create/save, never an update), since past enrollment/attendance records point at that exact sectionId and rewriting in place would silently rewrite history.
         //
-        // Given that, simply refetching under the CURRENT filters isn't
-        // enough to actually show the admin what just happened - the table
-        // could still be filtered to the source year (so the new rows,
-        // which belong to a different year, wouldn't match at all), to a
-        // Status the fresh sections don't have (they default to "active"),
-        // or unfiltered but paginated so the new rows land on a later page
-        // than whatever's currently shown. So instead of just reloading,
-        // point every filter at exactly the new sections: switch to the
-        // target year, clear Status/grade level/search so nothing hides
-        // them, and jump back to page 1.
+        // Simply refetching under the current filters isn't enough to show what just happened - the table could still be filtered to the source year, to a status the fresh sections don't have, or paginated past where the new rows land - so instead of just reloading, every filter is pointed at exactly the new sections: switch to the target year, clear Status/grade level/search, and jump back to page 1.
         //
-        // allSchoolYears is refreshed first so the target year's label is
-        // already resolvable the moment schoolYearFilter changes -
-        // otherwise selectedSchoolYearLabel can't find it yet and
-        // loadSections() would fail open (show every year, unfiltered) for
-        // one render before catching up.
+        // allSchoolYears is refreshed first so the target year's label is already resolvable the moment schoolYearFilter changes - otherwise selectedSchoolYearLabel can't find it yet and loadSections() would fail open for one render before catching up.
         await loadAllSchoolYears();
         setGradeLevel("");
         setStatus("");
@@ -593,23 +437,13 @@ function Sectionlevelpage() {
     }
   }
 
-  // Sections can be created directly under a "planning" year (e.g.
-  // building out rosters ahead of the year officially starting), not just
-  // the current active one, so the Add/Edit modal's School Year dropdown
-  // needs both lists. Planning entries are labeled so it's clear which
-  // status each option actually has.
+  // Sections can be created directly under a "planning" year (e.g. building out rosters ahead of the year officially starting), not just the current active one, so the Add/Edit modal's School Year dropdown needs both lists, with Planning entries labeled accordingly.
   const sectionFormSchoolYears = [
     ...schoolYears,
     ...planningSchoolYears.map((sy) => ({ ...sy, label: `${sy.label} (Planning)` })),
   ];
 
-  // Source options for "Start New School Year": the currently Active
-  // year(s) (the quick-start case - closes it, activates the target, and
-  // clones every section) PLUS any Closed/Archived (past) years
-  // (clone-select - see handleStartNewSchoolYear above). Each entry is
-  // tagged with its status so both the modal and the submit handler can
-  // tell which behavior applies without re-deriving it from three
-  // separate lists each time.
+  // Source options for "Start New School Year": the currently Active year(s) (quick-start - closes it, activates the target, and clones every section) plus any Closed/Archived (past) years (clone-select), each tagged with its status so both the modal and submit handler can tell which behavior applies.
   const newSchoolYearSourceOptions = [
     ...schoolYears.map((sy) => ({ ...sy, status: "active" })),
     ...closedSchoolYears.map((sy) => ({ ...sy, status: "closed" })),
@@ -642,8 +476,7 @@ function Sectionlevelpage() {
               placeholder="Search by section or adviser"
             />
 
-            {/* Primary, frequent, low-stakes action: solid fill so it
-                reads as the default thing you'd click on this page. */}
+            {/* Primary, frequent, low-stakes action: solid fill so it reads as the default thing you'd click on this page. */}
             <button
               type="button"
               onClick={handleOpenAdd}
@@ -656,8 +489,8 @@ function Sectionlevelpage() {
            <button
               type="button"
               onClick={handleOpenNewSchoolYear}
-              title="Picking your current school year as the source closes it and activates the target, carrying every section over automatically. Picking a past (Closed or Archived) year instead lets you choose specific sections to copy into a Planning year or the current Active year, without changing any school year's status."
-              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-40" >
+              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-40"
+            >
               <CalendarSync size={15} strokeWidth={2.5} />
               New School Year
             </button>

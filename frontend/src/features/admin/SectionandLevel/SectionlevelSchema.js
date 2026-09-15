@@ -42,7 +42,7 @@ export function getNewSchoolYearFormSchema() {
   return Yup.object({
     sourceSchoolYear: sourceSchoolYearField,
     targetSchoolYear: targetSchoolYearField,
-    gradeLevel: Yup.string(),
+    gradeLevel: gradeLevelField,
   });
 }
 
