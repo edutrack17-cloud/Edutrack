@@ -85,4 +85,18 @@ public interface StudentSectionAssignmentRepository
             @Param("studentId") long studentId,
             @Param("sectionId") int sectionId,
             @Param("excludeAssignmentId") long excludeAssignmentId);
+
+    @Query("""
+        SELECT a FROM StudentSectionAssignment a
+        WHERE a.section.sectionId = :sectionId
+        AND a.section.schoolYear = :schoolYear
+        AND (a.leftAt IS NULL OR a.leftAt >= :periodStart)
+        AND a.assignedAt <= :periodEnd
+        ORDER BY a.student.lastName, a.student.firstName
+        """)
+    List<StudentSectionAssignment> findRosterForSectionAndYear(
+            @Param("sectionId") int sectionId,
+            @Param("schoolYear") SchoolYear schoolYear,
+            @Param("periodStart") LocalDate periodStart,
+            @Param("periodEnd") LocalDate periodEnd);
 }
