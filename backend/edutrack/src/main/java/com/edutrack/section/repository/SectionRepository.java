@@ -65,6 +65,12 @@ public interface SectionRepository
 
     Integer countBySchoolYear(SchoolYear schoolYear);
 
+    // FIX: count only sections in a given status (so archived sections don't block cloning)
+    long countBySchoolYearAndSectionStatus(
+            SchoolYear schoolYear,
+            SectionStatus sectionStatus
+    );
+
     Boolean existsByUser(User user);
 
     Boolean existsBySectionNameAndSchoolYear(

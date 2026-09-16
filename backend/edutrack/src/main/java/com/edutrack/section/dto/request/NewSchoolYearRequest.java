@@ -6,8 +6,10 @@ import jakarta.validation.constraints.NotNull;
 public record NewSchoolYearRequest(
         @NotNull
         Long sourceSchoolYearId,
+
         @NotNull
         Long targetSchoolYearId,
-        @NotNull
+
+        // FIX: allow null so the caller can clone ALL grade levels at once
         GradeLevel gradeLevel
 ) {}

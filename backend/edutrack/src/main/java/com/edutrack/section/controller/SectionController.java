@@ -4,7 +4,6 @@ import com.edutrack.section.dto.request.CreateSectionRequest;
 import com.edutrack.section.dto.request.NewSchoolYearRequest;
 import com.edutrack.section.dto.request.UpdateSectionRequest;
 import com.edutrack.section.dto.response.SectionResponse;
-import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.section.service.SectionService;
@@ -21,45 +20,54 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/section")
 public class SectionController {
+
     private final SectionService sectionService;
 
-    public SectionController(SectionService sectionService){
+    public SectionController(SectionService sectionService) {
         this.sectionService = sectionService;
     }
 
     //CREATE
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ResponseEntity<SectionResponse> createSection(@Valid @RequestBody CreateSectionRequest sectionRequest){
+    public ResponseEntity<SectionResponse> createSection(@Valid @RequestBody CreateSectionRequest sectionRequest) {
         SectionResponse savedSection = sectionService.createSection(sectionRequest);
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(savedSection);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedSection);
     }
 
     //READ
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
-    public ResponseEntity<Page<SectionResponse>> getSection(@RequestParam(required = false) String fullName,
-                                                            @RequestParam(required = false) GradeLevel gradeLevel,
-                                                            @RequestParam(required = false) SectionStatus sectionStatus,
-                                                            @RequestParam(required = false) String sectionName,
-                                                            Pageable pageable){
-        return ResponseEntity
-                .ok(sectionService.getSection(fullName, gradeLevel, sectionStatus, sectionName, pageable));
+    public ResponseEntity<Page<SectionResponse>> getSection(
+            @RequestParam(required = false) String fullName,
+            @RequestParam(required = false) GradeLevel gradeLevel,
+            @RequestParam(required = false) SectionStatus sectionStatus,
+            @RequestParam(required = false) String sectionName,
+            @RequestParam(required = false) Long schoolYearId,      // <-- ADD
+            Pageable pageable) {
+        return ResponseEntity.ok(
+                sectionService.getSection(fullName, gradeLevel, sectionStatus, sectionName, schoolYearId, pageable)
+        );
+    }
+
+    //ADD: count sections for a given school year (used by "Start New School Year" modal)
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("count-by-school-year")
+    public ResponseEntity<Long> countBySchoolYear(@RequestParam Long schoolYearId) {
+        return ResponseEntity.ok(sectionService.countBySchoolYear(schoolYearId));
     }
 
     //READ BY ADVISER
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("{userId}")
-    public ResponseEntity<List<SectionResponse>> readSectionByAdviser(@PathVariable Long userId){
+    public ResponseEntity<List<SectionResponse>> readSectionByAdviser(@PathVariable Long userId) {
         return ResponseEntity.ok(sectionService.readSectionByAdviser(userId));
     }
 
     //SECTION DROPDOWN
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("dropdown")
-    public ResponseEntity<List<SectionResponse>> sectionDropdown(@RequestParam(required = false) GradeLevel gradeLevel){
+    public ResponseEntity<List<SectionResponse>> sectionDropdown(@RequestParam(required = false) GradeLevel gradeLevel) {
         return ResponseEntity.ok(sectionService.sectionDropDown(gradeLevel));
     }
 
@@ -69,7 +77,6 @@ public class SectionController {
     public ResponseEntity<SectionResponse> updateSection(
             @PathVariable Integer sectionId,
             @Valid @RequestBody UpdateSectionRequest updateSectionRequest) {
-
         SectionResponse response = sectionService.updateSection(sectionId, updateSectionRequest);
         return ResponseEntity.ok(response);
     }
@@ -93,9 +100,7 @@ public class SectionController {
     //START NEW SCHOOL YEAR
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("school-year/new-school-year")
-    public ResponseEntity<List<SectionResponse>> startNewSchoolYear(@Valid @RequestBody NewSchoolYearRequest request){
+    public ResponseEntity<List<SectionResponse>> startNewSchoolYear(@Valid @RequestBody NewSchoolYearRequest request) {
         return ResponseEntity.ok(sectionService.newSchoolYear(request));
     }
-
-
 }

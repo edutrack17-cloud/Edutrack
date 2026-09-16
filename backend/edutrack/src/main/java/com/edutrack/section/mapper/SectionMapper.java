@@ -12,7 +12,8 @@ import org.mapstruct.Mapping;
 public interface SectionMapper {
 
     @Mapping(target = "adviser", expression = "java(mapAdviserName(section.getUser()))")
-    @Mapping(target = "schoolYear", expression = "java(section.getSchoolYear().getSchoolYearName())")
+    @Mapping(target = "schoolYearId", expression = "java(section.getSchoolYear().getSchoolYearId())")
+    @Mapping(target = "schoolYear",   expression = "java(section.getSchoolYear().getSchoolYearName())")
     SectionResponse toResponseDTO(Section section);
 
     @Mapping(target = "sectionId", ignore = true)
@@ -22,9 +23,7 @@ public interface SectionMapper {
     Section toEntity(CreateSectionRequest clientRequest);
 
     default String mapAdviserName(User user) {
-        if (user == null) {
-            return null; // swap for "Unassigned" if you'd rather the API say so explicitly
-        }
+        if (user == null) return null;
         return NameUtil.buildFullName(user.getFirstName(), user.getMiddleName(), user.getLastName());
     }
 }

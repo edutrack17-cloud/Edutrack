@@ -80,12 +80,10 @@ public class SectionService {
                 .orElseThrow(() -> new UserNotFoundException(userId));
     }
 
-    /*
-     * Removes advisers from every section belonging to the
-     * specified school year.
-     *
-     * This is important because adviser assignments belong
-     * to a particular school year's section.
+    /**
+     * Removes advisers from every section belonging to the specified school year.
+     * FIX: also flushes so the null assignments are visible within the same transaction
+     * (important because other code in the same transaction may re-read these rows).
      */
     private void clearAdvisers(SchoolYear schoolYear) {
 
@@ -95,26 +93,25 @@ public class SectionService {
                 );
 
         sections.forEach(section -> section.setUser(null));
+
+        // FIX: force the UPDATE now so later queries in this transaction see the change
+        sectionRepository.flush();
     }
 
-    /*
+    /**
      * Creates a brand-new section for the target school year.
-     *
      * Adviser is NEVER copied from the source section.
      */
     private Section cloneSection(
             Section sourceSection,
             SchoolYear targetSchoolYear
     ) {
-
         Section newSection = new Section();
 
         newSection.setSectionName(sourceSection.getSectionName());
-
         newSection.setGradeLevel(sourceSection.getGradeLevel());
 
-        // IMPORTANT:
-        // Adviser must never be carried over.
+        // IMPORTANT: adviser must never be carried over.
         newSection.setUser(null);
 
         newSection.setSchoolYear(targetSchoolYear);
@@ -133,7 +130,6 @@ public class SectionService {
     public SectionResponse createSection(
             CreateSectionRequest sectionRequest
     ) {
-
         User adviserToBeAssigned =
                 userRepository.findById(sectionRequest.userId())
                         .orElseThrow(() ->
@@ -156,7 +152,6 @@ public class SectionService {
 
         if (adviserToBeAssigned.getAccountStatus()
                 == AccountStatus.disabled) {
-
             throw new AdviserAccountDisabled();
         }
 
@@ -167,14 +162,12 @@ public class SectionService {
         sectionEntity.setSchoolYear(schoolYearToBeAssigned);
 
         try {
-
             Section savedSection =
-                    sectionRepository.save(sectionEntity);
+                    sectionRepository.saveAndFlush(sectionEntity);
 
             return sectionMapper.toResponseDTO(savedSection);
 
         } catch (DataIntegrityViolationException e) {
-
             throw new SectionAlreadyExists(
                     sectionRequest.sectionName()
             );
@@ -184,21 +177,26 @@ public class SectionService {
     // =========================================================
     // READ
     // =========================================================
+    public long countBySchoolYear(Long schoolYearId) {
+        SchoolYear schoolYear = getBySchoolYearId(schoolYearId);
+        return sectionRepository.countBySchoolYear(schoolYear);
+    }
 
     public Page<SectionResponse> getSection(
             String fullName,
             GradeLevel gradeLevel,
             SectionStatus sectionStatus,
             String sectionName,
+            Long schoolYearId,          // <-- ADD
             Pageable pageable
     ) {
-
         Specification<Section> filters =
                 Specification
                         .where(SectionSpecification.hasAdviserName(fullName))
                         .and(SectionSpecification.hasGradeLevel(gradeLevel))
                         .and(SectionSpecification.hasStatus(sectionStatus))
-                        .and(SectionSpecification.hasSectionName(sectionName));
+                        .and(SectionSpecification.hasSectionName(sectionName))
+                        .and(SectionSpecification.hasSchoolYearId(schoolYearId));  // <-- ADD
 
         Pageable sortedPageable =
                 pageable.getSort().isSorted()
@@ -206,10 +204,7 @@ public class SectionService {
                         : PageRequest.of(
                         pageable.getPageNumber(),
                         pageable.getPageSize(),
-                        Sort.by(
-                                Sort.Direction.DESC,
-                                "sectionId"
-                        )
+                        Sort.by(Sort.Direction.DESC, "sectionId")
                 );
 
         return sectionRepository
@@ -226,13 +221,10 @@ public class SectionService {
         Specification<Section> filters =
                 Specification
                         .where(SectionSpecification.hasAdviserId(userId))
-                        .and(SectionSpecification.hasStatus(
-                                SectionStatus.active
-                        ))
+                        .and(SectionSpecification.hasStatus(SectionStatus.active))
                         .and(SectionSpecification.hasSchoolYearStatus());
 
-        List<Section> listOfSections =
-                sectionRepository.findAll(filters);
+        List<Section> listOfSections = sectionRepository.findAll(filters);
 
         if (listOfSections.isEmpty()) {
             throw new AdvisorySectionNotFound();
@@ -247,18 +239,12 @@ public class SectionService {
     // SECTION DROPDOWN
     // =========================================================
 
-    public List<SectionResponse> sectionDropDown(
-            GradeLevel gradeLevel
-    ) {
+    public List<SectionResponse> sectionDropDown(GradeLevel gradeLevel) {
 
         Specification<Section> filters =
                 Specification
-                        .where(SectionSpecification.hasStatus(
-                                SectionStatus.active
-                        ))
-                        .and(SectionSpecification.hasGradeLevel(
-                                gradeLevel
-                        ))
+                        .where(SectionSpecification.hasStatus(SectionStatus.active))
+                        .and(SectionSpecification.hasGradeLevel(gradeLevel))
                         .and(SectionSpecification.hasSchoolYearStatus());
 
         return sectionRepository
@@ -277,62 +263,39 @@ public class SectionService {
             Integer sectionId,
             UpdateSectionRequest updateSectionRequest
     ) {
-
         Section sectionToUpdate = getById(sectionId);
 
         boolean fieldsChanged = false;
         boolean schoolYearChanged = false;
 
-        String finalSectionName =
-                sectionToUpdate.getSectionName();
+        String finalSectionName = sectionToUpdate.getSectionName();
+        SchoolYear finalSchoolYear = sectionToUpdate.getSchoolYear();
 
-        SchoolYear finalSchoolYear =
-                sectionToUpdate.getSchoolYear();
-
-        // -----------------------------------------------------
         // SECTION NAME
-        // -----------------------------------------------------
-
         if (updateSectionRequest.sectionName() != null
                 && !updateSectionRequest.sectionName().isBlank()
                 && !sectionToUpdate.getSectionName()
-                .equalsIgnoreCase(
-                        updateSectionRequest.sectionName()
-                )) {
+                .equalsIgnoreCase(updateSectionRequest.sectionName())) {
 
-            finalSectionName =
-                    updateSectionRequest.sectionName().trim();
-
+            finalSectionName = updateSectionRequest.sectionName().trim();
             fieldsChanged = true;
         }
 
-        // -----------------------------------------------------
         // SCHOOL YEAR
-        // -----------------------------------------------------
-
         if (updateSectionRequest.schoolYear() != null
                 && !sectionToUpdate.getSchoolYear()
                 .getSchoolYearId()
                 .equals(updateSectionRequest.schoolYear())) {
 
-            finalSchoolYear =
-                    getBySchoolYearId(
-                            updateSectionRequest.schoolYear()
-                    );
-
+            finalSchoolYear = getBySchoolYearId(updateSectionRequest.schoolYear());
             schoolYearChanged = true;
             fieldsChanged = true;
         }
 
-        // -----------------------------------------------------
-        // CHECK DUPLICATE SECTION NAME
-        // -----------------------------------------------------
-
+        // DUPLICATE CHECK
         if (fieldsChanged &&
                 (schoolYearChanged
-                        || !finalSectionName.equals(
-                        sectionToUpdate.getSectionName()
-                ))) {
+                        || !finalSectionName.equals(sectionToUpdate.getSectionName()))) {
 
             if (sectionRepository
                     .existsBySectionNameAndSchoolYear_SchoolYearIdAndSectionIdNot(
@@ -340,107 +303,62 @@ public class SectionService {
                             finalSchoolYear.getSchoolYearId(),
                             sectionId
                     )) {
-
-                throw new SectionAlreadyExists(
-                        finalSectionName
-                );
+                throw new SectionAlreadyExists(finalSectionName);
             }
         }
 
-        // -----------------------------------------------------
-        // APPLY NAME / SCHOOL YEAR
-        // -----------------------------------------------------
-
-        if (!finalSectionName.equals(
-                sectionToUpdate.getSectionName()
-        )) {
-
+        // APPLY NAME
+        if (!finalSectionName.equals(sectionToUpdate.getSectionName())) {
             sectionToUpdate.setSectionName(finalSectionName);
             fieldsChanged = true;
         }
 
+        // APPLY SCHOOL YEAR
         if (schoolYearChanged) {
-
             sectionToUpdate.setSchoolYear(finalSchoolYear);
-
-            /*
-             * IMPORTANT:
-             *
-             * If a section is moved to another school year,
-             * the old adviser must NOT follow it.
-             */
+            // adviser must NOT follow the section to a new school year
             sectionToUpdate.setUser(null);
-
             fieldsChanged = true;
         }
 
-        // -----------------------------------------------------
         // GRADE LEVEL
-        // -----------------------------------------------------
-
         if (updateSectionRequest.gradeLevel() != null
                 && !sectionToUpdate.getGradeLevel()
                 .equals(updateSectionRequest.gradeLevel())) {
 
-            sectionToUpdate.setGradeLevel(
-                    updateSectionRequest.gradeLevel()
-            );
-
+            sectionToUpdate.setGradeLevel(updateSectionRequest.gradeLevel());
             fieldsChanged = true;
         }
 
-        // -----------------------------------------------------
         // ADVISER
-        // -----------------------------------------------------
-
         if (updateSectionRequest.userId() != null
                 && (sectionToUpdate.getUser() == null
                 || !sectionToUpdate.getUser()
                 .getUserId()
                 .equals(updateSectionRequest.userId()))) {
 
-            User newAdviser =
-                    getByUserId(updateSectionRequest.userId());
+            User newAdviser = getByUserId(updateSectionRequest.userId());
 
-            if (newAdviser.getAccountStatus()
-                    == AccountStatus.disabled) {
-
+            if (newAdviser.getAccountStatus() == AccountStatus.disabled) {
                 throw new TeacherAccountDisabled();
             }
 
             sectionToUpdate.setUser(newAdviser);
-
             fieldsChanged = true;
         }
-
-        // -----------------------------------------------------
-        // NO CHANGES
-        // -----------------------------------------------------
 
         if (!fieldsChanged) {
             throw new NoChangesDetected();
         }
 
-        // -----------------------------------------------------
-        // SAVE
-        // -----------------------------------------------------
-
         try {
-
             Section updatedSection =
-                    sectionRepository.saveAndFlush(
-                            sectionToUpdate
-                    );
+                    sectionRepository.saveAndFlush(sectionToUpdate);
 
-            return sectionMapper.toResponseDTO(
-                    updatedSection
-            );
+            return sectionMapper.toResponseDTO(updatedSection);
 
         } catch (DataIntegrityViolationException e) {
-
-            throw new SectionAlreadyExists(
-                    finalSectionName
-            );
+            throw new SectionAlreadyExists(finalSectionName);
         }
     }
 
@@ -453,9 +371,7 @@ public class SectionService {
 
         Section sectionToArchive = getById(sectionId);
 
-        if (sectionToArchive.getSectionStatus()
-                .equals(SectionStatus.archived)) {
-
+        if (sectionToArchive.getSectionStatus() == SectionStatus.archived) {
             throw new AlreadyArchived(
                     sectionToArchive.getSectionName(),
                     sectionId
@@ -467,17 +383,12 @@ public class SectionService {
                         sectionToArchive,
                         SchoolYearStatus.active
                 )) {
-
             throw new SectionHasEnrolledStudents();
         }
 
-        sectionToArchive.setSectionStatus(
-                SectionStatus.archived
-        );
+        sectionToArchive.setSectionStatus(SectionStatus.archived);
 
-        return sectionMapper.toResponseDTO(
-                sectionToArchive
-        );
+        return sectionMapper.toResponseDTO(sectionToArchive);
     }
 
     // =========================================================
@@ -489,22 +400,16 @@ public class SectionService {
 
         Section sectionToRestore = getById(sectionId);
 
-        if (sectionToRestore.getSectionStatus()
-                .equals(SectionStatus.active)) {
-
+        if (sectionToRestore.getSectionStatus() == SectionStatus.active) {
             throw new AlreadyActive(
                     sectionToRestore.getSectionName(),
                     sectionId
             );
         }
 
-        sectionToRestore.setSectionStatus(
-                SectionStatus.active
-        );
+        sectionToRestore.setSectionStatus(SectionStatus.active);
 
-        return sectionMapper.toResponseDTO(
-                sectionToRestore
-        );
+        return sectionMapper.toResponseDTO(sectionToRestore);
     }
 
     // =========================================================
@@ -512,32 +417,21 @@ public class SectionService {
     // =========================================================
 
     @Transactional
-    public List<SectionResponse> newSchoolYear(
-            NewSchoolYearRequest request
-    ) {
+    public List<SectionResponse> newSchoolYear(NewSchoolYearRequest request) {
 
         /*
-         * Prevent two admins from starting a school year
-         * simultaneously.
+         * FIX: acquire the lock at the very start, and do NOT release it early.
+         * The lock must cover the entire read-validate-write cycle.
          */
         schoolYearLockRepository.acquireActivationLock()
-                .orElseThrow(
-                        ActiveSchoolYearLockUnavailable::new
-                );
+                .orElseThrow(ActiveSchoolYearLockUnavailable::new);
 
         // -----------------------------------------------------
         // GET SOURCE / TARGET
         // -----------------------------------------------------
 
-        SchoolYear sourceSchoolYear =
-                getBySchoolYearId(
-                        request.sourceSchoolYearId()
-                );
-
-        SchoolYear targetSchoolYear =
-                getBySchoolYearId(
-                        request.targetSchoolYearId()
-                );
+        SchoolYear sourceSchoolYear = getBySchoolYearId(request.sourceSchoolYearId());
+        SchoolYear targetSchoolYear = getBySchoolYearId(request.targetSchoolYearId());
 
         // -----------------------------------------------------
         // SAME SCHOOL YEAR
@@ -545,7 +439,6 @@ public class SectionService {
 
         if (sourceSchoolYear.getSchoolYearId()
                 .equals(targetSchoolYear.getSchoolYearId())) {
-
             throw new SameSchoolYearNotAllowed();
         }
 
@@ -554,10 +447,8 @@ public class SectionService {
         // -----------------------------------------------------
 
         boolean sourceEligible =
-                sourceSchoolYear.getSchoolYearStatus()
-                        == SchoolYearStatus.active
-                        || sourceSchoolYear.getSchoolYearStatus()
-                        == SchoolYearStatus.closed;
+                sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active
+                        || sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.closed;
 
         if (!sourceEligible) {
             throw new SourceSchoolYearNotEligible();
@@ -568,10 +459,8 @@ public class SectionService {
         // -----------------------------------------------------
 
         boolean targetEligible =
-                targetSchoolYear.getSchoolYearStatus()
-                        == SchoolYearStatus.planning
-                        || targetSchoolYear.getSchoolYearStatus()
-                        == SchoolYearStatus.active;
+                targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.planning
+                        || targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active;
 
         if (!targetEligible) {
             throw new SchoolYearNotPlanning();
@@ -581,22 +470,23 @@ public class SectionService {
         // CANNOT HAVE TWO ACTIVE SCHOOL YEARS
         // -----------------------------------------------------
 
-        if (sourceSchoolYear.getSchoolYearStatus()
-                == SchoolYearStatus.active
-                && targetSchoolYear.getSchoolYearStatus()
-                == SchoolYearStatus.active) {
-
+        if (sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active
+                && targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active) {
             throw new ActiveSchoolYearAlreadyExists();
         }
 
         // -----------------------------------------------------
-        // TARGET MUST HAVE NO SECTIONS
+        // TARGET MUST HAVE NO *ACTIVE* SECTIONS
+        // (archived sections in the target should not block cloning)
         // -----------------------------------------------------
 
-        if (sectionRepository.countBySchoolYear(
-                targetSchoolYear
-        ) > 0) {
+        long activeSectionsInTarget =
+                sectionRepository.countBySchoolYearAndSectionStatus(
+                        targetSchoolYear,
+                        SectionStatus.active
+                );
 
+        if (activeSectionsInTarget > 0) {
             throw new SchoolYearAlreadyHasSections();
         }
 
@@ -607,23 +497,14 @@ public class SectionService {
         List<Section> sourceSections;
 
         if (request.gradeLevel() == null) {
-
-            sourceSections =
-                    sectionRepository
-                            .findAllBySchoolYear_SchoolYearId(
-                                    sourceSchoolYear
-                                            .getSchoolYearId()
-                            );
-
+            sourceSections = sectionRepository
+                    .findAllBySchoolYear_SchoolYearId(sourceSchoolYear.getSchoolYearId());
         } else {
-
-            sourceSections =
-                    sectionRepository
-                            .findAllBySchoolYear_SchoolYearIdAndGradeLevel(
-                                    sourceSchoolYear
-                                            .getSchoolYearId(),
-                                    request.gradeLevel()
-                            );
+            sourceSections = sectionRepository
+                    .findAllBySchoolYear_SchoolYearIdAndGradeLevel(
+                            sourceSchoolYear.getSchoolYearId(),
+                            request.gradeLevel()
+                    );
         }
 
         if (sourceSections.isEmpty()) {
@@ -634,73 +515,53 @@ public class SectionService {
         // CLONE SECTIONS
         // -----------------------------------------------------
 
-        List<Section> newSections =
-                sourceSections.stream()
-                        .map(section ->
-                                cloneSection(
-                                        section,
-                                        targetSchoolYear
-                                )
-                        )
-                        .toList();
+        List<Section> newSections = sourceSections.stream()
+                .map(section -> cloneSection(section, targetSchoolYear))
+                .toList();
 
+        // -----------------------------------------------------
+        // SAVE + TRANSITION
+        // -----------------------------------------------------
+        // FIX: everything is inside one try, and we flush() explicitly so that
+        // a constraint violation is caught here (before commit), not after the
+        // method returns (which is what caused "error but data pushed through").
         try {
+            List<Section> savedSections = sectionRepository.saveAll(newSections);
+
+            // Force the INSERTs to hit the DB now so any unique-constraint
+            // violation surfaces inside this try/catch.
+            sectionRepository.flush();
 
             /*
-             * Save the cloned sections first.
-             *
-             * Every cloned section has adviser = NULL.
+             * FIX: clear advisers on the source regardless of whether the source
+             * was active or already closed. If the user manually closed the source
+             * before calling this, we still want its advisers removed because a
+             * new school year is starting.
              */
-            List<Section> savedSections =
-                    sectionRepository.saveAll(
-                            newSections
-                    );
+            clearAdvisers(sourceSchoolYear);
 
-            /*
-             * If the source was still active, close it.
-             *
-             * Closing also clears advisers from ALL source
-             * sections, not just the selected grade level.
-             */
-            if (sourceSchoolYear.getSchoolYearStatus()
-                    == SchoolYearStatus.active) {
-
-                clearAdvisers(sourceSchoolYear);
-
-                sourceSchoolYear.setSchoolYearStatus(
-                        SchoolYearStatus.closed
-                );
-
-                sourceSchoolYear.setUpdatedAt(
-                        LocalDate.now()
-                );
+            if (sourceSchoolYear.getSchoolYearStatus() == SchoolYearStatus.active) {
+                sourceSchoolYear.setSchoolYearStatus(SchoolYearStatus.closed);
+                sourceSchoolYear.setUpdatedAt(LocalDate.now());
             }
 
-            /*
-             * If the target was planning, it now becomes active.
-             */
-            if (targetSchoolYear.getSchoolYearStatus()
-                    == SchoolYearStatus.planning) {
-
-                targetSchoolYear.setSchoolYearStatus(
-                        SchoolYearStatus.active
-                );
-
-                targetSchoolYear.setUpdatedAt(
-                        LocalDate.now()
-                );
+            if (targetSchoolYear.getSchoolYearStatus() == SchoolYearStatus.planning) {
+                targetSchoolYear.setSchoolYearStatus(SchoolYearStatus.active);
+                targetSchoolYear.setUpdatedAt(LocalDate.now());
             }
+
+            // Flush school year status changes too, so optimistic-lock
+            // (@Version) conflicts surface here.
+            schoolYearRepository.flush();
 
             return savedSections.stream()
                     .map(sectionMapper::toResponseDTO)
                     .toList();
 
         } catch (DataIntegrityViolationException e) {
-
             /*
-             * Because the whole method is transactional,
-             * the section inserts and school-year changes
-             * will be rolled back.
+             * Because the whole method is transactional and we flushed inside
+             * the try, the rollback is clean: no sections, no status changes.
              */
             throw new SchoolYearAlreadyHasSections();
         }

@@ -31,26 +31,10 @@ public class SchoolYearService {
 
     private static final Map<SchoolYearStatus, Set<SchoolYearStatus>>
             ALLOWED_TRANSITIONS = Map.of(
-
-            SchoolYearStatus.planning,
-            Set.of(
-                    SchoolYearStatus.active,
-                    SchoolYearStatus.archived
-            ),
-
-            SchoolYearStatus.active,
-            Set.of(
-                    SchoolYearStatus.closed,
-                    SchoolYearStatus.archived
-            ),
-
-            SchoolYearStatus.closed,
-            Set.of(
-                    SchoolYearStatus.archived
-            ),
-
-            SchoolYearStatus.archived,
-            Set.of()
+            SchoolYearStatus.planning, Set.of(SchoolYearStatus.active, SchoolYearStatus.archived),
+            SchoolYearStatus.active,   Set.of(SchoolYearStatus.closed, SchoolYearStatus.archived),
+            SchoolYearStatus.closed,   Set.of(SchoolYearStatus.archived),
+            SchoolYearStatus.archived, Set.of()
     );
 
     private final SchoolYearRepository schoolYearRepository;
@@ -66,8 +50,7 @@ public class SchoolYearService {
     ) {
         this.schoolYearRepository = schoolYearRepository;
         this.schoolYearMapper = schoolYearMapper;
-        this.schoolYearLockRepository =
-                schoolYearLockRepository;
+        this.schoolYearLockRepository = schoolYearLockRepository;
         this.sectionRepository = sectionRepository;
     }
 
@@ -76,44 +59,27 @@ public class SchoolYearService {
     // =========================================================
 
     private SchoolYear getById(Long schoolYearId) {
-
         return schoolYearRepository.findById(schoolYearId)
                 .orElseThrow(SchoolYearNotFound::new);
     }
 
-    /*
-     * Clears advisers from every section belonging to this
-     * school year.
-     */
     private void clearSectionAdvisers(SchoolYear schoolYear) {
-
         List<Section> sections =
                 sectionRepository.findAllBySchoolYear_SchoolYearId(
                         schoolYear.getSchoolYearId()
                 );
 
         sections.forEach(section -> section.setUser(null));
+
+        // FIX: flush so the null assignments are visible to subsequent reads
+        // within the same transaction and to optimistic-lock checks.
+        sectionRepository.flush();
     }
 
-    /*
-     * Internal close operation.
-     *
-     * This should be the single place where the application
-     * performs the actual closing of a school year.
-     */
-    private void closeSchoolYearInternal(
-            SchoolYear schoolYear
-    ) {
-
+    private void closeSchoolYearInternal(SchoolYear schoolYear) {
         clearSectionAdvisers(schoolYear);
-
-        schoolYear.setSchoolYearStatus(
-                SchoolYearStatus.closed
-        );
-
-        schoolYear.setUpdatedAt(
-                LocalDate.now()
-        );
+        schoolYear.setSchoolYearStatus(SchoolYearStatus.closed);
+        schoolYear.setUpdatedAt(LocalDate.now());
     }
 
     // =========================================================
@@ -124,53 +90,28 @@ public class SchoolYearService {
     public SchoolYearResponse createSchoolYear(
             CreateSchoolYearRequest schoolYearRequest
     ) {
-
         if (schoolYearRepository.existsBySchoolYearNameIgnoreCase(
                 schoolYearRequest.schoolYearName().trim()
         )) {
-
             throw new SchoolYearAlreadyExists(
                     schoolYearRequest.schoolYearName()
             );
         }
 
-        if (!schoolYearRequest.startDate()
-                .isBefore(
-                        schoolYearRequest.endDate()
-                )) {
-
+        if (!schoolYearRequest.startDate().isBefore(schoolYearRequest.endDate())) {
             throw new InvalidSchoolYearDateRange();
         }
 
-        SchoolYear schoolYearToEntity =
-                schoolYearMapper.toEntity(
-                        schoolYearRequest
-                );
-
-        schoolYearToEntity.setSchoolYearName(
-                schoolYearRequest.schoolYearName().trim()
-        );
-
-        schoolYearToEntity.setSchoolYearStatus(
-                SchoolYearStatus.planning
-        );
+        SchoolYear schoolYearToEntity = schoolYearMapper.toEntity(schoolYearRequest);
+        schoolYearToEntity.setSchoolYearName(schoolYearRequest.schoolYearName().trim());
+        schoolYearToEntity.setSchoolYearStatus(SchoolYearStatus.planning);
 
         try {
-
-            SchoolYear savedSchoolYear =
-                    schoolYearRepository.save(
-                            schoolYearToEntity
-                    );
-
-            return schoolYearMapper.toResponseDTO(
-                    savedSchoolYear
-            );
+            SchoolYear savedSchoolYear = schoolYearRepository.saveAndFlush(schoolYearToEntity);
+            return schoolYearMapper.toResponseDTO(savedSchoolYear);
 
         } catch (DataIntegrityViolationException e) {
-
-            throw new SchoolYearAlreadyExists(
-                    schoolYearRequest.schoolYearName()
-            );
+            throw new SchoolYearAlreadyExists(schoolYearRequest.schoolYearName());
         }
     }
 
@@ -183,19 +124,10 @@ public class SchoolYearService {
             SchoolYearStatus schoolYearStatus,
             Pageable pageable
     ) {
-
         Specification<SchoolYear> filters =
                 Specification
-                        .where(
-                                SchoolYearSpecification.hasName(
-                                        schoolYearName
-                                )
-                        )
-                        .and(
-                                SchoolYearSpecification.hasStatus(
-                                        schoolYearStatus
-                                )
-                        );
+                        .where(SchoolYearSpecification.hasName(schoolYearName))
+                        .and(SchoolYearSpecification.hasStatus(schoolYearStatus));
 
         return schoolYearRepository
                 .findAll(filters, pageable)
@@ -207,7 +139,6 @@ public class SchoolYearService {
     // =========================================================
 
     public List<SchoolYearResponse> schoolYearDropdown() {
-
         return schoolYearRepository.findAll()
                 .stream()
                 .map(schoolYearMapper::toResponseDTO)
@@ -223,79 +154,39 @@ public class SchoolYearService {
             Long schoolYearId,
             UpdateSchoolYearRequest updateSchoolYearRequest
     ) {
-
-        SchoolYear schoolYearToUpdate =
-                getById(schoolYearId);
+        SchoolYear schoolYearToUpdate = getById(schoolYearId);
 
         boolean fieldsChanged = false;
 
         String requestedName =
                 updateSchoolYearRequest.schoolYearName() != null
-                        ? updateSchoolYearRequest
-                        .schoolYearName()
-                        .trim()
+                        ? updateSchoolYearRequest.schoolYearName().trim()
                         : null;
 
-        // -----------------------------------------------------
         // NAME
-        // -----------------------------------------------------
-
         if (requestedName != null
                 && !requestedName.isEmpty()
-                && !schoolYearToUpdate
-                .getSchoolYearName()
-                .equals(requestedName)) {
+                && !schoolYearToUpdate.getSchoolYearName().equals(requestedName)) {
 
-            if (schoolYearRepository
-                    .existsBySchoolYearNameIgnoreCase(
-                            requestedName
-                    )) {
-
-                throw new SchoolYearAlreadyExists(
-                        requestedName
-                );
+            if (schoolYearRepository.existsBySchoolYearNameIgnoreCase(requestedName)) {
+                throw new SchoolYearAlreadyExists(requestedName);
             }
 
-            schoolYearToUpdate.setSchoolYearName(
-                    requestedName
-            );
-
+            schoolYearToUpdate.setSchoolYearName(requestedName);
             fieldsChanged = true;
         }
 
-        // -----------------------------------------------------
         // START DATE
-        // -----------------------------------------------------
-
         if (updateSchoolYearRequest.startDate() != null
-                && !schoolYearToUpdate
-                .getStartDate()
-                .equals(
-                        updateSchoolYearRequest.startDate()
-                )) {
-
-            schoolYearToUpdate.setStartDate(
-                    updateSchoolYearRequest.startDate()
-            );
-
+                && !schoolYearToUpdate.getStartDate().equals(updateSchoolYearRequest.startDate())) {
+            schoolYearToUpdate.setStartDate(updateSchoolYearRequest.startDate());
             fieldsChanged = true;
         }
 
-        // -----------------------------------------------------
         // END DATE
-        // -----------------------------------------------------
-
         if (updateSchoolYearRequest.endDate() != null
-                && !schoolYearToUpdate
-                .getEndDate()
-                .equals(
-                        updateSchoolYearRequest.endDate()
-                )) {
-
-            schoolYearToUpdate.setEndDate(
-                    updateSchoolYearRequest.endDate()
-            );
-
+                && !schoolYearToUpdate.getEndDate().equals(updateSchoolYearRequest.endDate())) {
+            schoolYearToUpdate.setEndDate(updateSchoolYearRequest.endDate());
             fieldsChanged = true;
         }
 
@@ -303,39 +194,18 @@ public class SchoolYearService {
             throw new NoChangesDetected();
         }
 
-        // -----------------------------------------------------
-        // DATE VALIDATION
-        // -----------------------------------------------------
-
-        if (!schoolYearToUpdate
-                .getStartDate()
-                .isBefore(
-                        schoolYearToUpdate.getEndDate()
-                )) {
-
+        if (!schoolYearToUpdate.getStartDate().isBefore(schoolYearToUpdate.getEndDate())) {
             throw new InvalidSchoolYearDateRange();
         }
 
-        schoolYearToUpdate.setUpdatedAt(
-                LocalDate.now()
-        );
+        schoolYearToUpdate.setUpdatedAt(LocalDate.now());
 
         try {
-
-            SchoolYear updated =
-                    schoolYearRepository.saveAndFlush(
-                            schoolYearToUpdate
-                    );
-
-            return schoolYearMapper.toResponseDTO(
-                    updated
-            );
+            SchoolYear updated = schoolYearRepository.saveAndFlush(schoolYearToUpdate);
+            return schoolYearMapper.toResponseDTO(updated);
 
         } catch (DataIntegrityViolationException e) {
-
-            throw new SchoolYearAlreadyExists(
-                    updateSchoolYearRequest.schoolYearName()
-            );
+            throw new SchoolYearAlreadyExists(updateSchoolYearRequest.schoolYearName());
         }
     }
 
@@ -344,16 +214,11 @@ public class SchoolYearService {
     // =========================================================
 
     @Transactional
-    public SchoolYearResponse archiveSchoolYear(
-            Long schoolYearId
-    ) {
+    public SchoolYearResponse archiveSchoolYear(Long schoolYearId) {
 
-        SchoolYear schoolYearToArchive =
-                getById(schoolYearId);
+        SchoolYear schoolYearToArchive = getById(schoolYearId);
 
-        if (schoolYearToArchive.getSchoolYearStatus()
-                == SchoolYearStatus.archived) {
-
+        if (schoolYearToArchive.getSchoolYearStatus() == SchoolYearStatus.archived) {
             throw new SchoolYearAlreadyArchived();
         }
 
@@ -362,23 +227,14 @@ public class SchoolYearService {
                 SchoolYearStatus.archived
         );
 
-        /*
-         * Archived school years should not retain adviser
-         * assignments.
-         */
         clearSectionAdvisers(schoolYearToArchive);
 
-        schoolYearToArchive.setSchoolYearStatus(
-                SchoolYearStatus.archived
-        );
+        schoolYearToArchive.setSchoolYearStatus(SchoolYearStatus.archived);
+        schoolYearToArchive.setUpdatedAt(LocalDate.now());
 
-        schoolYearToArchive.setUpdatedAt(
-                LocalDate.now()
-        );
+        schoolYearRepository.flush();
 
-        return schoolYearMapper.toResponseDTO(
-                schoolYearToArchive
-        );
+        return schoolYearMapper.toResponseDTO(schoolYearToArchive);
     }
 
     // =========================================================
@@ -386,24 +242,14 @@ public class SchoolYearService {
     // =========================================================
 
     @Transactional
-    public SchoolYearResponse restoreSchoolYear(
-            Long schoolYearId
-    ) {
+    public SchoolYearResponse restoreSchoolYear(Long schoolYearId) {
 
-        /*
-         * Prevent concurrent activation.
-         */
         schoolYearLockRepository.acquireActivationLock()
-                .orElseThrow(
-                        ActiveSchoolYearLockUnavailable::new
-                );
+                .orElseThrow(ActiveSchoolYearLockUnavailable::new);
 
-        SchoolYear schoolYearToActivate =
-                getById(schoolYearId);
+        SchoolYear schoolYearToActivate = getById(schoolYearId);
 
-        if (schoolYearToActivate.getSchoolYearStatus()
-                == SchoolYearStatus.active) {
-
+        if (schoolYearToActivate.getSchoolYearStatus() == SchoolYearStatus.active) {
             throw new SchoolYearAlreadyActive();
         }
 
@@ -412,28 +258,16 @@ public class SchoolYearService {
                 SchoolYearStatus.active
         );
 
-        /*
-         * Only one active school year is allowed.
-         */
-        if (schoolYearRepository
-                .existsBySchoolYearStatusEquals(
-                        SchoolYearStatus.active
-                )) {
-
+        if (schoolYearRepository.existsBySchoolYearStatusEquals(SchoolYearStatus.active)) {
             throw new ActiveSchoolYearAlreadyExists();
         }
 
-        schoolYearToActivate.setSchoolYearStatus(
-                SchoolYearStatus.active
-        );
+        schoolYearToActivate.setSchoolYearStatus(SchoolYearStatus.active);
+        schoolYearToActivate.setUpdatedAt(LocalDate.now());
 
-        schoolYearToActivate.setUpdatedAt(
-                LocalDate.now()
-        );
+        schoolYearRepository.flush();
 
-        return schoolYearMapper.toResponseDTO(
-                schoolYearToActivate
-        );
+        return schoolYearMapper.toResponseDTO(schoolYearToActivate);
     }
 
     // =========================================================
@@ -441,16 +275,11 @@ public class SchoolYearService {
     // =========================================================
 
     @Transactional
-    public SchoolYearResponse closeSchoolYear(
-            Long schoolYearId
-    ) {
+    public SchoolYearResponse closeSchoolYear(Long schoolYearId) {
 
-        SchoolYear schoolYearToClose =
-                getById(schoolYearId);
+        SchoolYear schoolYearToClose = getById(schoolYearId);
 
-        if (schoolYearToClose.getSchoolYearStatus()
-                == SchoolYearStatus.closed) {
-
+        if (schoolYearToClose.getSchoolYearStatus() == SchoolYearStatus.closed) {
             throw new SchoolYearAlreadyClosed();
         }
 
@@ -459,17 +288,11 @@ public class SchoolYearService {
                 SchoolYearStatus.closed
         );
 
-        /*
-         * Closing a school year always clears advisers
-         * from its sections.
-         */
-        closeSchoolYearInternal(
-                schoolYearToClose
-        );
+        closeSchoolYearInternal(schoolYearToClose);
 
-        return schoolYearMapper.toResponseDTO(
-                schoolYearToClose
-        );
+        schoolYearRepository.flush();
+
+        return schoolYearMapper.toResponseDTO(schoolYearToClose);
     }
 
     // =========================================================
@@ -477,16 +300,11 @@ public class SchoolYearService {
     // =========================================================
 
     @Transactional
-    public SchoolYearResponse markAsPlanning(
-            Long schoolYearId
-    ) {
+    public SchoolYearResponse markAsPlanning(Long schoolYearId) {
 
-        SchoolYear schoolYearToUpdate =
-                getById(schoolYearId);
+        SchoolYear schoolYearToUpdate = getById(schoolYearId);
 
-        if (schoolYearToUpdate.getSchoolYearStatus()
-                == SchoolYearStatus.planning) {
-
+        if (schoolYearToUpdate.getSchoolYearStatus() == SchoolYearStatus.planning) {
             throw new SchoolYearAlreadyPlanning();
         }
 
@@ -495,36 +313,21 @@ public class SchoolYearService {
                 SchoolYearStatus.planning
         );
 
-        schoolYearToUpdate.setSchoolYearStatus(
-                SchoolYearStatus.planning
-        );
+        schoolYearToUpdate.setSchoolYearStatus(SchoolYearStatus.planning);
+        schoolYearToUpdate.setUpdatedAt(LocalDate.now());
 
-        schoolYearToUpdate.setUpdatedAt(
-                LocalDate.now()
-        );
+        schoolYearRepository.flush();
 
-        return schoolYearMapper.toResponseDTO(
-                schoolYearToUpdate
-        );
+        return schoolYearMapper.toResponseDTO(schoolYearToUpdate);
     }
 
     // =========================================================
     // STATUS TRANSITION VALIDATION
     // =========================================================
 
-    private void validateTransition(
-            SchoolYearStatus from,
-            SchoolYearStatus to
-    ) {
-
-        if (!ALLOWED_TRANSITIONS
-                .getOrDefault(from, Set.of())
-                .contains(to)) {
-
-            throw new InvalidSchoolYearTransition(
-                    from,
-                    to
-            );
+    private void validateTransition(SchoolYearStatus from, SchoolYearStatus to) {
+        if (!ALLOWED_TRANSITIONS.getOrDefault(from, Set.of()).contains(to)) {
+            throw new InvalidSchoolYearTransition(from, to);
         }
     }
 }
