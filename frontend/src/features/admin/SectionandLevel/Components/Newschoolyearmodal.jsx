@@ -7,7 +7,7 @@ import {
   emptyNewSchoolYearForm,
 } from "../SectionlevelSchema";
 
-// GET /api/section has no schoolYearId param, so the source year's sections are fetched as one batch (no gradeLevel filter, so per-grade counts stay accurate) and matched by the `schoolYear` label client-side - the backend sorts sectionId DESC, so a school with more rows than this cap could lose sections from an old source year.
+// The source year's sections are fetched as one batch, scoped by schoolYearId (no gradeLevel filter, so per-grade counts stay accurate) - this cap only matters if a single school year somehow has more sections than this.
 const PREVIEW_FETCH_SIZE = 300;
 
 const inputClass = (hasError, textColorClass = "text-gray-700") =>
@@ -19,7 +19,17 @@ const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
 const errorClass = "mt-1 text-xs text-danger";
 const hintClass = "mt-1 text-xs text-gray-500";
 
+// Sentinel used only inside this modal's own grade-level picker - never sent
+// to the backend as-is. Distinct from "" (the picker's unselected/placeholder
+// value) so "nothing chosen yet" and "explicitly copy every grade" stay two
+// different states. NewSchoolYearRequest.gradeLevel has no @NotNull on the
+// backend anymore (comment on the record: "allow null so the caller can
+// clone ALL grade levels at once"), so submitting this sentinel is turned
+// into an omitted gradeLevel in handleFormSubmit below.
+const ALL_GRADES = "ALL_GRADES";
+
 function gradeLabelFor(gradeLevelValue) {
+  if (gradeLevelValue === ALL_GRADES) return "All Grade Levels";
   return GRADE_LEVEL_OPTIONS.find((option) => option.value === gradeLevelValue)?.label || "";
 }
 
@@ -32,8 +42,14 @@ function FormValueWatcher({ value, onChange }) {
   return null;
 }
 
-// Plain select (was a 3-card row, per design feedback) with each grade's section count shown inline; a grade with nothing under the source year is disabled instead of failing at submit time.
-function GradeLevelPicker({ value, onSelect, counts, countsReady, isLoading, hasError }) {
+// Plain select (was a 3-card row, per design feedback) with each grade's section count shown inline; a grade with nothing under the source year is disabled instead of failing at submit time. An "All Grade Levels" option sits above the individual grades - picking it clones the whole source year in one run instead of one grade at a time (backend: omitted NewSchoolYearRequest.gradeLevel = clone everything).
+function GradeLevelPicker({ value, onSelect, counts, totalCount, countsReady, isLoading, hasError }) {
+  const isAllEmpty = countsReady && totalCount === 0;
+
+  let allCountLabel = "";
+  if (isLoading) allCountLabel = " - Checking...";
+  else if (countsReady) allCountLabel = totalCount === 0 ? " - No sections" : ` - ${totalCount} section${totalCount === 1 ? "" : "s"}`;
+
   return (
     <div className="relative">
       <select
@@ -44,6 +60,10 @@ function GradeLevelPicker({ value, onSelect, counts, countsReady, isLoading, has
       >
         <option value="" className="text-gray-500">
           Select grade level
+        </option>
+
+        <option value={ALL_GRADES} disabled={isAllEmpty} className="text-gray-700">
+          All Grade Levels{allCountLabel}
         </option>
 
         {GRADE_LEVEL_OPTIONS.map((option) => {
@@ -71,13 +91,14 @@ function GradeLevelPicker({ value, onSelect, counts, countsReady, isLoading, has
   );
 }
 
-// Presentational checklist of sections to copy; `selectable` is only true for a Closed/Archived (past) source, since an Active-source clone runs server-side and can't be narrowed per-section.
+// Presentational, read-only list of the sections that will be copied over.
+// Every clone path (active-source "Start New School Year" and
+// closed/archived-source "Copy Sections Into") always carries over the
+// whole grade level - or every grade level - so there's nothing here for
+// the admin to narrow down to individual sections; the only choices are
+// made one step up, in the Grade Level picker.
 function SectionCarryOverPreview({
   sections,
-  selectedIds,
-  onToggleSection,
-  onToggleAll,
-  selectable,
   isLoading,
   sourceLabel,
   gradeLevel,
@@ -88,66 +109,36 @@ function SectionCarryOverPreview({
     return <p className="text-xs text-gray-500">Checking sections to copy...</p>;
   }
 
+  // "All Grade Levels" reads awkwardly slotted into "No All Grade Levels
+  // sections in..." - drop the label entirely for that case instead of
+  // grammatically forcing it in like a real grade ("No Grade 4 sections...").
+  const gradePrefix = gradeLevel === ALL_GRADES ? "" : `${gradeLabelFor(gradeLevel)} `;
+
   if (sections.length === 0) {
     return (
       <p className="text-xs text-gray-500">
-        No {gradeLabelFor(gradeLevel)} sections in "{sourceLabel}".
+        No {gradePrefix}sections in "{sourceLabel}".
       </p>
     );
   }
 
-  const allSelected = selectable && selectedIds.length === sections.length;
-
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-gray-600">
-          {selectable
-            ? `${selectedIds.length} of ${sections.length} ${gradeLabelFor(gradeLevel)} section${sections.length === 1 ? "" : "s"} selected to copy:`
-            : `${sections.length} ${gradeLabelFor(gradeLevel)} section${sections.length === 1 ? "" : "s"} will be copied over:`}
-        </p>
-
-        {selectable && (
-          <button
-            type="button"
-            onClick={onToggleAll}
-            className="shrink-0 cursor-pointer text-xs font-semibold text-primary hover:underline"
-          >
-            {allSelected ? "Deselect all" : "Select all"}
-          </button>
-        )}
-      </div>
+      <p className="text-xs font-semibold text-gray-600">
+        {sections.length} {gradePrefix}section{sections.length === 1 ? "" : "s"} will be copied over:
+      </p>
 
       <div className="flex max-h-32 flex-col overflow-y-auto rounded-lg border border-gray-200 bg-white">
         {sections.map((section, index) => {
           const isLastRow = index === sections.length - 1;
 
-          if (!selectable) {
-            return (
-              <div
-                key={section.sectionId}
-                className={`px-3 py-2 text-xs font-medium text-gray-700 ${isLastRow ? "" : "border-b border-gray-100"}`}
-              >
-                {section.sectionName}
-              </div>
-            );
-          }
-
-          const isSelected = selectedIds.includes(section.sectionId);
-
           return (
-            <label
+            <div
               key={section.sectionId}
-              className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 ${isLastRow ? "" : "border-b border-gray-100"}`}
+              className={`px-3 py-2 text-xs font-medium text-gray-700 ${isLastRow ? "" : "border-b border-gray-100"}`}
             >
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onToggleSection(section.sectionId)}
-                className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
-              />
               {section.sectionName}
-            </label>
+            </div>
           );
         })}
       </div>
@@ -174,9 +165,6 @@ function Newschoolyearmodal({
   const [sourceSections, setSourceSections] = useState([]);
   const [isLoadingSourceSections, setIsLoadingSourceSections] = useState(false);
   const [sourceLoadFailed, setSourceLoadFailed] = useState(false);
-
-  // Which of the previewed sections are checked to actually be cloned - only meaningful on the Closed/Archived-source path.
-  const [selectedSectionIds, setSelectedSectionIds] = useState([]);
 
   const sortedSourceYears = useMemo(
     () =>
@@ -209,9 +197,9 @@ function Newschoolyearmodal({
     );
   }, [selectedSourceId, sortedSourceYears]);
 
-  // CONNECT: GET /api/section - one batch per source year, reused by both the grade counts and the section preview.
+  // CONNECT: GET /api/section - one batch per source year, scoped by schoolYearId, reused by both the grade counts and the section preview.
   useEffect(() => {
-    if (!isOpen || !selectedSourceLabel) {
+    if (!isOpen || !selectedSourceId) {
       setSourceSections([]);
       setIsLoadingSourceSections(false);
       setSourceLoadFailed(false);
@@ -222,12 +210,10 @@ function Newschoolyearmodal({
     setIsLoadingSourceSections(true);
     setSourceLoadFailed(false);
 
-    getSections({ page: 0, size: PREVIEW_FETCH_SIZE })
+    getSections({ schoolYearId: selectedSourceId, page: 0, size: PREVIEW_FETCH_SIZE })
       .then((response) => {
         if (isCancelled) return;
-        setSourceSections(
-          response.content.filter((section) => section.schoolYear === selectedSourceLabel)
-        );
+        setSourceSections(response.content);
         setIsLoadingSourceSections(false);
       })
       .catch(() => {
@@ -240,7 +226,7 @@ function Newschoolyearmodal({
     return () => {
       isCancelled = true;
     };
-  }, [isOpen, selectedSourceLabel]);
+  }, [isOpen, selectedSourceId]);
 
   const gradeCounts = useMemo(() => {
     const counts = {};
@@ -253,18 +239,17 @@ function Newschoolyearmodal({
     return counts;
   }, [sourceSections]);
 
-  const sectionsForGrade = useMemo(
-    () =>
-      selectedGradeLevel
-        ? sourceSections.filter((section) => section.gradeLevel === selectedGradeLevel)
-        : [],
-    [sourceSections, selectedGradeLevel]
-  );
+  // sourceSections is already every grade under the source year (see the
+  // fetch effect above - no gradeLevel filter on the request), so the
+  // "All Grade Levels" total is just its length, not a sum of gradeCounts.
+  const totalSourceCount = sourceSections.length;
 
-  // Default to "everything in this grade selected" whenever the source or the grade changes - same spirit as before, just scoped to one grade level now.
-  useEffect(() => {
-    setSelectedSectionIds(sectionsForGrade.map((section) => section.sectionId));
-  }, [sectionsForGrade]);
+  const sectionsForGrade = useMemo(() => {
+    if (selectedGradeLevel === ALL_GRADES) return sourceSections;
+    return selectedGradeLevel
+      ? sourceSections.filter((section) => section.gradeLevel === selectedGradeLevel)
+      : [];
+  }, [sourceSections, selectedGradeLevel]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -273,7 +258,6 @@ function Newschoolyearmodal({
       setSelectedSourceId("");
       setSelectedGradeLevel("");
       setSourceSections([]);
-      setSelectedSectionIds([]);
     }
   }, [isOpen]);
 
@@ -303,35 +287,19 @@ function Newschoolyearmodal({
     sourceSchoolYear: isSourceLocked ? String(sortedSourceYears[0].id) : "",
   };
 
-  function toggleSection(sectionId) {
-    setSelectedSectionIds((prev) =>
-      prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId]
-    );
-  }
-
-  function toggleAllSections() {
-    setSelectedSectionIds((prev) =>
-      prev.length === sectionsForGrade.length ? [] : sectionsForGrade.map((s) => s.sectionId)
-    );
-  }
-
   async function handleFormSubmit(values, { setSubmitting }) {
     setSubmitError("");
     setIsBusy(true);
-
-    const submittedSource = sortedSourceYears.find(
-      (sy) => String(sy.id) === values.sourceSchoolYear
-    );
-    const isPastSource =
-      submittedSource?.status === "closed" || submittedSource?.status === "archived";
 
     try {
       await onSubmit({
         sourceSchoolYearId: Number(values.sourceSchoolYear),
         targetSchoolYearId: Number(values.targetSchoolYear),
-        // NewSchoolYearRequest.gradeLevel is @NotNull on the backend, so this is never optional - the old `|| undefined` would have produced a 400 the moment validation was ever relaxed on this field.
-        gradeLevel: values.gradeLevel,
-        sectionIds: isPastSource ? selectedSectionIds : undefined,
+        // NewSchoolYearRequest.gradeLevel has no @NotNull on the backend -
+        // omitting it clones every grade level from the source in one run.
+        // ALL_GRADES is a picker-only sentinel (see its definition above),
+        // never a real GradeLevel value, so it must not reach the API.
+        gradeLevel: values.gradeLevel === ALL_GRADES ? undefined : values.gradeLevel,
       });
 
       onClose();
@@ -391,7 +359,12 @@ function Newschoolyearmodal({
             const hasNoTargetOptions = targetOptions.length === 0;
 
             const hasGradeLevel = Boolean(values.gradeLevel);
-            const gradeSectionCount = hasGradeLevel ? gradeCounts[values.gradeLevel] ?? 0 : 0;
+            const isAllGradesSelected = values.gradeLevel === ALL_GRADES;
+            const gradeSectionCount = isAllGradesSelected
+              ? totalSourceCount
+              : hasGradeLevel
+                ? gradeCounts[values.gradeLevel] ?? 0
+                : 0;
 
             // A missing grade level deliberately does NOT disable the button: letting the submit through surfaces Formik's own "Grade level is required" message right under the picker, which explains more than a dead button would.
             const isStartDisabled =
@@ -399,13 +372,11 @@ function Newschoolyearmodal({
               hasNoSourceYear ||
               hasNoTargetOptions ||
               (isSelectedSourceActive && hasMultipleActiveYears) ||
-              (hasGradeLevel && countsReady && gradeSectionCount === 0) ||
-              (hasGradeLevel && isSelectedSourcePast && selectedSectionIds.length === 0);
+              (hasGradeLevel && countsReady && gradeSectionCount === 0);
 
             function handleClear() {
               resetForm();
               setSubmitError("");
-              setSelectedSectionIds([]);
             }
 
             return (
@@ -417,13 +388,14 @@ function Newschoolyearmodal({
                   <p className="text-xs leading-snug text-gray-500">
                     {isSelectedSourcePast ? (
                       <>
-                        Copies one grade level's sections into a Planning or Active
-                        year. Duplicates are skipped, and the originals stay put.
+                        Copies a grade level's sections - or all of them at once - into
+                        a Planning or Active year. Duplicates are skipped, and the
+                        originals stay put.
                       </>
                     ) : (
                       <>
-                        Copies one grade level into a new Planning year, closes this
-                        year, and makes the new one{" "}
+                        Copies a grade level - or all of them at once - into a new
+                        Planning year, closes this year, and makes the new one{" "}
                         <span className="font-semibold text-success">Active</span>.
                       </>
                     )}
@@ -577,7 +549,7 @@ function Newschoolyearmodal({
                         Grade Level <span className="text-danger">*</span>
                       </label>
                       <span className="text-[11px] font-medium text-gray-500">
-                        One grade level per run
+                        Or copy every grade at once
                       </span>
                     </div>
 
@@ -585,6 +557,7 @@ function Newschoolyearmodal({
                       value={values.gradeLevel}
                       onSelect={(nextValue) => setFieldValue("gradeLevel", nextValue, true)}
                       counts={gradeCounts}
+                      totalCount={totalSourceCount}
                       countsReady={countsReady}
                       isLoading={isLoadingSourceSections}
                       hasError={errors.gradeLevel && touched.gradeLevel}
@@ -594,13 +567,13 @@ function Newschoolyearmodal({
 
                     {!hasGradeLevel && !errors.gradeLevel && (
                       <p className={hintClass}>
-                        Sections are copied one grade level at a time. Pick the one you
-                        want to move over.
+                        Pick a single grade level to move over, or choose "All Grade
+                        Levels" to copy everything from this source in one run.
                       </p>
                     )}
                   </div>
 
-                  {hasGradeLevel && isSelectedSourceActive && (
+                  {hasGradeLevel && isSelectedSourceActive && !isAllGradesSelected && (
                     <div className="flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs leading-snug text-gray-600">
                       <Info size={14} className="mt-0.5 shrink-0 text-primary" />
                       <p>
@@ -612,12 +585,18 @@ function Newschoolyearmodal({
                     </div>
                   )}
 
+                  {hasGradeLevel && isSelectedSourceActive && isAllGradesSelected && (
+                    <div className="flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs leading-snug text-gray-600">
+                      <Info size={14} className="mt-0.5 shrink-0 text-primary" />
+                      <p>
+                        Every grade level moves over here, then "{selectedSource?.label}"
+                        closes. Just note the new sections won't have an adviser yet.
+                      </p>
+                    </div>
+                  )}
+
                   <SectionCarryOverPreview
                     sections={sectionsForGrade}
-                    selectedIds={selectedSectionIds}
-                    onToggleSection={toggleSection}
-                    onToggleAll={toggleAllSections}
-                    selectable={isSelectedSourcePast}
                     isLoading={isLoadingSourceSections}
                     sourceLabel={selectedSource?.label}
                     gradeLevel={values.gradeLevel}

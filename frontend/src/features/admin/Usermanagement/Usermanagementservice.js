@@ -102,6 +102,19 @@ export async function getUsers({ status, search, page = 1, size = 10 } = {}) {
   }
 }
 
+// CONNECTED: GET /api/user/{userId} - @PreAuthorize hasAnyRole('ADMIN','TEACHER'), unlike the
+// paged GET /api/user above (ADMIN only) - so this one is safe for a user to call on their own
+// userId. Added for Profileinformation.jsx (features/auth/pages/), which reuses this file's
+// userApi/mapTeacherResponse instead of standing up a second client for the same endpoints.
+export async function getUser(userId) {
+  try {
+    const { data } = await userApi.get(`/user/${userId}`);
+    return mapTeacherResponse(data);
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to load user"));
+  }
+}
+
 // CONNECTED: POST /api/user/createTeacher
 export async function createUser(formData) {
   try {

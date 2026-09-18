@@ -17,6 +17,7 @@ const pageTitles = {
   "/logs-reports": "Logs & Reports",
   "/user-management": "User Management",
   "/change-password": "Change Password",
+  "/profile": "Profile Information",
 };
 
 function MainLayout() {

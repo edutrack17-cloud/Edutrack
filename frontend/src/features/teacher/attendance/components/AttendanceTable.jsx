@@ -245,10 +245,16 @@ function AttendanceTable({
                   <div className="flex flex-col items-center gap-0.5">
                     <AttendanceStatus status={record.todayAttendance.status} />
                     {(record.todayAttendance.timeIn || record.todayAttendance.timeOut) && (
-                      <span className="text-[10px] font-normal text-gray-400">
-                        {record.todayAttendance.timeIn && formatDisplayTime(record.todayAttendance.timeIn)}
-                        {record.todayAttendance.timeIn && record.todayAttendance.timeOut && " – "}
-                        {record.todayAttendance.timeOut && formatDisplayTime(record.todayAttendance.timeOut)}
+                      <span className="text-[10px] font-normal">
+                        {record.todayAttendance.timeIn && (
+                          <span className="text-success">{formatDisplayTime(record.todayAttendance.timeIn)}</span>
+                        )}
+                        {record.todayAttendance.timeIn && record.todayAttendance.timeOut && (
+                          <span className="text-gray-400"> – </span>
+                        )}
+                        {record.todayAttendance.timeOut && (
+                          <span className="text-danger">{formatDisplayTime(record.todayAttendance.timeOut)}</span>
+                        )}
                       </span>
                     )}
                   </div>

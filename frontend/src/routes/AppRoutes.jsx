@@ -5,6 +5,7 @@ import { useAuth } from "../Context/Authcontext";
 import LoginPage from "../features/auth/LoginPage";
 import ForgotPasswordPage from "../features/auth/ForgotPass/ForgotPasswordPage";
 import ChangePassword from "../features/auth/pages/Changepassword";
+import ProfileInformation from "../features/teacher/profilemanagement/Profileinformationpage";
 import EnrollmentPage from "../features/teacher/enrollment/pages/EnrollmentPage" ;
 import AttendancePage from "../features/teacher/attendance/Attendancepage";
 import DashboardPage from "../features/teacher/dashboard/Dashboardpage";
@@ -58,6 +59,11 @@ function AppRoutes() {
           <Route path="/promote-student" element={<PromoteStudentPage />} />
           <Route path="/change-password" element={<ChangePassword />} />
  
+          {/* Everything below connects to teacher role only. */}
+          <Route element={<ProtectedRoute allowedRoles={["teacher"]} />}>
+            <Route path="/profile" element={<ProfileInformation />} />
+          </Route>
+
           {/* Everything below connects to admin role only. */}
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/user-management" element={<UserManagementPage />} />

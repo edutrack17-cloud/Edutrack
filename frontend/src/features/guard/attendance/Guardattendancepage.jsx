@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { timeInAttendance } from "./Attendaceserviceguard";
 import Pagination from "./components/Pagination";
 import AttendanceStatus from "./components/GuardAttendanceStatus";
+import Header from "../../../components/layout/Header"; // TODO: adjust to wherever Header.jsx actually lives relative to this file
+import Footer from "../../../components/layout/Footer"; // TODO: adjust to wherever Footer.jsx actually lives relative to this file
+import { useAuth } from "../../../Context/Authcontext"; // TODO: adjust to wherever Authcontext actually lives relative to this file
 
-const ACTIVITY_PAGE_SIZE = 5;
+// 6 per page (not 5) so the card grid below fills a clean 3x2 layout
+// on desktop instead of leaving an odd card dangling on its own row.
+const ACTIVITY_PAGE_SIZE = 6;
 
 const SCHOOL_NAME = "Cecilio M. Saliba Elementary School";
-
-const thClass =
-  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
-const tdClass =
-  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
 
 // PERSISTENCE: "Today's Activity" used to live only in React state, so
 // an F5/refresh on the kiosk (which happens - browsers crash, someone
@@ -122,23 +123,22 @@ function LiveClock() {
 // a running local list of successful tap-ins for the guard's own
 // reference during the shift.
 //
-// UI now mirrors Rfidattendancepage.jsx's activity panel (same
-// container/table classes, plus a Status column using the same
-// AttendanceStatus component) so both scanner screens read as one
-// visual family. Two things intentionally do NOT carry over from the
-// teacher version, since neither applies on the gate side:
+// UI matches the Figma kiosk design: "Today's Activity" renders as a
+// grid of cards (name, grade & section, time in) instead of a table -
+// easier to scan at a glance on the gate kiosk than table rows, and
+// matches the same card look used in the scan-result panel on the
+// left. One thing intentionally does NOT carry over from the teacher
+// version's table:
 //   - Level / Section as separate columns - Attendaceserviceguard.js's
 //     mapAttendanceRecord only gets one pre-combined gradeAndSection
 //     string back from the API (see that file's comment), so there's
-//     nothing to split into two real columns here.
-//   - "Mark Remaining as Absent" - that's an end-of-period sweep the
-//     TEACHER does after checking attendance in class. The guard only
-//     ever creates on_school rows at the gate; deciding who's absent
-//     isn't a gate-side action.
-// Status is always "On School" for a row here, since that's literally
-// what a successful gate tap sets - shown via AttendanceStatus for the
-// same badge styling as the teacher screen, not because the guard
-// tracks status transitions.
+//     nothing to split into two fields here.
+// Each card's bottom row places Status and Time in side by side,
+// centered with a small gap (not pushed to the edges), each with its
+// own label above the value so the two sides read symmetrically.
+// Status is always "On School" here since that's literally what a
+// successful gate tap sets, shown via the same AttendanceStatus badge
+// used on the teacher screen for a consistent look across both.
 function GuardAttendancePage() {
   const [todaysTaps, setTodaysTaps] = useState(loadStoredTaps);
   const [activityPage, setActivityPage] = useState(1);
@@ -146,6 +146,21 @@ function GuardAttendancePage() {
   const [scanBuffer, setScanBuffer] = useState("");
 
   const hiddenInputRef = useRef(null);
+
+  // Same logout pattern as MainLayout.jsx's teacher/admin Header, so the
+  // guard's header behaves identically - clear the session, then send the
+  // kiosk back to /login.
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login", { replace: true });
+  }
+
+  // Backend's LoginResponse only sends back a username (same as
+  // MainLayout's fullname derivation), so that's what's shown here too.
+  const fullname = user?.username ?? "GUARD";
 
   // Keep localStorage in sync every time the list changes (a new tap,
   // or the initial load itself) so a refresh right after a tap still
@@ -236,9 +251,19 @@ function GuardAttendancePage() {
   );
 
   return (
-    <div className="font-primary relative flex min-h-screen flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:gap-6">
-      {/* Catches RFID reader keystrokes (UID + Enter); visually hidden, always focused. */}
-      <input
+    <div className="flex min-h-screen flex-col bg-gray/40">
+      {/* No onMenuClick passed - the kiosk has no Sidebar, so Header
+          leaves the hamburger button out (see Header.jsx). */}
+      <Header
+        title="Guard Attendance"
+        fullname={fullname}
+        role="Guard"
+        onLogout={handleLogout}
+      />
+
+      <div className="font-primary relative flex flex-1 flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:gap-6">
+        {/* Catches RFID reader keystrokes (UID + Enter); visually hidden, always focused. */}
+        <input
         ref={hiddenInputRef}
         type="text"
         value={scanBuffer}
@@ -250,121 +275,113 @@ function GuardAttendancePage() {
         autoFocus
       />
 
-      {/* Widened from lg:w-70 to lg:w-96 so the scan/status panel has more room. */}
-      <div className="flex w-full flex-col justify-between text-center bg-primary p-4 text-white rounded-2xl shadow-md lg:w-96 lg:shrink-0">
-        <LiveClock />
+        {/* Widened from lg:w-70 to lg:w-96 so the scan/status panel has more room. */}
+        <div className="flex w-full flex-col justify-between text-center bg-primary p-4 text-white rounded-2xl shadow-md lg:w-96 lg:shrink-0">
+          <LiveClock />
 
-        <div className="flex min-h-52 flex-col items-center justify-center rounded-lg bg-white border border-gray shadow-sm px-4 py-8 text-center text-gray-800">
-          {lastScan ? (
-            <>
-              {/* Only "tapped-in" comes with a name; the other outcomes have no record to show one from. */}
-              {lastScan.name && (
-                <>
-                  <p className="text-lg font-bold text-primary">{lastScan.name}</p>
-                  <p className="mt-1 text-sm text-gray-500">{formatGradeAndSection(lastScan.gradeAndSection)}</p>
-                </>
-              )}
+          <div className="flex min-h-52 flex-col items-center justify-center rounded-lg bg-white border border-gray shadow-sm px-4 py-8 text-center text-gray-800">
+            {lastScan ? (
+              <>
+                {/* Only "tapped-in" comes with a name; the other outcomes have no record to show one from. */}
+                {lastScan.name && (
+                  <>
+                    <p className="text-lg font-bold text-primary">{lastScan.name}</p>
+                    <p className="mt-1 text-sm text-gray-500">{formatGradeAndSection(lastScan.gradeAndSection)}</p>
+                  </>
+                )}
 
-              {lastScan.action === "tapped-in" && (
-                <>
-                  <p className="mt-6 text-sm font-semibold text-warning">On School</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {formatDisplayTime(lastScan.timeIn)}
+                {lastScan.action === "tapped-in" && (
+                  <>
+                    <p className="mt-6 text-sm font-semibold text-warning">On School</p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      {formatDisplayTime(lastScan.timeIn)}
+                    </p>
+                  </>
+                )}
+
+                {lastScan.action === "already-tapped-in" && (
+                  <p className="mt-6 text-sm font-semibold text-gray-500">
+                    Already tapped in today
                   </p>
-                </>
-              )}
+                )}
 
-              {lastScan.action === "already-tapped-in" && (
-                <p className="mt-6 text-sm font-semibold text-gray-500">
-                  Already tapped in today
-                </p>
-              )}
+                {lastScan.action === "not-enrolled" && (
+                  <p className="mt-6 text-sm font-semibold text-danger">
+                    Card not recognized
+                  </p>
+                )}
 
-              {lastScan.action === "not-enrolled" && (
-                <p className="mt-6 text-sm font-semibold text-danger">
-                  Card not recognized
-                </p>
-              )}
+                {lastScan.action === "error" && (
+                  <p className="mt-6 text-sm font-semibold text-danger">
+                    Something went wrong, try again
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">
+                <span className="block">Scan your RFID card</span>
+                <span className="block">to time in</span>
+              </p>
+            )}
+          </div>
 
-              {lastScan.action === "error" && (
-                <p className="mt-6 text-sm font-semibold text-danger">
-                  Something went wrong, try again
-                </p>
-              )}
-            </>
+          <div>
+            <p className="text-sm font-semibold">{SCHOOL_NAME}</p>
+            <p className="text-xs text-white/70">Attendance Management System</p>
+          </div>
+        </div>
+
+        <div className="flex flex-1 flex-col overflow-y-auto rounded-2xl bg-white p-4 shadow-md sm:p-6">
+          <p className="text-sm font-semibold text-gray-700">Today's Activity</p>
+
+          {todaysTaps.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-center">
+              <p className="text-sm text-gray-500">No taps recorded yet today.</p>
+            </div>
           ) : (
-            <p className="text-sm text-gray-500">
-              <span className="block">Scan your RFID card</span>
-              <span className="block">to time in</span>
-            </p>
+            <div className="mt-6 grid w-full flex-1 grid-cols-1 content-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {pagedTaps.map((tap) => (
+                <div
+                  key={tap.id}
+                  className="flex flex-col items-center rounded-xl border border-gray-200 bg-white px-4 py-6 text-center shadow-sm transition hover:shadow-md"
+                >
+                  <p className="truncate text-base font-bold text-gray-800" title={tap.name}>
+                    {tap.name}
+                  </p>
+                  <p className="mt-1 text-sm text-primary">
+                    {formatGradeAndSection(tap.gradeAndSection)}
+                  </p>
+
+                  <div className="mt-6 flex w-full items-center justify-center gap-8">
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-gray-500">Status</p>
+                      <AttendanceStatus status="On School" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-success">Time in</p>
+                      <p className="text-xl font-bold text-gray-800">
+                        {tap.timeIn ? formatDisplayTime(tap.timeIn) : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {todaysTaps.length > 0 && (
+            <div className="mt-3">
+              <Pagination
+                currentPage={clampedActivityPage}
+                totalPages={totalActivityPages}
+                onPageChange={setActivityPage}
+              />
+            </div>
           )}
         </div>
-
-        <div>
-          <p className="text-sm font-semibold">{SCHOOL_NAME}</p>
-          <p className="text-xs text-white/70">Attendance Management System</p>
-        </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <p className="text-sm font-semibold text-gray-700">Today's Activity</p>
-
-        {todaysTaps.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-center">
-            <p className="text-sm text-gray-500">No taps recorded yet today.</p>
-          </div>
-        ) : (
-          <div className="mt-6 w-full overflow-x-auto rounded-xl bg-white shadow-md">
-            <table className="w-full min-w-110 table-fixed border-collapse">
-              <colgroup>
-                <col className="w-[35%]" />
-                <col className="w-[25%]" />
-                <col className="w-[20%]" />
-                <col className="w-[20%]" />
-              </colgroup>
-
-              <thead className="bg-primary">
-                <tr>
-                  <th className={thClass}>Name</th>
-                  <th className={thClass}>Grade &amp; Section</th>
-                  <th className={thClass}>Status</th>
-                  <th className={thClass}>Time In</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {pagedTaps.map((tap) => (
-                  <tr
-                    key={tap.id}
-                    className="border-b border-gray-200 transition hover:bg-gray-50"
-                  >
-                    <td className={tdClass} title={tap.name}>
-                      {tap.name}
-                    </td>
-                    <td className={tdClass}>{formatGradeAndSection(tap.gradeAndSection)}</td>
-                    <td className={tdClass}>
-                      <AttendanceStatus status="On School" />
-                    </td>
-                    <td className={tdClass}>
-                      {tap.timeIn ? formatDisplayTime(tap.timeIn) : ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {todaysTaps.length > 0 && (
-          <div className="mt-3">
-            <Pagination
-              currentPage={clampedActivityPage}
-              totalPages={totalActivityPages}
-              onPageChange={setActivityPage}
-            />
-          </div>
-        )}
-      </div>
+      <Footer />
     </div>
   );
 }

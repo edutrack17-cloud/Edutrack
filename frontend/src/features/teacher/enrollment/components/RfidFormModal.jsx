@@ -21,6 +21,7 @@ import { X, Rss, Check } from "lucide-react";
 // below just needs onScan(uid) to eventually get called.
 const SCAN_KEY_GAP_MS = 50; // max ms between characters that still counts as "one tap" rather than a human typing
 const SCAN_MIN_LENGTH = 4; // ignore anything shorter than this - stray/accidental keypresses, not a real UID
+const CONFIRM_DELAY_MS = 600; // how long "Card Detected" stays on screen before a tap auto-confirms and the scanner resets for the next card
 
 function useRfidScanner(isActive, onScan) {
   const bufferRef = useRef("");
@@ -78,9 +79,32 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
   }, [isOpen]);
 
   // Listens the whole time this modal is open - tapping a different
-  // card just overwrites "uid" with the new one, same as the old
-  // simulateTap() button did when clicked more than once.
+  // card just overwrites "uid" with the new one, same as before.
   useRfidScanner(isOpen, setUid);
+
+  // Keep the latest onConfirm in a ref rather than as a useEffect
+  // dependency below - if the parent re-renders and passes a new
+  // onConfirm function while we're mid-countdown, we don't want that
+  // to restart the delay and delay the auto-add even further.
+  const onConfirmRef = useRef(onConfirm);
+  useEffect(() => {
+    onConfirmRef.current = onConfirm;
+  }, [onConfirm]);
+
+  // A tap no longer just fills in the UID and waits for someone to
+  // click "Add" - it flashes "Card Detected" for a moment, then
+  // auto-confirms and clears back to "Waiting for tap..." so the
+  // scanner is ready for the next card. Clicking "Add" by hand still
+  // works too (see handleAdd) - it just short-circuits this same
+  // delay for an instant confirm.
+  useEffect(() => {
+    if (!uid) return;
+    const timer = setTimeout(() => {
+      onConfirmRef.current(uid);
+      setUid("");
+    }, CONFIRM_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [uid]);
 
   if (!isOpen) return null;
 
@@ -88,6 +112,9 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
     setUid("");
   }
 
+  // Manual shortcut: a tap already auto-confirms on its own after
+  // CONFIRM_DELAY_MS (see the useEffect above), so this button just
+  // lets someone confirm right away instead of waiting out the delay.
   function handleAdd() {
     if (!uid) return;
     onConfirm(uid);

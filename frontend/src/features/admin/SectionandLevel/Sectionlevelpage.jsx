@@ -17,7 +17,7 @@ import {
   getTeachers,
   getSchoolYears,
   getSchoolYearDropdown,
-  startNewSchoolYear,
+  startNewSchoolYearPreservingAdvisers,
   cloneSectionsAcrossSchoolYears,
 } from "./Sectionlevelservice";
 import { logActivity } from "../ActivityLogs/Activitylogservice";
@@ -26,9 +26,6 @@ const PAGE_SIZE = 10;
 
 // The backend can only AND section-name and adviser-name filters (never OR them), so an active search fetches both matches separately and merges them client-side - see loadSections() below; results past this cap per field are dropped.
 const SEARCH_FETCH_SIZE = 200;
-
-// GET /api/section has no schoolYearId param (Spring silently drops unknown params), so the School Year filter fetches a larger batch filtered by whatever the backend CAN filter on, matches each section's `schoolYear` label client-side, then paginates locally; results past this cap won't show up.
-const SCHOOL_YEAR_FETCH_SIZE = 300;
 
 function Sectionlevelpage() {
   const [sections, setSections] = useState([]);
@@ -53,12 +50,6 @@ function Sectionlevelpage() {
 
   // Teacher filter - stores the selected adviser's id (string, same convention as schoolYearFilter) and reuses the `advisers` list already loaded for the Add/Edit Section modal's Adviser field, so no extra fetch is needed.
   const [teacherFilter, setTeacherFilter] = useState("");
-
-  // BUG FIX: loadSections() used to depend on `allSchoolYears` directly, but that array gets a new reference every time the School Year dropdown is opened (see onSchoolYearDropdownOpen), which re-triggered the sections effect and reloaded the whole table just from opening the dropdown. Depending on this derived, primitive label instead fixes it: it's `null` when nothing's selected, and only changes when the resolved label itself actually changes.
-  const selectedSchoolYearLabel = useMemo(() => {
-    if (!schoolYearFilter) return null;
-    return allSchoolYears.find((sy) => String(sy.id) === schoolYearFilter)?.label ?? null;
-  }, [schoolYearFilter, allSchoolYears]);
 
   // GET /api/section already accepts a `fullName` param (SectionSpecification.hasAdviserName), the same one the search box's "adviser" half sends - so unlike the School Year filter, this just resolves the picked id to a name and passes it straight through as a normal AND'd filter.
   const selectedTeacherName = useMemo(() => {
@@ -97,71 +88,54 @@ function Sectionlevelpage() {
       let pageContent;
       let newTotalPages;
 
-      // Either the search box or the School Year filter (or both) force us off the normal server-paginated path and into fetch-a-batch, filter/merge locally, then paginate locally.
-      const needsClientSideFiltering = Boolean(debouncedSearch) || Boolean(schoolYearFilter);
+      // Only the search box still forces us off the normal server-paginated path - the backend can only AND sectionName/fullName (never OR them), so an active search fetches both matches and merges them locally. School Year is now a real backend filter (schoolYearId), same as Grade Level/Status/Teacher, so it no longer needs that treatment.
+      const needsClientSideFiltering = Boolean(debouncedSearch);
 
       if (needsClientSideFiltering) {
         let combined;
 
-        if (debouncedSearch) {
-          if (selectedTeacherName) {
-            // A specific teacher is already pinned via the dropdown, so the free-text box's "OR match on adviser name" behavior doesn't apply anymore - fullName is spoken for by the selected teacher, and since sectionName + fullName are AND'd on the backend already, one fetch covers it.
-            const response = await getSections({
-              sectionSearch: debouncedSearch,
-              search: selectedTeacherName,
-              gradeLevel,
-              status,
-              page: 0,
-              size: SEARCH_FETCH_SIZE,
-              signal: controller.signal,
-            });
-            combined = response.content;
-          } else {
-            // Fetch section-name matches and adviser-name matches in parallel and merge them, instead of only falling back to adviser matches when section-name matches are empty - the old approach silently hid real adviser matches whenever the term also matched a section name.
-            const [bySectionName, byAdviserName] = await Promise.all([
-              getSections({
-                sectionSearch: debouncedSearch,
-                gradeLevel,
-                status,
-                page: 0,
-                size: SEARCH_FETCH_SIZE,
-                signal: controller.signal,
-              }),
-              getSections({
-                search: debouncedSearch,
-                gradeLevel,
-                status,
-                page: 0,
-                size: SEARCH_FETCH_SIZE,
-                signal: controller.signal,
-              }),
-            ]);
-
-            const mergedById = new Map();
-            [...bySectionName.content, ...byAdviserName.content].forEach((section) => {
-              mergedById.set(section.sectionId, section);
-            });
-
-            combined = Array.from(mergedById.values());
-          }
-        } else {
-          // No search term - the School Year and/or Teacher filter is why we're here, so one fetch (narrowed by whatever the backend supports) is enough to filter locally for school year.
+        if (selectedTeacherName) {
+          // A specific teacher is already pinned via the dropdown, so the free-text box's "OR match on adviser name" behavior doesn't apply anymore - fullName is spoken for by the selected teacher, and since sectionName + fullName are AND'd on the backend already, one fetch covers it.
           const response = await getSections({
+            sectionSearch: debouncedSearch,
+            search: selectedTeacherName,
             gradeLevel,
             status,
-            search: selectedTeacherName || undefined,
+            schoolYearId: schoolYearFilter || undefined,
             page: 0,
-            size: SCHOOL_YEAR_FETCH_SIZE,
+            size: SEARCH_FETCH_SIZE,
             signal: controller.signal,
           });
           combined = response.content;
-        }
+        } else {
+          // Fetch section-name matches and adviser-name matches in parallel and merge them, instead of only falling back to adviser matches when section-name matches are empty - the old approach silently hid real adviser matches whenever the term also matched a section name.
+          const [bySectionName, byAdviserName] = await Promise.all([
+            getSections({
+              sectionSearch: debouncedSearch,
+              gradeLevel,
+              status,
+              schoolYearId: schoolYearFilter || undefined,
+              page: 0,
+              size: SEARCH_FETCH_SIZE,
+              signal: controller.signal,
+            }),
+            getSections({
+              search: debouncedSearch,
+              gradeLevel,
+              status,
+              schoolYearId: schoolYearFilter || undefined,
+              page: 0,
+              size: SEARCH_FETCH_SIZE,
+              signal: controller.signal,
+            }),
+          ]);
 
-        if (schoolYearFilter) {
-          // SectionResponse only exposes the school year as a display name (no id), so matching goes through the resolved label (see selectedSchoolYearLabel) - fails open rather than hiding everything if it's somehow not resolvable yet.
-          if (selectedSchoolYearLabel) {
-            combined = combined.filter((section) => section.schoolYear === selectedSchoolYearLabel);
-          }
+          const mergedById = new Map();
+          [...bySectionName.content, ...byAdviserName.content].forEach((section) => {
+            mergedById.set(section.sectionId, section);
+          });
+
+          combined = Array.from(mergedById.values());
         }
 
         combined = combined.sort((a, b) =>
@@ -178,9 +152,11 @@ function Sectionlevelpage() {
 
         pageContent = combined.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
       } else {
+        // No search term - School Year, Grade Level, Status and Teacher are all real, AND'able backend filters, so this is a normal server-paginated fetch (no local batching/slicing needed).
         const response = await getSections({
           gradeLevel,
           status,
+          schoolYearId: schoolYearFilter || undefined,
           search: selectedTeacherName || undefined,
           page: currentPage - 1,
           size: PAGE_SIZE,
@@ -217,13 +193,12 @@ function Sectionlevelpage() {
 
   useEffect(() => {
     loadSections();
-    // selectedSchoolYearLabel/selectedTeacherName (not allSchoolYears/advisers) are the dependencies here on purpose - see the BUG FIX comment above; this still re-runs if a filter is picked before its list has caught up, but not just because a dropdown was reopened and refetched into a new array reference.
+    // selectedTeacherName (not advisers) is the dependency here on purpose, same reasoning the old BUG FIX comment had for the school-year label: re-run if the teacher filter is picked before the advisers list has caught up, but not just because that list was refetched into a new array reference. schoolYearFilter is a plain id sent straight to the backend now, so there's no derived label to depend on anymore.
   }, [
     debouncedSearch,
     gradeLevel,
     status,
     schoolYearFilter,
-    selectedSchoolYearLabel,
     teacherFilter,
     selectedTeacherName,
     currentPage,
@@ -371,25 +346,55 @@ function Sectionlevelpage() {
 
     try {
       if (sourceYear?.status === "active") {
-        const clonedSections = await startNewSchoolYear(payload);
+        // Wrapped instead of calling startNewSchoolYear() directly - see
+        // startNewSchoolYearPreservingAdvisers() in Sectionlevelservice.js:
+        // the backend's newSchoolYear() clears the adviser off EVERY section
+        // in the source year (not just the gradeLevel just cloned), so a
+        // partial clone otherwise strips advisers from grade levels left
+        // behind. The wrapper restores those automatically where it can.
+        const { clonedSections, restored, restoreFailed } = await startNewSchoolYearPreservingAdvisers({
+          sourceSchoolYearId: payload.sourceSchoolYearId,
+          targetSchoolYearId: payload.targetSchoolYearId,
+          gradeLevel: payload.gradeLevel,
+          advisers,
+        });
 
         // The target came from planningSchoolYears in the first place (that's what populated the modal's dropdown), so its label is already available here without an extra fetch - used to spell out exactly which year is now Active instead of leaving that implicit.
         const targetYearLabel = targetYear?.label ? `"${targetYear.label}" is now Active. ` : "";
 
-        showToast(`${targetYearLabel}${clonedSections.length} section(s) carried over.`);
+        // Only surfaced when something couldn't be auto-restored (a
+        // renamed/removed teacher) - the common case is silent, since from
+        // the person's perspective nothing should have gone wrong at all.
+        const restoreNote =
+          restoreFailed.length > 0
+            ? ` ${restoreFailed.length} section(s) left behind lost their adviser and need to be reassigned manually: ${restoreFailed
+                .map((item) => item.sectionName)
+                .join(", ")}.`
+            : "";
+
+        showToast(
+          `${targetYearLabel}${clonedSections.length} section(s) carried over.${restoreNote}`,
+          restoreFailed.length > 0 ? "error" : undefined
+        );
         logActivity(
           "New School Year Started",
-          `${targetYearLabel}${clonedSections.length} section(s) carried over from the current school year.`
+          `${targetYearLabel}${clonedSections.length} section(s) carried over from the current school year.` +
+            (restored.length > 0
+              ? ` ${restored.length} other section(s) left behind had their adviser automatically restored.`
+              : "") +
+            (restoreFailed.length > 0
+              ? ` ${restoreFailed.length} couldn't be restored: ${restoreFailed
+                  .map((item) => item.sectionName)
+                  .join(", ")}.`
+              : "")
         );
       } else {
         const { created, failed } = await cloneSectionsAcrossSchoolYears({
-          sourceLabel: sourceYear.label,
-          targetLabel: targetYear?.label,
+          sourceSchoolYearId: payload.sourceSchoolYearId,
           targetSchoolYearId: payload.targetSchoolYearId,
+          targetLabel: targetYear?.label,
           gradeLevel: payload.gradeLevel,
           advisers,
-          // Which specific sections the admin checked in the modal's preview list - see cloneSectionsAcrossSchoolYears() for how this narrows the clone down instead of copying everything under the source year.
-          sectionIds: payload.sectionIds,
         });
 
         // All-failed is treated as a real error (nothing to show for it, and the person should see why) - anything else is best-effort: whatever copied over did copy over, so surface the partial shortfall as a toast rather than discarding the successful ones.
@@ -416,7 +421,7 @@ function Sectionlevelpage() {
         //
         // Simply refetching under the current filters isn't enough to show what just happened - the table could still be filtered to the source year, to a status the fresh sections don't have, or paginated past where the new rows land - so instead of just reloading, every filter is pointed at exactly the new sections: switch to the target year, clear Status/grade level/search, and jump back to page 1.
         //
-        // allSchoolYears is refreshed first so the target year's label is already resolvable the moment schoolYearFilter changes - otherwise selectedSchoolYearLabel can't find it yet and loadSections() would fail open for one render before catching up.
+        // schoolYearFilter is a plain id now, sent straight to the backend, so loadSections() doesn't need anything resolved first. allSchoolYears is still refreshed before switching the filter so the School Year dropdown itself already shows the target year's label instead of a blank/stale option for one render.
         await loadAllSchoolYears();
         setGradeLevel("");
         setStatus("");

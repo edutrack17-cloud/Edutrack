@@ -15,6 +15,7 @@ const DEFAULT_SECTION_OPTION = { value: "", label: "Section", textClass: "text-g
 
 const STATUS_OPTIONS = [
   { value: "", label: "Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
+  { value: "On School", label: "On School", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
   { value: "Present", label: "Present", textClass: "text-success", selectedBgClass: "bg-success/10" },
   { value: "Absent", label: "Absent", textClass: "text-danger", selectedBgClass: "bg-danger/10" },
 ];

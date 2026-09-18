@@ -20,6 +20,84 @@ import { useAuth } from "../../../Context/Authcontext";
 
 const SCHOOL_NAME = "Cecilio M. Saliba Elementary School";
 
+// Grade level / section / status filters used to reset to blank on every
+// browser refresh (they were plain useState("") with nothing behind
+// them), which silently broke Time In / Time Out too: the
+// fetchTodaysAttendanceForSection call below is section-scoped and only
+// runs when `section` is truthy, so losing the selected section on
+// refresh meant the roster still loaded fine but every row's
+// todayAttendance came back null - Status, Time In and Time Out all
+// rendered blank until the section was picked again. Persisting the
+// three filters to sessionStorage (cleared when the tab closes, unlike
+// localStorage) and reading them back via the lazy useState
+// initializers below means the very first fetch after a refresh already
+// has the right section and pulls today's attendance status with it.
+// AttendaceFilters already clears out any value that isn't valid for
+// the signed-in user (see its levels.some/sections.some checks), so a
+// stale filter left behind by a different user on a shared device gets
+// dropped automatically rather than leaking through.
+const FILTERS_STORAGE_KEY = "rfid-attendance:filters";
+
+function readPersistedFilter(key) {
+  try {
+    return sessionStorage.getItem(`${FILTERS_STORAGE_KEY}:${key}`) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writePersistedFilter(key, value) {
+  try {
+    sessionStorage.setItem(`${FILTERS_STORAGE_KEY}:${key}`, value);
+  } catch {
+    // sessionStorage unavailable (private browsing, etc.) - filters just
+    // won't survive a refresh, same as before this fix.
+  }
+}
+
+// TODAY'S ATTENDANCE CACHE
+// fetchTodaysAttendanceForSection below is the ONLY place this page ever
+// learns about an "On School" row - a guard's gate tap never reaches
+// this page live (separate kiosk, separate login, no socket connecting
+// them). So on every refresh, that one request has to succeed again
+// before Time In / Time Out can show up at all; while it's in flight
+// (or if it happens to be slow or fail once) rows that were already
+// showing a status a moment ago go back to blank, which looks like the
+// data was lost. Caching the last known todayAttendance per student (by
+// rfid, thrown away the moment the calendar date changes) means a
+// refresh can repaint the same status/time immediately from what was
+// already on screen, and the live fetch then confirms or corrects it -
+// the table no longer has to sit blank while waiting on the network.
+const TODAY_ATTENDANCE_CACHE_KEY = "rfid-attendance:today-attendance";
+
+function getTodayKey() {
+  return new Date().toDateString();
+}
+
+function loadAttendanceCache() {
+  try {
+    const raw = localStorage.getItem(TODAY_ATTENDANCE_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed.date !== getTodayKey()) return {};
+    return parsed.byRfid && typeof parsed.byRfid === "object" ? parsed.byRfid : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveAttendanceCache(byRfid) {
+  try {
+    localStorage.setItem(
+      TODAY_ATTENDANCE_CACHE_KEY,
+      JSON.stringify({ date: getTodayKey(), byRfid })
+    );
+  } catch {
+    // Storage full/unavailable (private browsing, quota) - the cache
+    // just won't survive a refresh this time, same as before this fix.
+  }
+}
+
 function formatClockTime(date) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
 }
@@ -90,9 +168,21 @@ function RFIDAttendancePage() {
   // reacts instantly), but loadRecords below only refetches once typing
   // pauses for 400ms, matching debouncedSearch there.
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [level, setLevel] = useState("");
-  const [section, setSection] = useState("");
-  const [status, setStatus] = useState("");
+  const [level, setLevel] = useState(() => readPersistedFilter("level"));
+  const [section, setSection] = useState(() => readPersistedFilter("section"));
+  const [status, setStatus] = useState(() => readPersistedFilter("status"));
+
+  useEffect(() => {
+    writePersistedFilter("level", level);
+  }, [level]);
+
+  useEffect(() => {
+    writePersistedFilter("section", section);
+  }, [section]);
+
+  useEffect(() => {
+    writePersistedFilter("status", status);
+  }, [status]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -187,19 +277,26 @@ function RFIDAttendancePage() {
           search: debouncedSearch,
         });
 
+        // Repaint any status/times this page has already seen today
+        // (from a previous load, a live tap, or a manual action) right
+        // away, before the live fetch below even resolves - see the
+        // comment on TODAY_ATTENDANCE_CACHE_KEY above for why this
+        // matters specifically for "On School" rows.
+        const cache = loadAttendanceCache();
+        let merged = fetched.map((r) => (cache[r.rfid] ? { ...r, todayAttendance: cache[r.rfid] } : r));
+
         // GET /api/attendance?sectionName= - only meaningful once a
         // section is picked (same constraint "Mark Absent" already has).
         // Matched by rfid, not assignmentId - see the comment on
         // fetchTodaysAttendanceForSection in Attendanceservice.js for
-        // why. A failure here is non-fatal: the roster itself already
-        // loaded fine above, it just won't have today's status filled
-        // in until a live tap patches it via applyAttendanceUpdate.
-        let merged = fetched;
+        // why. A failure here is non-fatal: the roster (and cache
+        // overlay above) are still usable, just without a fresher
+        // status than whatever was already cached.
         if (section) {
           try {
             const todaysAttendance = await fetchTodaysAttendanceForSection(section);
             const byRfid = new Map(todaysAttendance.map((a) => [a.rfid, a]));
-            merged = fetched.map((r) => {
+            merged = merged.map((r) => {
               const a = byRfid.get(r.rfid);
               return a
                 ? { ...r, todayAttendance: { id: a.id, status: a.status, timeIn: a.timeIn, timeOut: a.timeOut } }
@@ -229,6 +326,24 @@ function RFIDAttendancePage() {
       ignore = true;
     };
   }, [currentPage, level, section, debouncedSearch]);
+
+  // Keeps TODAY_ATTENDANCE_CACHE_KEY in sync with whatever this page
+  // currently has on screen - covers every path that can set
+  // todayAttendance (the merge above, a live tap via
+  // applyAttendanceUpdate, a manual Present/Time out action, and the
+  // bulk Mark Absent response), so the cache is never more than one
+  // render behind and a refresh always has the latest to repaint from.
+  useEffect(() => {
+    const cache = loadAttendanceCache();
+    let changed = false;
+    for (const r of records) {
+      if (r.todayAttendance && r.rfid) {
+        cache[r.rfid] = r.todayAttendance;
+        changed = true;
+      }
+    }
+    if (changed) saveAttendanceCache(cache);
+  }, [records]);
 
   // GET /api/student never returns today's attendance (fetchStudentRecords
   // always sets todayAttendance: null - see the comment there), so a full

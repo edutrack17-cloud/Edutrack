@@ -1,9 +1,12 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, ChevronDown, KeyRound, LogOut } from "lucide-react";
+import { Menu, ChevronDown, User, KeyRound, LogOut } from "lucide-react";
 
 function Header({ title, fullname, role, onMenuClick, onLogout }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  const isTeacher = role === "Teacher";
+  const isGuard = role === "Guard";
 
   function toggleProfileMenu() {
     setIsProfileMenuOpen((prev) => !prev);
@@ -26,12 +29,14 @@ function Header({ title, fullname, role, onMenuClick, onLogout }) {
     <header className="flex min-h-20 items-center justify-between gap-3 bg-white px-4 py-3 shadow-md sm:px-6">
 
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-        <button
-          onClick={onMenuClick}
-          className="flex shrink-0 items-center justify-center rounded-lg p-2 text-primary hover:bg-primary/10 md:hidden"
-        >
-          <Menu size={24} />
-        </button>
+        {onMenuClick && (
+          <button
+            onClick={onMenuClick}
+            className="flex shrink-0 items-center justify-center rounded-lg p-2 text-primary hover:bg-primary/10 md:hidden"
+          >
+            <Menu size={24} />
+          </button>
+        )}
 
         <h1 className="truncate text-xl font-bold font-primary text-primary sm:text-3xl">
           {title}
@@ -62,17 +67,28 @@ function Header({ title, fullname, role, onMenuClick, onLogout }) {
 
         {isProfileMenuOpen && (
           <>
-            {/* backdrop to close the dropdown when clicking outside */}
             <div onClick={closeProfileMenu} className="fixed inset-0 z-10" />
 
             <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
-              <Link
-                to="/change-password"
-                onClick={closeProfileMenu}
-                className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary transition-colors hover:bg-primary/10">
-                <KeyRound size={18} />
-                <span>Change Password</span>
-              </Link>
+              {isTeacher && (
+                <Link
+                  to="/profile"
+                  onClick={closeProfileMenu}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary transition-colors hover:bg-primary/10">
+                  <User size={18} />
+                  <span>Profile</span>
+                </Link>
+              )}
+
+              {!isGuard && (
+                <Link
+                  to="/change-password"
+                  onClick={closeProfileMenu}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary transition-colors hover:bg-primary/10">
+                  <KeyRound size={18} />
+                  <span>Change Password</span>
+                </Link>
+              )}
 
               <button
                 onClick={handleLogout}

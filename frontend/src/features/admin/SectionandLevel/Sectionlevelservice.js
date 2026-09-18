@@ -20,22 +20,18 @@ function getErrorMessage(error, fallback) {
 
 
 // CONNECT: GET /api/section
-// NOTE: no schoolYearId param here on purpose - GET /api/section has no
-// matching query param on the backend (SectionController /
-// SectionSpecification only support fullName, gradeLevel, sectionStatus,
-// sectionName), so it would be silently dropped by Spring anyway. The
-// School Year filter is applied entirely client-side instead - see
-// SCHOOL_YEAR_FETCH_SIZE and loadSections() in Sectionlevelpage.jsx. If
-// the backend ever adds real schoolYearId support, re-add it here AND
-// simplify away the client-side fetch-a-batch-and-match-by-label
-// workaround in Sectionlevelpage.jsx - keeping both at once would just
-// be redundant.
-export async function getSections({ search, sectionSearch, gradeLevel, status, page = 0, size = 10, signal } = {}) {
+// UPDATE: backend now accepts a real schoolYearId param (SectionController
+// / SectionSpecification.hasSchoolYearId), so the School Year filter no
+// longer needs the fetch-a-batch-and-match-by-label workaround that used
+// to live in Sectionlevelpage.jsx / Newschoolyearmodal.jsx - pass the id
+// straight through like gradeLevel/status below.
+export async function getSections({ search, sectionSearch, gradeLevel, status, schoolYearId, page = 0, size = 10, signal } = {}) {
   const params = {};
   if (search) params.fullName = search;
   if (sectionSearch) params.sectionName = sectionSearch;
   if (gradeLevel) params.gradeLevel = gradeLevel;
   if (status) params.sectionStatus = status;
+  if (schoolYearId) params.schoolYearId = schoolYearId;
   params.page = page;
   params.size = size;
 
@@ -194,14 +190,11 @@ export async function startNewSchoolYear(data) {
   }
 }
 
-// How many section rows to pull per lookup below. GET /api/section has no
-// schoolYearId query param (see the matching comment in
-// Sectionlevelpage.jsx), so both the "does the target already have
-// sections" check and the "which sections belong to the source year"
-// lookup have to fetch a batch and match on the section's `schoolYear`
-// display label client-side. Same trade-off as SCHOOL_YEAR_FETCH_SIZE
-// there: a single school year with more sections than this cap would be
-// undercounted.
+// How many section rows to pull per lookup below. Both the "does the
+// target already have sections" check and the "which sections belong to
+// the source year" lookup are now scoped with schoolYearId (see
+// getSections() above), so this is just a safety cap in case a single
+// school year ever has more sections than this.
 const CLONE_FETCH_SIZE = 300;
 
 // Client-side stand-in for the backend's newSchoolYear() clone step, used
@@ -234,17 +227,11 @@ const CLONE_FETCH_SIZE = 300;
 // paces this loop automatically (see apiClient.js) - no per-call retry
 // logic needed here specifically.
 export async function cloneSectionsAcrossSchoolYears({
-  sourceLabel,
-  targetLabel,
+  sourceSchoolYearId,
   targetSchoolYearId,
+  targetLabel,
   gradeLevel,
   advisers = [],
-  // Section ids the admin actually checked in the "New School Year"
-  // modal's preview list. Optional (and left undefined) for any caller
-  // that hasn't been updated to pass a selection, so this stays backward
-  // compatible - when omitted, every section matched by sourceLabel/
-  // gradeLevel below is cloned, same as before this was selectable.
-  sectionIds,
 }) {
   // Used to mirror the backend's SchoolYearAlreadyHasSections guard and
   // block the WHOLE clone the moment the target had any section at all.
@@ -255,39 +242,26 @@ export async function cloneSectionsAcrossSchoolYears({
   // that case impossible. Instead, only skip the individual sections
   // that would collide BY NAME with something already under the target -
   // everything else still gets cloned in alongside what's already there.
-  const targetBatch = await getSections({ page: 0, size: CLONE_FETCH_SIZE });
+  const targetBatch = await getSections({ schoolYearId: targetSchoolYearId, page: 0, size: CLONE_FETCH_SIZE });
   const existingTargetNames = new Set(
-    targetBatch.content
-      .filter((section) => section.schoolYear === targetLabel)
-      .map((section) => section.sectionName.trim().toLowerCase())
+    targetBatch.content.map((section) => section.sectionName.trim().toLowerCase())
   );
 
   // No sectionStatus filter here on purpose - the backend's own clone
   // queries (findAllBySchoolYear_SchoolYearId[AndGradeLevel]) don't filter
   // by section status either, so both active AND archived sections under
   // the source year get copied, matching that behavior exactly.
-  const sourceBatch = await getSections({ gradeLevel, page: 0, size: CLONE_FETCH_SIZE });
-  let sectionsToClone = sourceBatch.content.filter(
-    (section) => section.schoolYear === sourceLabel
-  );
-
-  // Narrow down to just the sections the admin checked, when a selection
-  // was provided. sectionsToClone (above) is still what populates the
-  // modal's preview in the first place, so `sectionIds` here is always a
-  // subset of it - Array.isArray guards against a caller that passed
-  // nothing, which should fall back to "clone everything matched" rather
-  // than being treated as "nothing selected."
-  if (Array.isArray(sectionIds)) {
-    const selectedIdSet = new Set(sectionIds);
-    sectionsToClone = sectionsToClone.filter((section) => selectedIdSet.has(section.sectionId));
-  }
+  //
+  // Always every section matched by sourceSchoolYearId/gradeLevel - no
+  // per-section narrowing. This mirrors the backend's own newSchoolYear()
+  // rule for the active-source path (all sections, or all sections in one
+  // grade level, never a hand-picked subset), so both clone paths behave
+  // identically instead of this one allowing something the other can't.
+  const sourceBatch = await getSections({ schoolYearId: sourceSchoolYearId, gradeLevel, page: 0, size: CLONE_FETCH_SIZE });
+  const sectionsToClone = sourceBatch.content;
 
   if (sectionsToClone.length === 0) {
-    throw new Error(
-      Array.isArray(sectionIds) && sectionIds.length === 0
-        ? "No sections selected to copy."
-        : "This school year doesn't have sections yet"
-    );
+    throw new Error("This school year doesn't have sections yet");
   }
 
   const created = [];
@@ -325,6 +299,88 @@ export async function cloneSectionsAcrossSchoolYears({
   }
 
   return { created, failed };
+}
+
+// WORKAROUND for a backend side effect: SectionService.newSchoolYear() (what
+// startNewSchoolYear() above calls) closes the source school year whenever
+// it was active, and its clearAdvisers() step then wipes the adviser off
+// EVERY section under that school year - not just the ones matching the
+// gradeLevel actually being cloned. So cloning just Grade 4, say, silently
+// strips the adviser from every Grade 5/6 section left behind too, even
+// though they were never touched by this clone.
+//
+// This wraps startNewSchoolYear() to snapshot every section under the
+// source year right before the call (while advisers are still intact), then
+// re-checks the same school year right after. Anything that had an adviser
+// before but doesn't anymore gets it put back via updateSection() - from
+// the caller's point of view, the collateral wipe never happened.
+//
+// LIMITATIONS (same reasoning as cloneSectionsAcrossSchoolYears() above):
+// - SectionResponse only exposes the adviser as a display name, not a
+//   userId, so a section can only be restored if that name still matches
+//   someone in the `advisers` list passed in. A renamed/removed teacher
+//   can't be resolved back to an id and is reported in `restoreFailed`
+//   instead of silently left broken.
+// - This can't do anything about advisers a PAST call already wiped - once
+//   the name is gone there's no record left of who it used to be. It only
+//   prevents new collateral damage from this call forward.
+export async function startNewSchoolYearPreservingAdvisers({
+  sourceSchoolYearId,
+  targetSchoolYearId,
+  gradeLevel,
+  advisers = [],
+}) {
+  const before = await getSections({
+    schoolYearId: sourceSchoolYearId,
+    page: 0,
+    size: CLONE_FETCH_SIZE,
+  });
+  const adviserBySectionId = new Map(
+    before.content
+      .filter((section) => section.adviser)
+      .map((section) => [section.sectionId, section.adviser])
+  );
+
+  const clonedSections = await startNewSchoolYear({
+    sourceSchoolYearId,
+    targetSchoolYearId,
+    gradeLevel,
+  });
+
+  const after = await getSections({
+    schoolYearId: sourceSchoolYearId,
+    page: 0,
+    size: CLONE_FETCH_SIZE,
+  });
+
+  const restored = [];
+  const restoreFailed = [];
+
+  for (const section of after.content) {
+    const previousAdviserName = adviserBySectionId.get(section.sectionId);
+    // Nothing to do if it had no adviser before, or if it still has one now
+    // (i.e. it was never touched by clearAdvisers() in the first place).
+    if (!previousAdviserName || section.adviser) continue;
+
+    const adviser = advisers.find((candidate) => candidate.name === previousAdviserName);
+    if (!adviser) {
+      restoreFailed.push({ sectionName: section.sectionName, adviserName: previousAdviserName });
+      continue;
+    }
+
+    try {
+      await updateSection(section.sectionId, { userId: adviser.id });
+      restored.push(section.sectionName);
+    } catch (error) {
+      restoreFailed.push({
+        sectionName: section.sectionName,
+        adviserName: previousAdviserName,
+        reason: error.message,
+      });
+    }
+  }
+
+  return { clonedSections, restored, restoreFailed };
 }
 
 export default sectionApi;
