@@ -48,13 +48,57 @@ export async function getSections({ search, sectionSearch, gradeLevel, status, s
 }
 
 
-// CONNECT: POST /api/section/
+// CONNECT: POST /api/section
+// Manual create - the backend enforces "adviser required" here.
 export async function createSection(data) {
   try {
     const response = await sectionApi.post("/section", data);
     return response.data;
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to create section"));
+  }
+}
+
+
+// CONNECT: POST /api/section/clone
+// Clone-specific create: adviser is OPTIONAL. Kept for any single-section
+// clone caller; the bulk path below (cloneSectionBatch) is what
+// cloneSectionsAcrossSchoolYears() now uses.
+export async function cloneSection(data) {
+  try {
+    const response = await sectionApi.post("/section/clone", data);
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to clone section"));
+  }
+}
+
+
+// CONNECT: POST /api/section/clone/batch
+// Bulk clone: ONE request for N sections, all inside a single backend
+// transaction. Replaces the old per-section loop in
+// cloneSectionsAcrossSchoolYears(), which did N sequential POSTs through
+// the rate limiter and was the main cause of the "clone feels slow"
+// complaint.
+//
+// Body: { targetSchoolYearId, sections: [{ sectionName, gradeLevel, userId? }, ...] }
+// Returns: SectionResponse[] (one per successfully created section, in order).
+//
+// Failure semantics: the batch is all-or-nothing at the transaction level.
+// If any single section violates a constraint (duplicate name, bad
+// adviser id, etc.), the whole batch rolls back and the promise rejects
+// with the backend's error message. Callers that need per-section failure
+// reporting should still pre-filter what they can (duplicate names,
+// unresolvable adviser names) client-side before calling this.
+export async function cloneSectionBatch(targetSchoolYearId, sections) {
+  try {
+    const response = await sectionApi.post("/section/clone/batch", {
+      targetSchoolYearId,
+      sections,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to clone sections"));
   }
 }
 
@@ -194,8 +238,10 @@ export async function startNewSchoolYear(data) {
 // target already have sections" check and the "which sections belong to
 // the source year" lookup are now scoped with schoolYearId (see
 // getSections() above), so this is just a safety cap in case a single
-// school year ever has more sections than this.
-const CLONE_FETCH_SIZE = 300;
+// school year ever has more sections than this. Kept modest on purpose -
+// the old 300 pulled the full SectionResponse payload for every row,
+// which was a big part of why the clone flow felt slow.
+const CLONE_FETCH_SIZE = 100;
 
 // Client-side stand-in for the backend's newSchoolYear() clone step, used
 // specifically when the source is a Closed (past) school year rather than
@@ -203,29 +249,33 @@ const CLONE_FETCH_SIZE = 300;
 // case (see the note on it above) since it always closes "the" active
 // year and activates the target, and neither of those should happen when
 // someone is just pulling sections forward from an old year as a
-// template. This composes the already-public section endpoints instead
-// (GET /section, POST /section) so no school year's status is touched -
-// only the sections themselves get copied, with their schoolYear
-// reference pointed at the target.
+// template.
 //
-// LIMITATION: SectionResponse only exposes each section's adviser as a
-// display name string, not a userId, so re-creating a section under the
-// target year requires matching that name back to an id in the `advisers`
-// list (from getTeachers()) passed in by the caller. A source section
-// whose adviser name doesn't exactly match anyone currently in that list
-// (renamed, removed, etc.) can't be safely auto-assigned and is reported
-// back as a failure instead of being skipped silently or given to the
-// wrong person.
+// PERF: this now does exactly TWO network reads (target lookup, source
+// lookup) plus ONE bulk POST to /section/clone/batch. It used to do the
+// same two reads plus N sequential POSTs to /section/clone - one per
+// section - each of which had to squeeze through the rate limiter, which
+// is what made cloning 10 sections take seconds.
+//
+// ADVISER HANDLING: a section with no adviser is a valid state and must
+// stay valid after cloning. Only sections that actually HAD an adviser on
+// the source need that adviser resolved back to a userId (SectionResponse
+// exposes the adviser as a display-name string only). If a source section
+// has an adviser name that can't be matched to anyone in the `advisers`
+// list (renamed, removed, etc.), that section is reported as a failure
+// instead of being silently skipped or given to the wrong person. If the
+// source section had NO adviser, we clone it with no adviser - no lookup,
+// no failure.
+//
+// Duplicate-name collisions against the target are resolved client-side
+// (we skip those sections and report them in `failed`) before the batch
+// is sent, because the batch endpoint is all-or-nothing: a single
+// duplicate would roll back every section in the request.
 //
 // Returns { created, failed } - `created` is the list of successfully
 // cloned SectionResponses (mirrors startNewSchoolYear()'s return shape),
 // `failed` is `{ sectionName, reason }` entries for anything that
 // couldn't be copied.
-//
-// RATE LIMIT: every getSections()/createSection() call below goes
-// through sectionApi, so the request interceptor's local bucket now
-// paces this loop automatically (see apiClient.js) - no per-call retry
-// logic needed here specifically.
 export async function cloneSectionsAcrossSchoolYears({
   sourceSchoolYearId,
   targetSchoolYearId,
@@ -264,8 +314,11 @@ export async function cloneSectionsAcrossSchoolYears({
     throw new Error("This school year doesn't have sections yet");
   }
 
-  const created = [];
+  // Build the batch payload locally first. Everything we can validate
+  // without a network call is validated here, so a single bad row can't
+  // take the whole batch down with it.
   const failed = [];
+  const payload = [];
 
   for (const section of sectionsToClone) {
     if (existingTargetNames.has(section.sectionName.trim().toLowerCase())) {
@@ -276,29 +329,45 @@ export async function cloneSectionsAcrossSchoolYears({
       continue;
     }
 
-    const adviser = advisers.find((candidate) => candidate.name === section.adviser);
-    if (!adviser) {
-      failed.push({
-        sectionName: section.sectionName,
-        reason: `Adviser "${section.adviser}" couldn't be matched to a current teacher.`,
-      });
-      continue;
+    let adviserId;
+
+    if (section.adviser) {
+      const adviser = advisers.find((candidate) => candidate.name === section.adviser);
+      if (!adviser) {
+        failed.push({
+          sectionName: section.sectionName,
+          reason: `Adviser "${section.adviser}" couldn't be matched to a current teacher.`,
+        });
+        continue;
+      }
+      adviserId = adviser.id;
     }
 
-    try {
-      const clonedSection = await createSection({
-        sectionName: section.sectionName,
-        schoolYear: targetSchoolYearId,
-        gradeLevel: section.gradeLevel,
-        userId: adviser.id,
-      });
-      created.push(clonedSection);
-    } catch (error) {
-      failed.push({ sectionName: section.sectionName, reason: error.message });
-    }
+    payload.push({
+      sectionName: section.sectionName,
+      gradeLevel: section.gradeLevel,
+      userId: adviserId, // undefined when the source section had no adviser
+    });
   }
 
-  return { created, failed };
+  if (payload.length === 0) {
+    return { created: [], failed };
+  }
+
+  // ONE request for the whole batch. The backend wraps this in a single
+  // transaction, so if it succeeds every section is created, and if it
+  // fails nothing is created.
+  try {
+    const created = await cloneSectionBatch(targetSchoolYearId, payload);
+    return { created, failed };
+  } catch (error) {
+    // Batch is all-or-nothing: attribute the failure to every section
+    // that was in the payload, since the backend rolled them all back.
+    payload.forEach((s) =>
+      failed.push({ sectionName: s.sectionName, reason: error.message })
+    );
+    return { created: [], failed };
+  }
 }
 
 // WORKAROUND for a backend side effect: SectionService.newSchoolYear() (what
@@ -324,6 +393,11 @@ export async function cloneSectionsAcrossSchoolYears({
 // - This can't do anything about advisers a PAST call already wiped - once
 //   the name is gone there's no record left of who it used to be. It only
 //   prevents new collateral damage from this call forward.
+//
+// PERF: the restore loop below still does one PATCH per section that lost
+// its adviser - that's a much smaller set than "every section in the
+// source year", usually zero after a normal clone. Left as-is on purpose;
+// convert to a batch endpoint only if it ever becomes hot.
 export async function startNewSchoolYearPreservingAdvisers({
   sourceSchoolYearId,
   targetSchoolYearId,

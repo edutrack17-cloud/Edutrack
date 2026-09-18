@@ -80,12 +80,22 @@ function processThrottleQueue() {
   }
 }
 
-// Awaited by the request interceptor below before every call, no matter
-// which service file's axios instance is making it - this is what makes
-// the bucket actually shared instead of just co-located in one file.
-// Under the limit, resolves immediately; over it, queues (in call order,
-// across every domain that shares this module) and resolves as tokens
-// refill.
+// Awaited by the request interceptor below before every WRITE call, no
+// matter which service file's axios instance is making it - this is what
+// makes the bucket actually shared instead of just co-located in one
+// file. Under the limit, resolves immediately; over it, queues (in call
+// order, across every domain that shares this module) and resolves as
+// tokens refill.
+//
+// Reads (GET/HEAD/OPTIONS) are explicitly NOT charged against this bucket
+// - see the request interceptor below. Two reasons:
+//   1. Reads are cheap and idempotent; charging them means a single page
+//      transition that fires a dozen GETs drains the client's budget and
+//      queues every subsequent read (and write) behind a 1.2s refill.
+//   2. It mirrors the backend RateLimitFilter, which also skips
+//      GET/HEAD/OPTIONS as of the same fix. The client bucket's only job
+//      now is to pace state-changing requests, which is exactly what the
+//      server-side bucket is doing.
 function acquireRequestSlot() {
   refillTokens();
   if (availableTokens > 0 && throttleQueue.length === 0) {
@@ -102,7 +112,7 @@ function acquireRequestSlot() {
 }
 
 /**
- * Builds a fully-wired axios instance: shared rate-limit throttle,
+ * Builds a fully-wired axios instance: shared rate-limit throttle, 
  * Authorization header attachment, 401 -> refresh-once-and-retry -> logout,
  * and 429 -> resync-and-retry-once. This is the shape every *Service.js
  * file used to hand-roll on its own (sectionApi, studentApi, userApi,
@@ -147,7 +157,22 @@ export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
   });
 
   instance.interceptors.request.use(async (config) => {
-    await acquireRequestSlot();
+    // Reads are NOT charged against the shared bucket. This mirrors the
+    // backend RateLimitFilter (which skips GET/HEAD/OPTIONS as of the
+    // same fix). Before this guard, navigating between pages that fire
+    // bursts of GETs drained the client budget at ~0.83 req/sec refill,
+    // so the third or fourth page visited would stall for hundreds of
+    // ms on every request while waiting for a token.
+    //
+    // Only state-changing methods (POST/PATCH/PUT/DELETE) consume a
+    // slot, which is what keeps rapid double-submits and other write
+    // bursts under control.
+    const method = (config.method || "get").toLowerCase();
+    const isRead = method === "get" || method === "head" || method === "options";
+
+    if (!isRead) {
+      await acquireRequestSlot();
+    }
 
     const token = localStorage.getItem("accessToken");
     if (token) {
@@ -202,7 +227,7 @@ export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
       // backend's limit on its own now, so reaching a real 429 means
       // something else is also spending from this user's backend bucket
       // right now (another tab, another device, or a burst of parallel
-      // requests that all queued past acquireRequestSlot() before the
+      // writes that all queued past acquireRequestSlot() before the
       // first one's response came back). Resync the shared bucket to
       // empty and retry this one request once after a full refill
       // interval.
