@@ -1,5 +1,6 @@
 package com.edutrack.studentsectionassignment.specification;
 
+import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.student.enums.StudentStatus;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
@@ -10,7 +11,9 @@ import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 public class StudentSectionAssignmentSpecification {
 
@@ -61,6 +64,29 @@ public class StudentSectionAssignmentSpecification {
                     ),
                     sectionName.trim().toLowerCase()
             );
+        };
+    }
+
+    // FILTER BY ACTIVE SCHOOL YEAR SECTION
+    // Convenience wrapper — equivalent to
+    // hasSchoolYearStatusIn(Set.of(SchoolYearStatus.active)).
+    public static Specification<StudentSectionAssignment> hasActiveSchoolYear() {
+        return hasSchoolYearStatusIn(Set.of(SchoolYearStatus.active));
+    }
+
+    // FILTER BY SCHOOL YEAR STATUS SET
+    // planning / active / closed / archived — pass whichever subset you
+    // want. Null or empty collection means "no filter" (conjunction),
+    // matching the rest of the class's optional-filter convention.
+    public static Specification<StudentSectionAssignment> hasSchoolYearStatusIn(
+            Collection<SchoolYearStatus> statuses
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            if (statuses == null || statuses.isEmpty()) {
+                return criteriaBuilder.conjunction();
+            }
+            return root.get("section").get("schoolYear").get("schoolYearStatus")
+                    .in(statuses);
         };
     }
 
@@ -183,7 +209,6 @@ public class StudentSectionAssignmentSpecification {
     }
 
     // FILTER BY ADVISER
-    // StudentSectionAssignmentSpecification.java — revert to matching the rest of the class
     public static Specification<StudentSectionAssignment> hasAdviserId(Long adviserId) {
         return (root, query, criteriaBuilder) -> {
             if (adviserId == null) {

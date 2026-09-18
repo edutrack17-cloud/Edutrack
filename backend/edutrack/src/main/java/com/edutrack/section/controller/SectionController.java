@@ -1,11 +1,10 @@
 package com.edutrack.section.controller;
 
-import com.edutrack.section.dto.request.CreateSectionRequest;
-import com.edutrack.section.dto.request.NewSchoolYearRequest;
-import com.edutrack.section.dto.request.UpdateSectionRequest;
+import com.edutrack.section.dto.request.*;
 import com.edutrack.section.dto.response.SectionResponse;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
+import com.edutrack.section.exception.AdviserRequired;
 import com.edutrack.section.service.SectionService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -27,12 +26,37 @@ public class SectionController {
         this.sectionService = sectionService;
     }
 
-    //CREATE
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public ResponseEntity<SectionResponse> createSection(@Valid @RequestBody CreateSectionRequest sectionRequest) {
+    public ResponseEntity<SectionResponse> createSection(
+            @Valid @RequestBody CreateSectionRequest sectionRequest) {
+
+        // Manual creation always requires an adviser. Clone paths call
+        // SectionService.createSection directly and skip this check.
+        if (sectionRequest.userId() == null) {
+            throw new AdviserRequired();
+        }
+
         SectionResponse savedSection = sectionService.createSection(sectionRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedSection);
+    }
+
+    // CLONE (used by the frontend's cloneSectionsAcrossSchoolYears flow) —
+    // adviser is optional here, unlike the manual-create endpoint above.
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/clone")
+    public ResponseEntity<SectionResponse> cloneSection(
+            @Valid @RequestBody CloneSectionRequest cloneRequest) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(sectionService.cloneSection(cloneRequest));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/clone/batch")
+    public ResponseEntity<List<SectionResponse>> cloneSectionBatch(
+            @Valid @RequestBody CloneSectionBatchRequest batchRequest) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(sectionService.cloneSectionBatch(batchRequest));
     }
 
     //READ
@@ -43,14 +67,13 @@ public class SectionController {
             @RequestParam(required = false) GradeLevel gradeLevel,
             @RequestParam(required = false) SectionStatus sectionStatus,
             @RequestParam(required = false) String sectionName,
-            @RequestParam(required = false) Long schoolYearId,      // <-- ADD
+            @RequestParam(required = false) Long schoolYearId,
             Pageable pageable) {
         return ResponseEntity.ok(
                 sectionService.getSection(fullName, gradeLevel, sectionStatus, sectionName, schoolYearId, pageable)
         );
     }
 
-    //ADD: count sections for a given school year (used by "Start New School Year" modal)
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("count-by-school-year")
     public ResponseEntity<Long> countBySchoolYear(@RequestParam Long schoolYearId) {

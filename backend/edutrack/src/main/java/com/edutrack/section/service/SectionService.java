@@ -5,9 +5,7 @@ import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.schoolyear.exception.*;
 import com.edutrack.schoolyear.repository.SchoolYearLockRepository;
 import com.edutrack.schoolyear.repository.SchoolYearRepository;
-import com.edutrack.section.dto.request.CreateSectionRequest;
-import com.edutrack.section.dto.request.NewSchoolYearRequest;
-import com.edutrack.section.dto.request.UpdateSectionRequest;
+import com.edutrack.section.dto.request.*;
 import com.edutrack.section.dto.response.SectionResponse;
 import com.edutrack.section.entity.Section;
 import com.edutrack.section.enums.GradeLevel;
@@ -32,7 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -126,51 +125,137 @@ public class SectionService {
     // CREATE
     // =========================================================
 
-    @Transactional
-    public SectionResponse createSection(
-            CreateSectionRequest sectionRequest
-    ) {
-        User adviserToBeAssigned =
-                userRepository.findById(sectionRequest.userId())
-                        .orElseThrow(() ->
-                                new UserNotFoundException(
-                                        sectionRequest.userId()
-                                )
-                        );
+    // =========================================================
+// CREATE
+// =========================================================
 
-        SchoolYear schoolYearToBeAssigned =
-                getBySchoolYearId(sectionRequest.schoolYear());
+    @Transactional
+    public SectionResponse createSection(CreateSectionRequest sectionRequest) {
+        return doCreateSection(
+                sectionRequest.sectionName(),
+                sectionRequest.schoolYear(),
+                sectionRequest.gradeLevel(),
+                sectionRequest.userId()
+        );
+    }
+
+    @Transactional
+    public SectionResponse cloneSection(CloneSectionRequest cloneRequest) {
+        return doCreateSection(
+                cloneRequest.sectionName(),
+                cloneRequest.schoolYear(),
+                cloneRequest.gradeLevel(),
+                cloneRequest.userId()
+        );
+    }
+
+    @Transactional
+    public List<SectionResponse> cloneSectionBatch(CloneSectionBatchRequest batchRequest) {
+
+        // 1. Resolve target school year ONCE
+        SchoolYear targetSchoolYear = getBySchoolYearId(batchRequest.targetSchoolYearId());
+
+        // 2. Resolve all unique adviser ids in ONE query
+        Set<Long> adviserIds = batchRequest.sections().stream()
+                .map(CloneSectionRequest::userId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, User> advisersById = adviserIds.isEmpty()
+                ? Map.of()
+                : userRepository.findAllById(adviserIds).stream()
+                .collect(Collectors.toMap(User::getUserId, u -> u));
+
+        // 3. Check which section names already exist under target in ONE query
+        List<String> requestedNames = batchRequest.sections().stream()
+                .map(CloneSectionRequest::sectionName)
+                .toList();
+
+        Set<String> existingNames = sectionRepository
+                .findAllBySchoolYear_SchoolYearIdAndSectionNameIn(
+                        targetSchoolYear.getSchoolYearId(), requestedNames)
+                .stream()
+                .map(s -> s.getSectionName().toLowerCase())
+                .collect(Collectors.toSet());
+
+        // 4. Build all entities in memory, fail fast on any bad row
+        List<Section> toSave = new ArrayList<>(batchRequest.sections().size());
+
+        for (CloneSectionRequest req : batchRequest.sections()) {
+            if (existingNames.contains(req.sectionName().toLowerCase())) {
+                throw new SectionAlreadyExists(req.sectionName());
+            }
+
+            User adviser = null;
+            if (req.userId() != null) {
+                adviser = advisersById.get(req.userId());
+                if (adviser == null) {
+                    throw new UserNotFoundException(req.userId());
+                }
+                if (adviser.getAccountStatus() == AccountStatus.disabled) {
+                    throw new AdviserAccountDisabled();
+                }
+            }
+
+            Section s = new Section();
+            s.setSectionName(req.sectionName());
+            s.setGradeLevel(req.gradeLevel());
+            s.setUser(adviser);
+            s.setSchoolYear(targetSchoolYear);
+            s.setSectionStatus(SectionStatus.active);
+            toSave.add(s);
+        }
+
+        // 5. ONE saveAll, ONE flush at commit
+        List<Section> saved = sectionRepository.saveAll(toSave);
+
+        return saved.stream().map(sectionMapper::toResponseDTO).toList();
+    }
+
+    /**
+     * Shared creation logic for both the manual-create endpoint and the
+     * clone endpoint. Adviser is optional at this layer — the manual-create
+     * controller enforces "adviser required" itself, and the clone path
+     * legitimately passes null.
+     */
+    private SectionResponse doCreateSection(
+            String sectionName,
+            Long schoolYearId,
+            GradeLevel gradeLevel,
+            Long userId
+    ) {
+        User adviserToBeAssigned = null;
+
+        if (userId != null) {
+            adviserToBeAssigned = userRepository.findById(userId)
+                    .orElseThrow(() -> new UserNotFoundException(userId));
+
+            if (adviserToBeAssigned.getAccountStatus() == AccountStatus.disabled) {
+                throw new AdviserAccountDisabled();
+            }
+        }
+
+        SchoolYear schoolYearToBeAssigned = getBySchoolYearId(schoolYearId);
 
         if (sectionRepository.existsBySectionNameAndSchoolYear_SchoolYearId(
-                sectionRequest.sectionName(),
-                sectionRequest.schoolYear()
+                sectionName,
+                schoolYearId
         )) {
-            throw new SectionAlreadyExists(
-                    sectionRequest.sectionName()
-            );
+            throw new SectionAlreadyExists(sectionName);
         }
 
-        if (adviserToBeAssigned.getAccountStatus()
-                == AccountStatus.disabled) {
-            throw new AdviserAccountDisabled();
-        }
-
-        Section sectionEntity =
-                sectionMapper.toEntity(sectionRequest);
-
-        sectionEntity.setUser(adviserToBeAssigned);
+        Section sectionEntity = new Section();
+        sectionEntity.setSectionName(sectionName);
+        sectionEntity.setGradeLevel(gradeLevel);
+        sectionEntity.setUser(adviserToBeAssigned);           // null is valid
         sectionEntity.setSchoolYear(schoolYearToBeAssigned);
+        sectionEntity.setSectionStatus(SectionStatus.active);
 
         try {
-            Section savedSection =
-                    sectionRepository.saveAndFlush(sectionEntity);
-
+            Section savedSection = sectionRepository.saveAndFlush(sectionEntity);
             return sectionMapper.toResponseDTO(savedSection);
-
         } catch (DataIntegrityViolationException e) {
-            throw new SectionAlreadyExists(
-                    sectionRequest.sectionName()
-            );
+            throw new SectionAlreadyExists(sectionName);
         }
     }
 

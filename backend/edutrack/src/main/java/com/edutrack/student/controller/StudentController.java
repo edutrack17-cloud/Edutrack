@@ -1,5 +1,6 @@
 package com.edutrack.student.controller;
 
+import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.security.CustomUserDetails;
 import com.edutrack.student.dto.request.*;
@@ -61,6 +62,10 @@ public class StudentController {
             @RequestParam(required = false) Long schoolYearId,
             @RequestParam(required = false) Long adviserId,
             @RequestParam(required = false) String search,
+            // CHANGED: plural, bound from repeated query params, e.g.
+            //   ?schoolYearStatuses=active&schoolYearStatuses=closed
+            // Omitting it entirely = no status filter (shows all).
+            @RequestParam(required = false) List<SchoolYearStatus> schoolYearStatuses,
             Pageable pageable,
             @AuthenticationPrincipal CustomUserDetails principal) {
 
@@ -72,6 +77,7 @@ public class StudentController {
                         search,
                         schoolYearId,
                         adviserId,
+                        schoolYearStatuses,
                         pageable,
                         principal
                 ));

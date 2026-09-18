@@ -1,4 +1,3 @@
-
 package com.edutrack.student.service;
 
 import com.edutrack.activitylog.service.ActivityLogService;
@@ -28,6 +27,7 @@ import com.edutrack.studentsectionassignment.repository.StudentSectionAssignment
 import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
 import com.edutrack.user.enums.UserRole;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,10 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @Transactional(readOnly = true)
@@ -200,25 +197,76 @@ public class StudentService {
     }
 
     //READ
-    public Page<StudentResponse> getStudents(GradeLevel gradeLevel, String sectionName, StudentStatus studentStatus,
-                                             String search, Long schoolYearId, Long adviserId,
-                                             Pageable pageable, CustomUserDetails principal){
-
+    public Page<StudentResponse> getStudents(
+            GradeLevel gradeLevel,
+            String sectionName,
+            StudentStatus studentStatus,
+            String search,
+            Long schoolYearId,
+            Long adviserId,
+            List<SchoolYearStatus> schoolYearStatuses,
+            Pageable pageable,
+            CustomUserDetails principal
+    ) {
         Specification<StudentSectionAssignment> filters = Specification
                 .where(StudentSectionAssignmentSpecification.isLatestAssignment())
                 .and(StudentSectionAssignmentSpecification.hasGradeLevel(gradeLevel))
                 .and(StudentSectionAssignmentSpecification.hasSection(sectionName))
+                // CHANGED: no longer forces hasActiveSchoolYear() as a filter.
+                // Active-school-year students are now prioritized in the sort
+                // below instead of being the only ones shown.
                 .and(StudentSectionAssignmentSpecification.hasStudentStatus(studentStatus))
                 .and(StudentSectionAssignmentSpecification.hasSchoolYear(schoolYearId))
+                // CHANGED: schoolYearStatuses is now a List (was singular).
+                // Passed straight into hasSchoolYearStatusIn, which treats
+                // null/empty as "no filter". So omitting the param shows
+                // students from sections in every status; passing e.g.
+                // ?schoolYearStatuses=active&schoolYearStatuses=closed
+                // narrows to just those.
+                .and(StudentSectionAssignmentSpecification.hasSchoolYearStatusIn(schoolYearStatuses))
                 .and(StudentSectionAssignmentSpecification.matchesSearch(search));
 
         filters = principal.getUser().getUserRole() == UserRole.teacher
-                ? filters.and(StudentSectionAssignmentSpecification.hasAdviserId(principal.getUser().getUserId()))
+                ? filters.and(StudentSectionAssignmentSpecification.hasAdviserId(
+                principal.getUser().getUserId()))
                 : filters.and(StudentSectionAssignmentSpecification.hasAdviserId(adviserId));
 
-        return studentSectionAssignmentRepository
-                .findAll(filters, pageable)
-                .map(assignment -> studentMapper.toStudentResponseDTO(assignment.getStudent(), assignment.getSection()));
+        Page<StudentSectionAssignment> page =
+                studentSectionAssignmentRepository.findAll(filters, pageable);
+
+        // Within each page, put students whose section's school year is
+        // currently active first, then everyone else. This is done in memory
+        // rather than in the query because JpaSort / ORDER BY CASE on a
+        // nested association (section.schoolYear.schoolYearStatus) isn't
+        // portable across Hibernate versions; the page sizes here are small
+        // (default 10), so the in-memory sort cost is negligible.
+        //
+        // NOTE: this only reorders within a single page. If you need a
+        // *global* "active-year students always on page 1" guarantee, that
+        // has to be done with a JpaSort.unsafe expression on the query, or
+        // by fetching all rows and paginating in memory. See the earlier
+        // discussion for trade-offs.
+        List<StudentSectionAssignment> sorted = new ArrayList<>(page.getContent());
+        sorted.sort(
+                Comparator.comparingInt(
+                        (StudentSectionAssignment a) ->
+                                a.getSection() != null
+                                        && a.getSection().getSchoolYear() != null
+                                        && a.getSection().getSchoolYear().getSchoolYearStatus()
+                                        == SchoolYearStatus.active
+                                        ? 0
+                                        : 1
+                )
+        );
+
+        return new PageImpl<>(
+                sorted.stream()
+                        .map(a -> studentMapper.toStudentResponseDTO(
+                                a.getStudent(), a.getSection()))
+                        .toList(),
+                pageable,
+                page.getTotalElements()
+        );
     }
 
     //UPDATE
@@ -431,15 +479,15 @@ public class StudentService {
         assignmentToUpdate.setExitType(ExitType.dropped);
 
         if (updateStudentStatusRequest.remarks() != null &&
-            !updateStudentStatusRequest.remarks().isBlank()){
+                !updateStudentStatusRequest.remarks().isBlank()){
             assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
         }
 
         activityLogService.createLogRecord(
                 "STUDENT DROPPED",
                 "marked " +
-                NameUtil.buildFullName(studentToDrop.getFirstName(), studentToDrop.getMiddleName(), studentToDrop.getLastName()) +
-                " as dropped"
+                        NameUtil.buildFullName(studentToDrop.getFirstName(), studentToDrop.getMiddleName(), studentToDrop.getLastName()) +
+                        " as dropped"
 
         );
         return studentMapper.toStudentEditResponseDTO(studentToDrop, sectionOfStudent);

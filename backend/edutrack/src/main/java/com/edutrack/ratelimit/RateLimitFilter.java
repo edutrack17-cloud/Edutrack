@@ -29,6 +29,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
+        // Reads (GET/HEAD/OPTIONS) are cheap, idempotent, and safe. Do NOT
+        // charge them against the bucket — a single SPA page load fires
+        // dozens of these, which used to drain the 100-token budget and
+        // starve any subsequent write (e.g. clone batch), making the write
+        // look slow when it was really just waiting for a refill.
+        String method = request.getMethod();
+        if ("GET".equalsIgnoreCase(method)
+                || "HEAD".equalsIgnoreCase(method)
+                || "OPTIONS".equalsIgnoreCase(method)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String key = resolveKey(request);
 
         boolean allowed = rateLimitService.isAllowed(key);
