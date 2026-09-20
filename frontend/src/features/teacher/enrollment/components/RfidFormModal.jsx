@@ -91,35 +91,22 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
     onConfirmRef.current = onConfirm;
   }, [onConfirm]);
 
-  // A tap no longer just fills in the UID and waits for someone to
-  // click "Add" - it flashes "Card Detected" for a moment, then
-  // auto-confirms and clears back to "Waiting for tap..." so the
-  // scanner is ready for the next card. Clicking "Add" by hand still
-  // works too (see handleAdd) - it just short-circuits this same
-  // delay for an instant confirm.
+  // A tap flashes "Card Detected" for a moment, then auto-confirms and
+  // clears back to "Waiting for tap..." so the scanner is ready for the
+  // next card. There's no Add/Clear button anymore - the auto-confirm
+  // is the only path. The isOpen guard makes sure closing the modal
+  // (X) during the short delay cancels the pending confirm instead of
+  // still writing the UID into the form after it's gone.
   useEffect(() => {
-    if (!uid) return;
+    if (!isOpen || !uid) return;
     const timer = setTimeout(() => {
       onConfirmRef.current(uid);
       setUid("");
     }, CONFIRM_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [uid]);
+  }, [isOpen, uid]);
 
   if (!isOpen) return null;
-
-  function handleClear() {
-    setUid("");
-  }
-
-  // Manual shortcut: a tap already auto-confirms on its own after
-  // CONFIRM_DELAY_MS (see the useEffect above), so this button just
-  // lets someone confirm right away instead of waiting out the delay.
-  function handleAdd() {
-    if (!uid) return;
-    onConfirm(uid);
-    setUid("");
-  }
 
   return (
     <div className="font-primary fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
@@ -132,12 +119,14 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 transition-colors hover:text-gray-700">
+            aria-label="Close"
+            className="text-gray-500 transition-colors hover:text-gray-700"
+          >
             <X size={22} />
           </button>
         </div>
 
-        <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col gap-4 px-4 pb-6 pt-4 sm:px-6 sm:pb-7 sm:pt-5">
           <h3 className="text-sm font-bold tracking-wide text-primary uppercase">
             RFID Information
           </h3>
@@ -146,6 +135,7 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
               by hand anymore, this is just a live status indicator
               while we wait for useRfidScanner() to catch a real tap. */}
           <div
+            aria-live="polite"
             className={`flex h-32 flex-col items-center justify-center gap-2 rounded-lg border transition-colors sm:h-40 ${
               uid
                 ? "border-success text-success"
@@ -159,38 +149,25 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary ">
+            <label className="mb-1 block text-sm font-semibold text-primary">
               RFID UID
             </label>
             {/* Plain display, not an <input> - there's nothing here to
                 click into, focus, or type on. The only way this value
                 changes is useRfidScanner() catching a real tap. */}
             <div
-              className={`w-full select-none rounded-lg border px-3 py-2.5 text-sm ${
-                uid ? "border-success text-success font-semibold" : "border-gray-500 text-gray-500"
+              className={`w-full select-none rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                uid
+                  ? "border-success bg-success/5 font-semibold text-success"
+                  : "border-gray-300 bg-gray-50 text-gray-500"
               }`}
             >
               {uid || "Waiting for tap..."}
             </div>
+            <p className="mt-1.5 text-xs text-gray-500">
+              The card is added automatically once it's detected.
+            </p>
           </div>
-        </div>
-
-        <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={!uid}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-90"
-          >
-            Add
-          </button>
-          <button
-            type="button"
-            onClick={handleClear}
-            className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
-          >
-            Clear
-          </button>
         </div>
       </div>
     </div>

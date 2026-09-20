@@ -12,6 +12,7 @@ import {
   getStudents,
   enrollStudent,
   wasStudentReactivated,
+  getSchoolYearOptions,
 } from "../enrollmentService";
 import { useToasts, ToastContainer } from "../../../../components/ui/Toast";
 import { useAuth } from "../../../../Context/Authcontext";
@@ -51,6 +52,11 @@ function EnrollmentPage() {
   const [gradeLevels, setGradeLevels] = useState([]);
   const [sections, setSections] = useState([]);
   const [sectionsError, setSectionsError] = useState("");
+
+  // School Year filter (ADMIN only). "" = the current (active) school year;
+  // otherwise the id of a past year picked from the dropdown.
+  const [schoolYear, setSchoolYear] = useState("");
+  const [schoolYearOptions, setSchoolYearOptions] = useState([]);
 
   const [students, setStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -143,6 +149,22 @@ function EnrollmentPage() {
     loadSections();
   }, [role, isInitializing, sectionsRefreshKey, loadSections]);
 
+  // GET /api/school-year/dropdown - fetched for EVERY role now (ADMIN
+  // and TEACHER), not just non-teacher, so a teacher can browse their
+  // own past students too via the School Year filter.
+  //
+  // BACKEND DEPENDENCY: SchoolYearController.schoolYearDropdown is
+  // currently locked to ADMIN-only server-side - a TEACHER calling it
+  // gets a 403 today. getSchoolYearOptions() never throws (it catches
+  // that and just returns []), so this line alone won't break anything,
+  // but it also won't actually show the filter to a teacher until that
+  // endpoint's authorization is widened to allow TEACHER too - ask
+  // backend to update it, this frontend change is only half the fix.
+  useEffect(() => {
+    if (isInitializing) return;
+    getSchoolYearOptions().then(setSchoolYearOptions);
+  }, [isInitializing]);
+
   useEffect(() => {
     if (role !== "teacher") return;
     const uniqueLevels = [...new Set(sections.map((s) => s.gradeLevel))];
@@ -171,6 +193,15 @@ function EnrollmentPage() {
         level,
         section,
         status,
+        // Default = current school year only. Without this, GET /api/student
+        // returns students from EVERY school year (it only sorts active-year
+        // ones first within each page), so students still sitting in a
+        // closed year's sections keep showing up after a New School Year
+        // starts. An admin can pin one specific past year instead via the
+        // School Year filter (schoolYear = that year's id). Both are
+        // server-side, so "Page X of Y" stays accurate.
+        schoolYearStatuses: schoolYear ? undefined : "active",
+        schoolYearId: schoolYear || undefined,
         search: debouncedSearch || undefined,
         page: currentPage - 1,
         size: PAGE_SIZE,
@@ -202,7 +233,7 @@ function EnrollmentPage() {
     if (isInitializing) return;
     loadStudents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, section, status, currentPage, debouncedSearch, isInitializing]);
+  }, [level, section, status, schoolYear, currentPage, debouncedSearch, isInitializing]);
 
   function handleLevelChange(event) {
     setLevel(event.target.value);
@@ -217,6 +248,14 @@ function EnrollmentPage() {
 
   function handleStatusChange(event) {
     setStatus(event.target.value);
+    setCurrentPage(1);
+  }
+
+  function handleSchoolYearChange(event) {
+    setSchoolYear(event.target.value);
+    // The Section filter lists the CURRENT year's sections, so a previously
+    // picked one may not exist in the newly selected year.
+    setSection("");
     setCurrentPage(1);
   }
 
@@ -287,6 +326,9 @@ function EnrollmentPage() {
             onStatusChange={handleStatusChange}
             gradeLevels={gradeLevels}
             sections={sections}
+            schoolYear={schoolYear}
+            schoolYearOptions={schoolYearOptions}
+            onSchoolYearChange={handleSchoolYearChange}
           />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -322,6 +364,7 @@ function EnrollmentPage() {
               onRefreshSections={loadSections}
               showToast={showToast}
               role={role}
+              schoolYear={schoolYear}
             />
             <Pagination
               currentPage={currentPage}

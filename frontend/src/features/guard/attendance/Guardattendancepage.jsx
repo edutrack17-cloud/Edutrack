@@ -343,7 +343,7 @@ function GuardAttendancePage() {
               {pagedTaps.map((tap) => (
                 <div
                   key={tap.id}
-                  className="flex flex-col items-center rounded-xl border border-gray-200 bg-white px-4 py-6 text-center shadow-sm transition hover:shadow-md"
+                  className="flex flex-col items-center rounded-xl border border-gray-200 bg-white px-3 py-5 text-center shadow-sm transition hover:shadow-md"
                 >
                   <p className="truncate text-base font-bold text-gray-800" title={tap.name}>
                     {tap.name}
@@ -352,7 +352,7 @@ function GuardAttendancePage() {
                     {formatGradeAndSection(tap.gradeAndSection)}
                   </p>
 
-                  <div className="mt-6 flex w-full items-center justify-center gap-8">
+                  <div className="mt-6 flex w-full items-center justify-center gap-15">
                     <div className="text-left">
                       <p className="text-sm font-semibold text-gray-500">Status</p>
                       <AttendanceStatus status="On School" />

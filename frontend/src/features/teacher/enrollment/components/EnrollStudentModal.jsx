@@ -84,16 +84,22 @@ function EnrollStudentModal({
   }
 
   async function handleRfidConfirm(uid) {
-    // formik.setFieldValue() re-validates internally but doesn't finish
-    // synchronously - calling setFieldTouched() right after it (without
-    // waiting) makes that touched-triggered validation pass run against
-    // the OLD value (still "" at that point), so the "required" error
-    // from before the tap sticks around even though the field already
-    // shows the new uid. Awaiting setFieldValue first lets the new value
-    // land (and validation re-run against it) before rfid gets marked
-    // touched, so the error clears in step with the value appearing.
-    await formik.setFieldValue("rfid", uid);
-    formik.setFieldTouched("rfid", true);
+    // FIX: the "Please tap or add the student's RFID card" error kept
+    // showing right after a successful tap. Cause: setFieldTouched()
+    // runs its OWN validation pass by default, and that pass reads
+    // formik's `values` from the CURRENT render - which still has
+    // rfid === "" at that point, even if we `await` setFieldValue()
+    // first (the await resolves when validation finishes, NOT after
+    // React has re-rendered with the new value). So the stale "" got
+    // validated, the "required" error came back, and since rfid was
+    // now touched, it was shown.
+    //
+    // So: mark it touched WITHOUT validating (3rd arg = false), then
+    // set the value WITH validation (3rd arg = true). setFieldValue
+    // validates using the new value it was handed directly, not the
+    // stale render, so the error clears correctly.
+    formik.setFieldTouched("rfid", true, false);
+    await formik.setFieldValue("rfid", uid, true);
     setIsRfidModalOpen(false);
   }
 

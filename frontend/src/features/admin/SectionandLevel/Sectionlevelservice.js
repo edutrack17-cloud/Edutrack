@@ -346,6 +346,9 @@ export async function cloneSectionsAcrossSchoolYears({
     payload.push({
       sectionName: section.sectionName,
       gradeLevel: section.gradeLevel,
+      // Required by the backend's CloneSectionRequest (@NotNull) on every item,
+      // even though cloneSectionBatch() itself uses batch-level targetSchoolYearId.
+      schoolYear: targetSchoolYearId,
       userId: adviserId, // undefined when the source section had no adviser
     });
   }

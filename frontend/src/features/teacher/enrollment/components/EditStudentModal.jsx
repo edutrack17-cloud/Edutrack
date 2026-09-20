@@ -118,13 +118,13 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [], o
   }
 
   async function handleRfidConfirm(uid) {
-    // Same race condition as EnrollStudentModal's handleRfidConfirm: await
-    // setFieldValue so the new uid is committed (and re-validated) before
-    // setFieldTouched runs its own validation pass, otherwise that pass
-    // reads the old value and the "required" error sticks despite the
-    // field already showing the tapped uid.
-    await formik.setFieldValue("rfid", uid);
-    formik.setFieldTouched("rfid", true);
+    // Same fix as EnrollStudentModal's handleRfidConfirm: setFieldTouched
+    // validates against the stale render's values (old rfid), which
+    // brought the "required" error back even after a successful tap.
+    // Touch WITHOUT validating, then set the value WITH validating so
+    // the check runs against the new uid.
+    formik.setFieldTouched("rfid", true, false);
+    await formik.setFieldValue("rfid", uid, true);
     setIsRfidModalOpen(false);
   }
 

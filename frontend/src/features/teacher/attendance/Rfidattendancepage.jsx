@@ -128,6 +128,55 @@ function formatDisplayTime(hhmm) {
   return formatClockTime(date);
 }
 
+// HOW THE TEACHER SEES A GUARD TAP: the guard kiosk is a separate
+// login/browser, so nothing pushes its taps to this page. The only way
+// this page learns a student is now "On School" is by asking the
+// backend again (GET /api/attendance?sectionName=), so while a section
+// is selected it re-asks every TODAY_ATTENDANCE_POLL_MS (and right away
+// when the tab becomes visible again). Raise this number if the backend
+// rate limit gets tight; lower it if the teacher needs to see gate taps
+// faster.
+const TODAY_ATTENDANCE_POLL_MS = 15_000;
+
+function sameTodayAttendance(a, b) {
+  return (
+    Boolean(a) &&
+    Boolean(b) &&
+    a.id === b.id &&
+    a.status === b.status &&
+    a.timeIn === b.timeIn &&
+    a.timeOut === b.timeOut
+  );
+}
+
+// Merges today's attendance records (GET /api/attendance?sectionName=)
+// into roster rows. AttendanceResponse.java (backend) has NO rfid or
+// studentId field - only studentName - so matching by name is what
+// actually works today. It still prefers rfid when a record carries one,
+// so if the backend ever adds rfid/studentId to the response this starts
+// matching by that automatically (and duplicate names stop being a risk).
+// Returns the SAME array when nothing changed so a poll that finds no
+// news doesn't re-render the table or rewrite the localStorage cache.
+function mergeTodaysAttendance(rows, todaysAttendance) {
+  const byRfid = new Map();
+  const byName = new Map();
+  for (const a of todaysAttendance) {
+    if (a.rfid) byRfid.set(a.rfid, a);
+    else if (a.name) byName.set(a.name, a);
+  }
+
+  let changed = false;
+  const merged = rows.map((r) => {
+    const a = (r.rfid && byRfid.get(r.rfid)) || byName.get(r.name);
+    if (!a) return r;
+    const next = { id: a.id, status: a.status, timeIn: a.timeIn, timeOut: a.timeOut };
+    if (sameTodayAttendance(r.todayAttendance, next)) return r;
+    changed = true;
+    return { ...r, todayAttendance: next };
+  });
+  return changed ? merged : rows;
+}
+
 function LiveClock() {
   const [now, setNow] = useState(new Date());
 
@@ -153,6 +202,15 @@ function RFIDAttendancePage() {
   const [isConfirmAbsentOpen, setIsConfirmAbsentOpen] = useState(false);
 
   const hiddenInputRef = useRef(null);
+
+  // Timestamp of the last change made from THIS page (a scan, a manual
+  // Present/Time out, or Mark Absent). A background refresh that started
+  // before that moment may be carrying older data, so its result is
+  // thrown away instead of overwriting the newer local state.
+  const lastLocalChangeRef = useRef(0);
+  function markLocalChange() {
+    lastLocalChangeRef.current = Date.now();
+  }
 
   const TAP_COOLDOWN_MS = 3000;
   const lastTapRef = useRef({ rfid: null, atMs: 0 });
@@ -295,15 +353,15 @@ function RFIDAttendancePage() {
         if (section) {
           try {
             const todaysAttendance = await fetchTodaysAttendanceForSection(section);
-            const byRfid = new Map(todaysAttendance.map((a) => [a.rfid, a]));
-            merged = merged.map((r) => {
-              const a = byRfid.get(r.rfid);
-              return a
-                ? { ...r, todayAttendance: { id: a.id, status: a.status, timeIn: a.timeIn, timeOut: a.timeOut } }
-                : r;
-            });
+            merged = mergeTodaysAttendance(merged, todaysAttendance);
           } catch (attendanceError) {
-            // swallow - roster still usable, just without today's status
+            // Non-fatal (roster still usable without today's status), but
+            // it used to fail completely silently - a blank Status column
+            // looked identical whether nobody had tapped yet or this call
+            // just failed (429, network blip, etc). Logging it means a
+            // "why is this row blank" check starts in the console instead
+            // of guessing.
+            console.error("GET /api/attendance?sectionName=" + section + " failed:", attendanceError);
           }
         }
 
@@ -345,6 +403,63 @@ function RFIDAttendancePage() {
     if (changed) saveAttendanceCache(cache);
   }, [records]);
 
+  // Keeps the Status column current with taps made at the gate: a
+  // student's guard tap creates today's record as "On School"
+  // (POST /api/attendance), and this re-asks the backend so that shows
+  // up here without a manual refresh. It never sets "Present" - that
+  // only happens when the student taps THIS page's scanner
+  // (PATCH /api/attendance/present) or via the manual Present action.
+  //
+  // DEPENDS ON: GET /api/attendance?sectionName=. The AttendanceController
+  // this was checked against has no GET mapping at all, so the request
+  // comes back 404/405 and NOTHING can show "On School" on this page until
+  // the backend adds it. When that happens, this stops itself instead of
+  // firing a failing request every few seconds; once the endpoint exists
+  // it just works, no frontend change needed.
+  useEffect(() => {
+    if (role === "guard" || !section) return;
+
+    let ignore = false;
+    let isRefreshing = false;
+    let intervalId = null;
+
+    function stopPolling() {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshTodaysAttendance);
+    }
+
+    async function refreshTodaysAttendance() {
+      if (isRefreshing || document.hidden) return;
+      isRefreshing = true;
+      const startedAt = Date.now();
+      try {
+        // GET /api/attendance?sectionName=
+        const todaysAttendance = await fetchTodaysAttendanceForSection(section);
+        if (ignore || lastLocalChangeRef.current > startedAt) return;
+        setRecords((prev) => mergeTodaysAttendance(prev, todaysAttendance));
+      } catch (error) {
+        if (error.status === 404 || error.status === 405) {
+          console.warn(
+            "GET /api/attendance?sectionName= doesn't exist on the backend yet - " +
+              "stopping the background refresh. Guard taps (On School) can't show up here until it does."
+          );
+          stopPolling();
+        } else {
+          console.error("Background refresh of today's attendance failed:", error);
+        }
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    intervalId = setInterval(refreshTodaysAttendance, TODAY_ATTENDANCE_POLL_MS);
+    document.addEventListener("visibilitychange", refreshTodaysAttendance);
+    return () => {
+      ignore = true;
+      stopPolling();
+    };
+  }, [role, section]);
+
   // GET /api/student never returns today's attendance (fetchStudentRecords
   // always sets todayAttendance: null - see the comment there), so a full
   // reloadRecords() after a tap doesn't refresh anything real; it just
@@ -356,6 +471,7 @@ function RFIDAttendancePage() {
   // rfid, which we already have from the tap itself) instead of
   // re-fetching a roster that can't tell us anything about attendance.
   function applyAttendanceUpdate(rfid, attendance) {
+    markLocalChange();
     setRecords((prev) =>
       prev.map((r) =>
         r.rfid === rfid
@@ -383,6 +499,7 @@ function RFIDAttendancePage() {
   // but that's the trade-off available without a backend change - if
   // that's ever added, switch this back to matching by id.
   function applyBulkAttendanceUpdate(attendanceRecords) {
+    markLocalChange();
     const byStudentName = new Map(
       attendanceRecords.map((attendance) => [attendance.name, attendance])
     );
@@ -525,6 +642,7 @@ function RFIDAttendancePage() {
     try {
       // PATCH /api/attendance/manual-timeout/{studentId}
       const updated = await manualTimeOut(record.studentId);
+      markLocalChange();
       setRecords((prev) =>
         prev.map((r) =>
           r.assignmentId === record.assignmentId
@@ -545,6 +663,7 @@ function RFIDAttendancePage() {
     try {
       // POST /api/attendance/manual/{studentId}
       const updated = await markPresentManual(presentTarget.studentId, time);
+      markLocalChange();
       setRecords((prev) =>
         prev.map((r) =>
           r.assignmentId === presentTarget.assignmentId
@@ -715,7 +834,7 @@ function RFIDAttendancePage() {
               title={
                 !section
                   ? "Select a section first"
-                  : "Marks every enrolled student in this section with no attendance record at all today as absent."
+                  : "Marks every student in this section with no record today, or still \"On School\" (tapped at the gate but never in class), as absent."
               }
               className="flex h-9 w-fit shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-secondary px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
             >

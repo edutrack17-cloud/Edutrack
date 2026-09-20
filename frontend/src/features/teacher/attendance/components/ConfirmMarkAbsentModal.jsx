@@ -34,8 +34,8 @@ function ConfirmMarkAbsentModal({ isOpen, onClose, onConfirm, sectionName = "" }
   }
 
   const bodyText = sectionName
-    ? `Students in ${sectionName} with no record today will be marked absent. Students already tapped in by the guard are not affected.`
-    : "Students in the selected section with no record today will be marked absent. Students already tapped in by the guard are not affected.";
+    ? `Students in ${sectionName} with no record today, and students still marked "On School" (tapped at the gate but not yet in class), will be marked absent. Students already marked Present are not affected.`
+    : "Students in the selected section with no record today, and students still marked \"On School\" (tapped at the gate but not yet in class), will be marked absent. Students already marked Present are not affected.";
 
   return (
     <div

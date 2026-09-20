@@ -58,7 +58,7 @@ export function formatGradeLevel(gradeLevel) {
   return gradeLevel.replace("_", " ");
 }
 
-function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onTransferSection, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
+function ActionMenu({ menuRef, top, left, studentStatus, isPastYear, onView, onEdit, onTransferSection, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
   // The backend's dropStudent()/transferOutStudent()/graduateStudent()
   // each only guard against re-applying the SAME status (e.g.
   // StudentAlreadyGraduated) - there's no check preventing an invalid
@@ -67,7 +67,19 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onTrans
   // already left (any status other than "enrolled") so that can't be
   // triggered from the UI. View stays available regardless, since
   // looking up a past student's record is still a valid use case.
-  const isEnrolled = studentStatus === "enrolled";
+  //
+  // isPastYear folds in the School Year filter: a row can still show
+  // studentStatus "enrolled" while its section belongs to a CLOSED/
+  // archived year (a straggler who was never promoted/graduated before
+  // that year closed - see promotestudentservice.js's getPromotableStudents
+  // for the same case). That's a historical view, not the active roster,
+  // so it should read View-only here too, even though the status itself
+  // says "enrolled" - editing/transferring/changing status from THIS
+  // screen doesn't make sense for a closed year. A straggler like that
+  // still needs fixing - that's what the Promote Student page's own
+  // School Year filter is for, which still only ever targets active-year
+  // sections.
+  const isEnrolled = studentStatus === "enrolled" && !isPastYear;
 
   // Editing is only for actively enrolled students - once a student has
   // left (dropped/transferred out) or graduated, their record is closed
@@ -126,9 +138,14 @@ function ActionMenu({ menuRef, top, left, studentStatus, onView, onEdit, onTrans
 // GET /api/student - this component no longer owns mock data or does
 // client-side search/level/section/status filtering, since those
 // filters are applied server-side via enrollmentService.getStudents().
-function StudentTable({ students = [], sections = [], onChanged, onRefreshSections, showToast, role }) {
+function StudentTable({ students = [], sections = [], onChanged, onRefreshSections, showToast, role, schoolYear }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+
+  // Same "" = active year / id = a past year convention as
+  // EnrollmentPage's own schoolYear state - anything truthy here means
+  // the table is currently showing a past/closed year via the filter.
+  const isPastYear = Boolean(schoolYear);
 
   const desktopMenuRef = useRef(null);
   const mobileMenuRef = useRef(null);
@@ -356,6 +373,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                       top={menuPosition.top}
                       left={menuPosition.left}
                       studentStatus={student.studentStatus}
+                      isPastYear={isPastYear}
                       onView={() => handleView(student)}
                       onEdit={() => handleEdit(student)}
                       onTransferSection={() => handleRequestTransfer(student)}
@@ -417,6 +435,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                 top={menuPosition.top}
                 left={menuPosition.left}
                 studentStatus={student.studentStatus}
+                isPastYear={isPastYear}
                 onView={() => handleView(student)}
                 onEdit={() => handleEdit(student)}
                 onTransferSection={() => handleRequestTransfer(student)}

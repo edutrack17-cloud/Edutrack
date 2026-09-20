@@ -64,19 +64,44 @@ async function getActiveSectionsByAdviserName() {
   }
 }
 
+// While searching we can't rely on the backend's case-sensitive match, so we
+// pull a big page and filter/paginate here instead. Same size the section
+// lookup above already uses.
+const SEARCH_FETCH_SIZE = 1000;
+
+// normalizeWhitespace() already lowercases + collapses spaces, so "WILLIAM  henry" === "william henry"
+function matchesSearch(user, term) {
+  const needle = normalizeWhitespace(term);
+  return (
+    normalizeWhitespace(user.fullName).includes(needle) ||
+    normalizeWhitespace(user.username).includes(needle)
+  );
+}
+
 // CONNECTED: GET /api/user
 export async function getUsers({ status, search, page = 1, size = 10 } = {}) {
   try {
+    const term = (search || "").trim();
+    const isSearching = term.length > 0;
+
     const { data } = await userApi.get("/user", {
       params: {
-        page: page - 1, 
-        size,
+        page: isSearching ? 0 : page - 1,
+        size: isSearching ? SEARCH_FETCH_SIZE : size,
         accountStatus: status ? status.toLowerCase() : undefined,
-        searchEntry: search || undefined,
+        // searchEntry intentionally NOT sent - filtered below, case-insensitively
       },
     });
 
     let mapped = data.content.map(mapTeacherResponse);
+    let totalPages = data.totalPages ?? 1;
+
+    if (isSearching) {
+      mapped = mapped.filter((user) => matchesSearch(user, term));
+      totalPages = Math.max(1, Math.ceil(mapped.length / size));
+      const start = (page - 1) * size;
+      mapped = mapped.slice(start, start + size);
+    }
 
     // Section-assignment stopgap - skipped gracefully (stays "Not yet assigned") if it fails
     const activeSections = await getActiveSectionsByAdviserName();
@@ -96,7 +121,7 @@ export async function getUsers({ status, search, page = 1, size = 10 } = {}) {
       });
     }
 
-    return { content: mapped, totalPages: data.totalPages ?? 1 };
+    return { content: mapped, totalPages };
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to load users"));
   }

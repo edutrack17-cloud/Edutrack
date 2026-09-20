@@ -168,7 +168,27 @@ export async function getSectionsByAdviser(userId) {
   }
 }
 
-// CONNECTED: GET /api/student?gradeLevel&sectionName&studentStatus&search&page&size
+// CONNECTED: GET /api/school-year/dropdown
+// ADMIN ONLY (SchoolYearController.schoolYearDropdown) - feeds the School
+// Year filter on EnrollmentPage. Same endpoint/mapping as
+// getSchoolYearDropdown() in Sectionlevelservice.js. Never throws: a
+// TEACHER (403) or any other failure just means "no School Year filter",
+// same fail-soft idea as getTeachers() in Sectionlevelservice.js.
+export async function getSchoolYearOptions() {
+  try {
+    const { data } = await studentApi.get("/school-year/dropdown");
+    return (data || []).map((sy) => ({
+      id: sy.schoolYearId,
+      label: sy.schoolYearName,
+      status: sy.schoolYearStatus,
+    }));
+  } catch (error) {
+    console.warn("getSchoolYearOptions(): failed to load school years -", getErrorMessage(error, "unknown error"));
+    return [];
+  }
+}
+
+// CONNECTED: GET /api/student?gradeLevel&sectionName&studentStatus&search&schoolYearStatuses&schoolYearId&page&size
 // Confirmed via StudentController.getStudents(). Notes:
 //   - UPDATE: the backend now DOES accept and honor a "search" param -
 //     StudentService.getStudents() runs it through
@@ -187,12 +207,27 @@ export async function getSectionsByAdviser(userId) {
 //   - "signal" added so EnrollmentPage can cancel an in-flight request
 //     when a filter/search/page changes again before it resolves,
 //     same idiom as promotestudentservice.js's getPromotableStudents().
-export async function getStudents({ search, level, section, status, page = 0, size = 10, signal } = {}) {
+//   - "schoolYearStatuses" narrows the list to students whose latest
+//     section belongs to a school year in that status (active | planning |
+//     closed | archived). Omitted = EVERY school year: StudentService.
+//     getStudents() no longer forces active-year-only, it just sorts
+//     active-year students first WITHIN each page. So a screen that only
+//     wants the current year's students has to ask for it (see
+//     EnrollmentPage.jsx). Pass a string ("active") or an array; arrays
+//     are comma-joined because axios would otherwise send
+//     "schoolYearStatuses[]=..." which Spring doesn't bind to a List.
+//     "schoolYearId" pins ONE specific school year instead (used by the
+//     admin's School Year filter, see EnrollmentPage.jsx). The backend
+//     also accepts "adviserId" - not used here.
+export async function getStudents({ search, level, section, status, schoolYearStatuses, schoolYearId, page = 0, size = 10, signal } = {}) {
   const params = {};
   if (level) params.gradeLevel = level;
   if (section) params.sectionName = section;
   if (status) params.studentStatus = status;
   if (search) params.search = search;
+  const schoolYearStatusList = [].concat(schoolYearStatuses ?? []).filter(Boolean);
+  if (schoolYearStatusList.length > 0) params.schoolYearStatuses = schoolYearStatusList.join(",");
+  if (schoolYearId) params.schoolYearId = schoolYearId;
   params.page = page;
   params.size = size;
 

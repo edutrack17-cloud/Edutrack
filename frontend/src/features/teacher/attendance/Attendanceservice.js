@@ -42,11 +42,19 @@ function buildTodayDateTimeISO(hhmm) {
   return `${yyyy}-${mm}-${dd}T${hours}:${minutes}:00`;
 }
 
+// Backend enum values look like "Grade_6" (or "Grade_6 - Sampaguita" inside
+// gradeAndSection). The UI should always show "Grade 6", so normalize any
+// "Grade_<n>" occurrence to "Grade <n>" before it reaches a component.
+function formatGradeAndSection(value) {
+  if (!value) return "";
+  return String(value).replace(/grade[_\s]?(\d+)/gi, "Grade $1");
+}
+
 function mapAttendanceRecord(record) {
   return {
     id: record.attendanceId,
     name: record.studentName ?? "",
-    gradeAndSection: record.gradeAndSection ?? "",
+    gradeAndSection: formatGradeAndSection(record.gradeAndSection),
     rfid: record.rfid ?? "",
     date: formatDate(record.dateTimeIn),
     timeIn: formatTime(record.dateTimeIn),
@@ -133,8 +141,18 @@ export async function fetchStudentRecords({
   const params = new URLSearchParams();
   if (level) params.set("gradeLevel", LABEL_TO_GRADE_LEVEL[level] ?? level);
   if (section) params.set("sectionName", section);
-  if (search) params.set("studentName", search);
+  // StudentController.getStudents has no `studentName` param - the name
+  // filter is called `search` (anything else is silently ignored by
+  // Spring, which is why typing a name never narrowed the roster
+  // server-side before).
+  if (search) params.set("search", search);
   params.set("studentStatus", "enrolled");
+  // NOTE: deliberately NOT sending schoolYearStatuses. StudentService
+  // .getStudents treats it as "no filter" when omitted (and puts
+  // active-year students first within each page). Forcing "active" here
+  // emptied the roster whenever a section's school year wasn't literally
+  // `active`, so the table showed "No enrolled students found" and no
+  // tap/status could appear.
   params.set("page", String(page - 1));
   params.set("size", "20");
 

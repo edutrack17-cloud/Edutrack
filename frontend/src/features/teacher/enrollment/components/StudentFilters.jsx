@@ -17,6 +17,10 @@ const triggerClass =
   "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
 const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
 
+// Same width family as the Level/Section dropdowns, a touch wider for year
+// labels like "2049-2050".
+const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
+
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
     if (!isOpen) return;
@@ -109,6 +113,9 @@ function StudentFilters({
   onStatusChange,
   gradeLevels = [],
   sections = [],
+  schoolYear = "",
+  schoolYearOptions = [],
+  onSchoolYearChange,
 }) {
   const levelOptions = [
     LEVEL_ALL,
@@ -122,6 +129,32 @@ function StudentFilters({
   const sectionOptions = [
     SECTION_ALL,
     ...sections.map((s) => ({ value: s.name, label: s.name, textClass: "text-gray-700" })),
+  ];
+
+  // School Year filter: "" = the current (active) year, plus every PAST
+  // year (closed/archived, newest first) to look back at. Planning years
+  // are left out on purpose - students can only be assigned into an
+  // ACTIVE year's sections, so a planning year never has any. Only shown
+  // when there's at least one past year AND the page wired up a handler,
+  // so a TEACHER (who can't load school years) or a fresh install just
+  // doesn't see it.
+  const pastSchoolYears = schoolYearOptions
+    .filter((sy) => sy.status === "closed" || sy.status === "archived")
+    .sort((a, b) => b.label.localeCompare(a.label, undefined, { numeric: true }));
+  const showSchoolYearFilter = pastSchoolYears.length > 0 && !!onSchoolYearChange;
+
+  // The "" value means "the active school year" (see EnrollmentPage's
+  // schoolYear state comment), so its label should show which year that
+  // actually is (e.g. "2025-2026") instead of the generic word "Current
+  // Year" - a plain "Current Year" doesn't tell an admin which year is
+  // actually active without opening the dropdown. Falls back to "Current
+  // Year" only if schoolYearOptions hasn't loaded yet or has no school
+  // year marked "active".
+  const activeSchoolYear = schoolYearOptions.find((sy) => sy.status === "active");
+
+  const schoolYearMenuOptions = [
+    { value: "", label: activeSchoolYear?.label ?? "Current Year", textClass: "text-gray-700" },
+    ...pastSchoolYears.map((sy) => ({ value: String(sy.id), label: sy.label, textClass: "text-gray-700" })),
   ];
 
   return (
@@ -148,6 +181,16 @@ function StudentFilters({
         onChange={onStatusChange}
         ariaLabel="Filter by status"
       />
+
+      {showSchoolYearFilter && (
+        <FilterDropdown
+          options={schoolYearMenuOptions}
+          value={schoolYear}
+          onChange={onSchoolYearChange}
+          ariaLabel="Filter by school year"
+          wrapperClassName={schoolYearWidthClass}
+        />
+      )}
     </div>
   );
 }
