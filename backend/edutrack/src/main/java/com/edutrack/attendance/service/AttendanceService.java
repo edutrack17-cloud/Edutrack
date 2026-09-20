@@ -6,6 +6,7 @@ import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
 import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.enums.AttendanceStatus;
+import com.edutrack.attendance.event.AttendanceStatusChangedEvent;
 import com.edutrack.attendance.exception.*;
 import com.edutrack.attendance.mapper.AttendanceMapper;
 import com.edutrack.attendance.repository.AttendanceRepository;
@@ -15,6 +16,7 @@ import com.edutrack.student.mapper.StudentMapper;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -25,44 +27,47 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
 public class AttendanceService {
+
     private final StudentMapper studentMapper;
-    private AttendanceRepository attendanceRepository;
-    private AttendanceMapper attendanceMapper;
-    private StudentSectionAssignmentRepository studentSectionAssignmentRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final AttendanceMapper attendanceMapper;
+    private final StudentSectionAssignmentRepository studentSectionAssignmentRepository;
     private final ActivityLogService activityLogService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AttendanceService(StudentMapper studentMapper,
                              AttendanceRepository attendanceRepository,
                              AttendanceMapper attendanceMapper,
                              StudentSectionAssignmentRepository studentSectionAssignmentRepository,
-                             ActivityLogService activityLogService) {
+                             ActivityLogService activityLogService,
+                             ApplicationEventPublisher eventPublisher) {
         this.studentMapper = studentMapper;
         this.attendanceRepository = attendanceRepository;
         this.attendanceMapper = attendanceMapper;
         this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
         this.activityLogService = activityLogService;
+        this.eventPublisher = eventPublisher;
     }
 
-    private StudentSectionAssignment findAssignmentByStudentId(Long studentId){
+    private StudentSectionAssignment findAssignmentByStudentId(Long studentId) {
         return studentSectionAssignmentRepository
                 .findByStudent_StudentIdAndLeftAtIsNull(studentId)
                 .orElseThrow(AssignmentNotFound::new);
     }
 
-    private Specification<Attendance> filterByAssignmentIdAndDateTime(Long assignmentId, LocalDate today){
+    private Specification<Attendance> filterByAssignmentIdAndDateTime(Long assignmentId, LocalDate today) {
         return Specification
                 .where(AttendanceSpecification.hasAssignment(assignmentId))
                 .and(AttendanceSpecification.createdToday(today));
     }
 
-    private Attendance findByAssignmentAndDateTime(Specification<Attendance> filters){
+    private Attendance findByAssignmentAndDateTime(Specification<Attendance> filters) {
         return attendanceRepository
                 .findOne(filters)
                 .orElseThrow(AssignmentNotFound::new);
@@ -70,17 +75,17 @@ public class AttendanceService {
 
     //TIME-IN
     @Transactional
-    public AttendanceResponse createAttendance(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
+    public AttendanceResponse createAttendance(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest) {
         LocalDate today = LocalDate.now();
 
-        StudentSectionAssignment studentToTimeIn = studentSectionAssignmentRepository.
-                findByStudent_RfidAndLeftAtIsNull(timeInAndOutAttendanceRequest.rfid())
+        StudentSectionAssignment studentToTimeIn = studentSectionAssignmentRepository
+                .findByStudent_RfidAndLeftAtIsNull(timeInAndOutAttendanceRequest.rfid())
                 .orElseThrow(AssignmentNotFound::new);
 
         Specification<Attendance> filters = filterByAssignmentIdAndDateTime(
                 studentToTimeIn.getAssignmentId(), today);
 
-        if (attendanceRepository.exists(filters)){
+        if (attendanceRepository.exists(filters)) {
             throw new AlreadyHasARecord();
         }
 
@@ -90,13 +95,20 @@ public class AttendanceService {
         newAttendance.setAttendanceStatus(AttendanceStatus.on_school);
 
         Attendance savedAttendance = attendanceRepository.save(newAttendance);
+
+        eventPublisher.publishEvent(new AttendanceStatusChangedEvent(
+                studentToTimeIn.getStudent().getStudentId(),
+                AttendanceStatus.on_school,
+                AttendanceStatusChangedEvent.NotificationType.TIME_IN
+        ));
+
         return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
     }
 
     //MANUAL ATTENDANCE
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
-    public AttendanceResponse manualAttendance(Long studentId, ManualAttendanceRequest manualAttendanceRequest){
+    public AttendanceResponse manualAttendance(Long studentId, ManualAttendanceRequest manualAttendanceRequest) {
         LocalDate today = LocalDate.now();
 
         StudentSectionAssignment studentToTimeIn = findAssignmentByStudentId(studentId);
@@ -109,7 +121,7 @@ public class AttendanceService {
         Specification<Attendance> filters = filterByAssignmentIdAndDateTime(
                 studentToTimeIn.getAssignmentId(), today);
 
-        if (attendanceRepository.exists(filters)){
+        if (attendanceRepository.exists(filters)) {
             throw new AlreadyHasARecord();
         }
 
@@ -118,18 +130,25 @@ public class AttendanceService {
         activityLogService.createLogRecord(
                 "MANUAL ATTENDANCE",
                 "manually marked Student " +
-                NameUtil.buildFullName(studentToTimeIn.getStudent().getFirstName(),
-                                       studentToTimeIn.getStudent().getMiddleName(),
-                                       studentToTimeIn.getStudent().getLastName()) +
-                " as present"
+                        NameUtil.buildFullName(studentToTimeIn.getStudent().getFirstName(),
+                                studentToTimeIn.getStudent().getMiddleName(),
+                                studentToTimeIn.getStudent().getLastName()) +
+                        " as present"
         );
+
+        eventPublisher.publishEvent(new AttendanceStatusChangedEvent(
+                studentToTimeIn.getStudent().getStudentId(),
+                AttendanceStatus.present,
+                AttendanceStatusChangedEvent.NotificationType.TIME_IN
+        ));
+
         return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
     }
 
     //MANUAL TIME-OUT
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
-    public AttendanceResponse manualTimeOut(Long studentId){
+    public AttendanceResponse manualTimeOut(Long studentId) {
         LocalDate today = LocalDate.now();
 
         StudentSectionAssignment studentToTimeOut = findAssignmentByStudentId(studentId);
@@ -139,11 +158,11 @@ public class AttendanceService {
 
         Attendance attendanceToTimeOUt = findByAssignmentAndDateTime(filters);
 
-        if (attendanceToTimeOUt.getAttendanceStatus() == AttendanceStatus.on_school){
+        if (attendanceToTimeOUt.getAttendanceStatus() == AttendanceStatus.on_school) {
             throw new NoClassromTap();
         }
 
-        if (attendanceToTimeOUt.getDateTimeOut() != null){
+        if (attendanceToTimeOUt.getDateTimeOut() != null) {
             throw new AlreadyTimedOut();
         }
 
@@ -157,13 +176,20 @@ public class AttendanceService {
                                 studentToTimeOut.getStudent().getMiddleName(),
                                 studentToTimeOut.getStudent().getLastName())
         );
+
+        eventPublisher.publishEvent(new AttendanceStatusChangedEvent(
+                studentToTimeOut.getStudent().getStudentId(),
+                savedTimeOutAttendance.getAttendanceStatus(),
+                AttendanceStatusChangedEvent.NotificationType.TIME_OUT
+        ));
+
         return attendanceMapper.toAttendanceResponseDTO(savedTimeOutAttendance);
     }
 
     //MARK AS PRESENT
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudentByRfid(#timeInAndOutAttendanceRequest.rfid()))")
     @Transactional
-    public AttendanceResponse markAsPresent(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest){
+    public AttendanceResponse markAsPresent(TimeInAndOutAttendanceRequest timeInAndOutAttendanceRequest) {
         LocalDate today = LocalDate.now();
 
         StudentSectionAssignment studentToMarkPresent = studentSectionAssignmentRepository
@@ -175,22 +201,29 @@ public class AttendanceService {
 
         Attendance attendanceToMarkPresent = findByAssignmentAndDateTime(filters);
 
-        if (attendanceToMarkPresent.getAttendanceStatus() == AttendanceStatus.absent){
+        if (attendanceToMarkPresent.getAttendanceStatus() == AttendanceStatus.absent) {
             throw new AlreadyMarkedAbsent();
         }
 
-        if (attendanceToMarkPresent.getAttendanceStatus() == AttendanceStatus.present){
+        if (attendanceToMarkPresent.getAttendanceStatus() == AttendanceStatus.present) {
             throw new AlreadyMarkedPresent();
         }
 
         attendanceToMarkPresent.setAttendanceStatus(AttendanceStatus.present);
         Attendance markedPresentAttendance = attendanceRepository.save(attendanceToMarkPresent);
+
+        // NOTE: No SMS event is published here on purpose.
+        // The parent already received an "arrived at school" notification when the student
+        // tapped in at the gate (createAttendance) or was manually marked by a teacher
+        // (manualAttendance). Marking as present is an in-system verification action,
+        // not a new arrival, so it must NOT trigger another SMS.
+
         return attendanceMapper.toAttendanceResponseDTO(markedPresentAttendance);
     }
 
     //TIME-OUT
     @Transactional
-    public AttendanceResponse timeOut(TimeInAndOutAttendanceRequest request){
+    public AttendanceResponse timeOut(TimeInAndOutAttendanceRequest request) {
         LocalDate today = LocalDate.now();
 
         StudentSectionAssignment studentToTimeOut = studentSectionAssignmentRepository
@@ -202,23 +235,30 @@ public class AttendanceService {
 
         Attendance attendanceToTimeOut = findByAssignmentAndDateTime(filters);
 
-        if (attendanceToTimeOut.getAttendanceStatus() == AttendanceStatus.on_school){
+        if (attendanceToTimeOut.getAttendanceStatus() == AttendanceStatus.on_school) {
             throw new NoClassromTap();
         }
 
-        if (attendanceToTimeOut.getDateTimeOut() != null){
+        if (attendanceToTimeOut.getDateTimeOut() != null) {
             throw new AlreadyTimedOut();
         }
 
         attendanceToTimeOut.setDateTimeOut(LocalDateTime.now());
         Attendance timedOutAttendance = attendanceRepository.save(attendanceToTimeOut);
+
+        eventPublisher.publishEvent(new AttendanceStatusChangedEvent(
+                studentToTimeOut.getStudent().getStudentId(),
+                timedOutAttendance.getAttendanceStatus(),
+                AttendanceStatusChangedEvent.NotificationType.TIME_OUT
+        ));
+
         return attendanceMapper.toAttendanceResponseDTO(timedOutAttendance);
     }
 
     //MULTIPLE ABSENT
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfSectionName(#sectionName))")
     @Transactional
-    public List<AttendanceResponse> bulkMarkAsAbsent(String sectionName){
+    public List<AttendanceResponse> bulkMarkAsAbsent(String sectionName) {
         LocalDate today = LocalDate.now();
 
         Specification<StudentSectionAssignment> studentSectionAssignmentFilter = Specification
@@ -245,12 +285,10 @@ public class AttendanceService {
                         a -> a.getStudentSectionAssignment().getAssignmentId(),
                         a -> a));
 
-        // no tap-in at all today -> new absent record
         List<StudentSectionAssignment> noRecordStudents = listOfStudents.stream()
                 .filter(s -> !attendanceByAssignmentId.containsKey(s.getAssignmentId()))
                 .toList();
 
-        // tapped in at the gate but never reached class -> flip existing record
         List<Attendance> onSchoolOnlyRecords = attendanceByAssignmentId.values().stream()
                 .filter(a -> a.getAttendanceStatus() == AttendanceStatus.on_school)
                 .toList();

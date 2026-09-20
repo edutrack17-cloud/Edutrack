@@ -35,4 +35,6 @@ build/
 ### SPRING PROFILES ###
 src/main/resources/application-dev.properties
 
-/.env
+.env
+.env.local
+*.env

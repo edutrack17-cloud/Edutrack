@@ -30,6 +30,9 @@ public class User {
     @Column(nullable = false, name = "last_name", length = 100)
     private String lastName;
 
+    @Column(name = "contact_number", length = 15, unique = true, nullable = false)
+    private String contactNumber;
+
     @Enumerated(EnumType.STRING)
     private UserRole userRole = UserRole.teacher;
 
@@ -82,6 +85,14 @@ public class User {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public String getContactNumber() {
+        return contactNumber;
+    }
+
+    public void setContactNumber(String contactNumber) {
+        this.contactNumber = contactNumber;
     }
 
     public UserRole getUserRole() {
