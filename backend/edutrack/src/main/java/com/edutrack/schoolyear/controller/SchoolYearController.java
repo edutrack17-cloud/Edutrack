@@ -44,7 +44,7 @@ public class SchoolYearController {
     }
 
     //DROPDOWN
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("dropdown")
     public ResponseEntity<List<SchoolYearResponse>> schoolYearDropdown(){
         return ResponseEntity.ok(schoolYearService.schoolYearDropdown());

@@ -10,7 +10,6 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.YearMonth;
@@ -20,7 +19,7 @@ import java.time.YearMonth;
 public class SF2ReportController {
 
     private final SF2ReportService sf2ReportService;
-    private final SF2TableService sf2TableService; // Inject the new service
+    private final SF2TableService sf2TableService;
 
     public SF2ReportController(SF2ReportService sf2ReportService, SF2TableService sf2TableService) {
         this.sf2ReportService = sf2ReportService;
@@ -43,7 +42,6 @@ public class SF2ReportController {
     }
 
     @GetMapping("/table")
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfSectionId(#request.sectionId()))")
     public ResponseEntity<SF2TableResponse> getSF2Table(
             @RequestParam Integer sectionId,
             @RequestParam Long schoolYearId,
