@@ -13,6 +13,7 @@ import {
   enrollStudent,
   wasStudentReactivated,
   getSchoolYearOptions,
+  ALL_SCHOOL_YEARS,
 } from "../enrollmentService";
 import { useToasts, ToastContainer } from "../../../../components/ui/Toast";
 import { useAuth } from "../../../../Context/Authcontext";
@@ -102,8 +103,11 @@ function EnrollmentPage() {
   //
   // TEACHER vs ADMIN scoping: per backend dev, a logged-in TEACHER should
   // only ever see the section(s) where THEY are the adviser - via
-  // GET /api/section/{userId} (SectionController.readSectionByAdviser /
-  // getSectionsByAdviser() here) - never the full section list. ADMIN
+  // GET /api/section/adviser/{userId} (SectionController.
+  // readSectionByAdviser / getSectionsByAdviser() here) - never the full
+  // section list. A teacher with no section yet now gets 200 [] (not a
+  // 404), which lands in setSections([]) below with no sectionsError -
+  // only a real request failure reaches the catch. ADMIN
   // keeps seeing every active section (GET /api/section/dropdown via
   // getSections()). Same split PromoteStudentPage.jsx already uses for
   // its filter-section fetch.
@@ -200,8 +204,10 @@ function EnrollmentPage() {
         // starts. An admin can pin one specific past year instead via the
         // School Year filter (schoolYear = that year's id). Both are
         // server-side, so "Page X of Y" stays accurate.
+        // ALL_SCHOOL_YEARS = no school-year restriction at all, so it must
+        // NOT be sent as schoolYearId (the backend expects a numeric id).
         schoolYearStatuses: schoolYear ? undefined : "active",
-        schoolYearId: schoolYear || undefined,
+        schoolYearId: schoolYear && schoolYear !== ALL_SCHOOL_YEARS ? schoolYear : undefined,
         search: debouncedSearch || undefined,
         page: currentPage - 1,
         size: PAGE_SIZE,

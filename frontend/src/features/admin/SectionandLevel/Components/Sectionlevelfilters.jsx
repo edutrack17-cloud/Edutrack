@@ -71,10 +71,10 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, widthClas
   // created elsewhere after this page's initial data load, instead of
   // only ever reflecting a fetch made once on mount.
   function handleToggle() {
-    setIsOpen((prev) => {
-      if (!prev) onOpen?.();
-      return !prev;
-    });
+    // Called here, not inside the setIsOpen updater: updaters must be pure,
+    // and StrictMode runs them twice in dev (two requests per open).
+    if (!isOpen) onOpen?.();
+    setIsOpen(!isOpen);
   }
 
   return (
@@ -147,14 +147,21 @@ function Sectionlevelfilters({
   // component exactly as it worked before this filter existed.
   const showTeacherFilter = Array.isArray(teacherOptions) && !!onTeacherChange;
 
+  // Newest school year first, same order as StudentFilters, so the latest
+  // year isn't buried at the bottom of a long list. Sorted here instead of
+  // trusting the backend's order - /school-year/dropdown is just findAll(),
+  // which has no guaranteed ordering. Copied before sorting because sort()
+  // mutates in place and schoolYearOptions is the page's own state.
   const schoolYearMenuOptions = showSchoolYearFilter
     ? [
         { value: "", label: "All School Years", textClass: "text-gray-700" },
-        ...schoolYearOptions.map((sy) => ({
-          value: String(sy.id),
-          label: sy.label,
-          textClass: "text-gray-700",
-        })),
+        ...[...schoolYearOptions]
+          .sort((a, b) => b.label.localeCompare(a.label, undefined, { numeric: true }))
+          .map((sy) => ({
+            value: String(sy.id),
+            label: sy.label,
+            textClass: "text-gray-700",
+          })),
       ]
     : [];
 

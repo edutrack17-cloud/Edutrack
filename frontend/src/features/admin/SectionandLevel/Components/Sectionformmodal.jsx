@@ -221,6 +221,82 @@ function Sectionformmodal({
 
   if (!isOpen) return null;
 
+  // View mode (opened from a row's kebab menu): read-only details laid out
+  // like the Student Information modal - label above a plain value, two
+  // columns, one full-width Close button. No form, no Save/Undo. Uses the
+  // section row as-is, so nothing needs to be fetched.
+  if (mode === "view") {
+    const gradeLevelLabel =
+      GRADE_LEVEL_OPTIONS.find((opt) => opt.value === initialData?.gradeLevel)?.label ??
+      initialData?.gradeLevel ??
+      "";
+
+    const details = [
+      { label: "Section Name", value: initialData?.sectionName },
+      { label: "Grade Level", value: gradeLevelLabel },
+      { label: "School Year", value: initialData?.schoolYear },
+      { label: "Adviser", value: initialData?.adviser },
+    ];
+
+    return (
+      <div className="font-primary fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="view-section-title"
+          className="flex w-full max-w-xl flex-col rounded-lg bg-white shadow-xl"
+        >
+          <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
+            <div className="w-6" />
+
+            <h2
+              id="view-section-title"
+              className="flex-1 text-center text-lg font-bold text-primary sm:text-xl"
+            >
+              View Section
+            </h2>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="text-gray-500 transition-colors hover:text-gray-700"
+            >
+              <X size={22} />
+            </button>
+          </div>
+
+          <div className="px-4 py-5 sm:px-6">
+            <h3 className="mb-4 text-base font-bold uppercase text-primary">
+              Section Information
+            </h3>
+
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+              {details.map((detail) => (
+                <div key={detail.label} className="min-w-0">
+                  <dt className="text-sm font-semibold text-gray-700">{detail.label}</dt>
+                  <dd className="mt-1 wrap-break-words text-sm font-normal text-gray-500">
+                    {detail.value || "—"}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="flex border-t border-gray-200 px-4 py-4 sm:px-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const initialValues =
     mode === "edit" && initialData
       ? {

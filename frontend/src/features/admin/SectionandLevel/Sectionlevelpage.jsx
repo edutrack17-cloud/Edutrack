@@ -27,14 +27,14 @@ const PAGE_SIZE = 10;
 // The backend can only AND section-name and adviser-name filters (never OR them), so an active search fetches both matches separately and merges them client-side - see loadSections() below; results past this cap per field are dropped.
 const SEARCH_FETCH_SIZE = 200;
 
+// Sections in a school year with one of these statuses are frozen: no edit (so no adviser changes either) and no archive/unarchive. Active and Planning years stay editable - Planning on purpose, since rosters and advisers get filled in there before the year starts.
+const PAST_SCHOOL_YEAR_STATUSES = ["closed", "archived"];
+
 function Sectionlevelpage() {
   const [sections, setSections] = useState([]);
   const [advisers, setAdvisers] = useState([]);
   const [schoolYears, setSchoolYears] = useState([]);
   const [planningSchoolYears, setPlanningSchoolYears] = useState([]);
-  // Closed and Archived (past) school years are valid CLONE sources for "Start New School Year" (see newSchoolYearSourceOptions below), alongside the currently Active year - but neither is a valid target or offered on the Add/Edit form, so both stay separate from schoolYears/planningSchoolYears.
-  const [closedSchoolYears, setClosedSchoolYears] = useState([]);
-  const [archivedSchoolYears, setArchivedSchoolYears] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -56,6 +56,17 @@ function Sectionlevelpage() {
     if (!teacherFilter) return null;
     return advisers.find((adviser) => String(adviser.id) === teacherFilter)?.name ?? null;
   }, [teacherFilter, advisers]);
+
+  // Section rows only carry their school year's label (section.schoolYear), not its id or status, so the status is looked up by label in allSchoolYears - the unfiltered list that already has every year's status.
+  const schoolYearStatusByLabel = useMemo(
+    () => new Map(allSchoolYears.map((sy) => [sy.label, sy.status])),
+    [allSchoolYears]
+  );
+
+  // True once a section's school year is past (closed/archived). An unknown year (list not loaded yet, or a section with no year) counts as editable - this is only the UI gate, the backend is what actually has to refuse the change.
+  function isSectionReadOnly(section) {
+    return PAST_SCHOOL_YEAR_STATUSES.includes(schoolYearStatusByLabel.get(section?.schoolYear));
+  }
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -204,19 +215,15 @@ function Sectionlevelpage() {
     currentPage,
   ]);
 
-  // Hits GET /api/school-year for every status this page needs (active/planning/closed/archived - see newSchoolYearSourceOptions below); kept as its own function so it can be re-run on demand (handleOpenAdd/Edit/NewSchoolYear) instead of only once on page load.
+  // Hits GET /api/school-year for the statuses the Add/Edit form and the New School Year TARGET dropdown need (active/planning - the Closed/Archived source years come from loadAllSchoolYears() instead, see newSchoolYearSourceOptions below); kept as its own function so it can be re-run on demand (handleOpenAdd/Edit/NewSchoolYear) instead of only once on page load.
   async function loadSchoolYearOptions() {
     try {
-      const [activeYears, planningYears, closedYears, archivedYears] = await Promise.all([
+      const [activeYears, planningYears] = await Promise.all([
         getSchoolYears("active"),
         getSchoolYears("planning"),
-        getSchoolYears("closed"),
-        getSchoolYears("archived"),
       ]);
       setSchoolYears(activeYears);
       setPlanningSchoolYears(planningYears);
-      setClosedSchoolYears(closedYears);
-      setArchivedSchoolYears(archivedYears);
     } catch (error) {
       setErrorMessage(error.message);
     }
@@ -231,11 +238,11 @@ function Sectionlevelpage() {
   // Own function, same reasoning as loadSchoolYearOptions/loadAdvisers above - a one-time mount fetch went stale the moment a school year was added/edited elsewhere, breaking the School Year filter (fail-open lookup, or the new year missing from the dropdown); re-run on demand instead (see onSchoolYearDropdownOpen below).
   async function loadAllSchoolYears() {
     try {
-      // Dedicated /school-year/dropdown endpoint - returns every year with no size ceiling, unlike getSchoolYears() above (hardcoded size:100, fine for active/planning/closed pulls but wrong for "every year regardless of status").
+      // Dedicated /school-year/dropdown endpoint - returns every year with no size ceiling, unlike getSchoolYears() above: GET /school-year is paginated and the backend caps page size at 10, so size:100 is silently ignored and only the first 10 rows of a status come back. This list also feeds the New School Year source dropdown, so no Closed/Archived year gets cut off.
       const years = await getSchoolYearDropdown();
       setAllSchoolYears(years);
     } catch (error) {
-      setAllSchoolYears([]);
+      // Keep the last good list instead of clearing it. Clearing dropped the selected year from the options, so the trigger fell back to "All School Years" while the table was still filtered to that year - and it would also wipe the statuses isSectionReadOnly() relies on.
     }
   }
 
@@ -256,6 +263,11 @@ function Sectionlevelpage() {
 
   // Same refresh as handleOpenAdd above, for the Edit Section modal.
   function handleOpenEdit(section) {
+    // The table already hides Edit/Archive for these rows; this is the second gate.
+    if (isSectionReadOnly(section)) {
+      showToast("Sections from past school years are read-only.", "error");
+      return;
+    }
     setModalMode("edit");
     setSelectedSection(section);
     setIsModalOpen(true);
@@ -263,10 +275,18 @@ function Sectionlevelpage() {
     loadAdvisers();
   }
 
+  // Read-only details for a section, used by the View item in each row's kebab menu. Nothing here is editable, so unlike Add/Edit it doesn't need the school year / adviser lists refreshed first.
+  function handleOpenView(section) {
+    setModalMode("view");
+    setSelectedSection(section);
+    setIsModalOpen(true);
+  }
+
   // Re-fetches source/target school year options right before opening the modal, so it always reflects whatever was last changed on the School Year Management page.
   function handleOpenNewSchoolYear() {
     setIsNewSchoolYearModalOpen(true);
     loadSchoolYearOptions();
+    loadAllSchoolYears(); // the source dropdown (newSchoolYearSourceOptions) is derived from this list
   }
 
   function handleGradeLevelChange(event) {
@@ -308,6 +328,10 @@ function Sectionlevelpage() {
   }
 
   function handleRequestStatusChange(section) {
+    if (isSectionReadOnly(section)) {
+      showToast("Sections from past school years are read-only.", "error");
+      return;
+    }
     const nextStatus = section.sectionStatus === "archived" ? "active" : "archived";
     setStatusChangeRequest({ section, nextStatus });
   }
@@ -448,12 +472,10 @@ function Sectionlevelpage() {
     ...planningSchoolYears.map((sy) => ({ ...sy, label: `${sy.label} (Planning)` })),
   ];
 
-  // Source options for "Start New School Year": the currently Active year(s) (quick-start - closes it, activates the target, and clones every section) plus any Closed/Archived (past) years (clone-select), each tagged with its status so both the modal and submit handler can tell which behavior applies.
-  const newSchoolYearSourceOptions = [
-    ...schoolYears.map((sy) => ({ ...sy, status: "active" })),
-    ...closedSchoolYears.map((sy) => ({ ...sy, status: "closed" })),
-    ...archivedSchoolYears.map((sy) => ({ ...sy, status: "archived" })),
-  ];
+  // Source options for "Start New School Year": the currently Active year(s) (quick-start - closes it, activates the target, and clones every section) plus any Closed/Archived (past) years (clone-select), each tagged with its status so both the modal and submit handler can tell which behavior applies. Derived from allSchoolYears (GET /school-year/dropdown, unpaginated) instead of three paginated GET /school-year calls - the backend caps those at 10 rows, which silently dropped every Closed/Archived year past the 10th. Planning years are excluded on purpose: they are valid targets, not sources.
+  const newSchoolYearSourceOptions = allSchoolYears
+    .map((sy) => ({ ...sy, status: String(sy.status).toLowerCase() }))
+    .filter((sy) => ["active", "closed", "archived"].includes(sy.status));
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
@@ -508,7 +530,13 @@ function Sectionlevelpage() {
           <p className="py-6 text-center text-sm text-gray-500">Loading sections...</p>
         ) : (
           <div className="flex flex-col gap-3">
-            <Sectiontable sections={sections} onEdit={handleOpenEdit} onToggleStatus={handleRequestStatusChange} />
+            <Sectiontable
+              sections={sections}
+              onEdit={handleOpenEdit}
+              onView={handleOpenView}
+              onToggleStatus={handleRequestStatusChange}
+              isSectionReadOnly={isSectionReadOnly}
+            />
             <Sectionlevelpagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
           </div>
         )}

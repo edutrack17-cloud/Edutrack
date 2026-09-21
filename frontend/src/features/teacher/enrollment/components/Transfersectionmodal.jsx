@@ -17,6 +17,7 @@
 
 import React, { useEffect, useState } from "react";
 import { X, ChevronDown } from "lucide-react";
+import { getSections } from "../enrollmentService";
 
 function TransferSectionModal({
   isOpen,
@@ -26,9 +27,30 @@ function TransferSectionModal({
   sections = [],
   onRefreshSections,
   isSubmitting = false,
+  role,
 }) {
   const [sectionId, setSectionId] = useState("");
   const [touched, setTouched] = useState(false);
+
+  // TEACHER: the "sections" prop is only the teacher's OWN advisory
+  // section(s) (EnrollmentPage's loadSections() -> getSectionsByAdviser),
+  // which is right for Add/Edit Student but wrong here - a section
+  // transfer moves the student OUT of the teacher's section into someone
+  // else's. StudentService.transferStudent() only authorizes on the
+  // SOURCE student (isAdviserOfStudent) and lets the target be any active
+  // section, and the business rule is that a teacher may transfer a
+  // student to another adviser's section. So a teacher gets the full
+  // same-grade section list from GET /api/section/dropdown instead.
+  // ADMIN keeps using the "sections" prop, which is already that list.
+  //
+  // BACKEND DEPENDENCY: this only works if SectionController's
+  // /section/dropdown allows the TEACHER role. If it 403s, the error is
+  // shown inside the modal (see targetsError) rather than failing silently.
+  const isTeacher = role === "teacher";
+  const currentGradeLevel = student?.section?.gradeLevel;
+  const [teacherTargetSections, setTeacherTargetSections] = useState([]);
+  const [isLoadingTargets, setIsLoadingTargets] = useState(false);
+  const [targetsError, setTargetsError] = useState("");
 
   // Same reasoning as EnrollStudentModal/EditStudentModal: refresh the
   // section list on every open instead of trusting whatever "sections"
@@ -49,10 +71,35 @@ function TransferSectionModal({
     }
   }, [isOpen, student?.studentId]);
 
+  // TEACHER only - see isTeacher above. getSections() caches per grade
+  // level for 30s, so reopening this doesn't hit the network every time.
+  useEffect(() => {
+    if (!isOpen || !isTeacher || !currentGradeLevel) return;
+
+    let cancelled = false;
+    setIsLoadingTargets(true);
+    setTargetsError("");
+    setTeacherTargetSections([]);
+
+    getSections(currentGradeLevel)
+      .then((data) => {
+        if (!cancelled) setTeacherTargetSections(data);
+      })
+      .catch((error) => {
+        if (!cancelled) setTargetsError(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingTargets(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isTeacher, currentGradeLevel, student?.studentId]);
+
   if (!isOpen || !student) return null;
 
   const currentSectionId = student.section?.sectionId;
-  const currentGradeLevel = student.section?.gradeLevel;
 
   // transferStudentSection() moves a student within their SAME grade
   // level (see the comment on that function in enrollmentService.js) -
@@ -62,12 +109,19 @@ function TransferSectionModal({
   // rule StudentForm's own Section dropdown uses), and excludes the
   // student's current section - picking it again wouldn't be a real
   // transfer.
-  const eligibleSections = sections.filter(
+  const candidateSections = isTeacher ? teacherTargetSections : sections;
+  const eligibleSections = candidateSections.filter(
     (s) =>
       s.status !== "archived" &&
       s.gradeLevel === currentGradeLevel &&
       s.id !== currentSectionId
   );
+
+  const noOptionsLabel = isLoadingTargets
+    ? "Loading sections..."
+    : targetsError
+    ? "Unable to load sections"
+    : "No other sections available at this level";
 
   const isValid = Boolean(sectionId);
 
@@ -123,9 +177,7 @@ function TransferSectionModal({
                 } ${sectionId ? "text-gray-700" : "text-gray-500"}`}
               >
                 <option value="">
-                  {eligibleSections.length === 0
-                    ? "No other sections available at this level"
-                    : "Select Section"}
+                  {eligibleSections.length === 0 ? noOptionsLabel : "Select Section"}
                 </option>
                 {eligibleSections.map((s) => (
                   <option key={s.id} value={s.id} className="text-gray-700">
@@ -138,6 +190,7 @@ function TransferSectionModal({
                 className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
               />
             </div>
+            {targetsError && <p className="mt-1 text-xs text-danger">{targetsError}</p>}
             {touched && !isValid && (
               <p className="mt-1 text-xs text-danger">Please select a section to transfer to.</p>
             )}

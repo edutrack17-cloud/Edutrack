@@ -159,6 +159,11 @@ export async function getTeachers() {
 // already calls this endpoint - adjust once the SchoolYear controller is
 // shared.
 // CONNECT: GET /api/school-year
+// WARNING: paginated, and the backend caps page size at 10 (size:100 below is
+// silently ignored), so this only ever returns the FIRST 10 years of a status.
+// Fine for "active"/"planning" (a handful at most). For anything that needs
+// every year of a status - e.g. all Closed/Archived years for the New School
+// Year source dropdown - use getSchoolYearDropdown() and filter by status.
 export async function getSchoolYears(status = "active") {
   try {
     const { data } = await sectionApi.get("/school-year", {
@@ -234,14 +239,32 @@ export async function startNewSchoolYear(data) {
   }
 }
 
-// How many section rows to pull per lookup below. Both the "does the
-// target already have sections" check and the "which sections belong to
-// the source year" lookup are now scoped with schoolYearId (see
-// getSections() above), so this is just a safety cap in case a single
-// school year ever has more sections than this. Kept modest on purpose -
-// the old 300 pulled the full SectionResponse payload for every row,
-// which was a big part of why the clone flow felt slow.
-const CLONE_FETCH_SIZE = 100;
+// The backend caps page size at 10 - asking for size:100 is silently ignored
+// and only the first 10 rows come back, with no error. Every lookup below
+// that needs "all sections of a school year" therefore has to walk the
+// pages via getAllSections() instead of trusting a single big request.
+// Both lookups are scoped with schoolYearId (see getSections() above), so
+// this is at most a handful of requests per school year.
+const SECTION_PAGE_SIZE = 10;
+const MAX_SECTION_PAGES = 50; // safety net against a runaway loop (500 sections)
+
+// Walks every page of GET /section for the given filters and returns all
+// rows as one flat array (NOT the { content, totalPages } shape that
+// getSections() returns).
+async function getAllSections(filters = {}) {
+  const all = [];
+  let page = 0;
+  let totalPages = 1;
+
+  do {
+    const batch = await getSections({ ...filters, page, size: SECTION_PAGE_SIZE });
+    all.push(...batch.content);
+    totalPages = batch.totalPages;
+    page += 1;
+  } while (page < totalPages && page < MAX_SECTION_PAGES);
+
+  return all;
+}
 
 // Client-side stand-in for the backend's newSchoolYear() clone step, used
 // specifically when the source is a Closed (past) school year rather than
@@ -292,9 +315,9 @@ export async function cloneSectionsAcrossSchoolYears({
   // that case impossible. Instead, only skip the individual sections
   // that would collide BY NAME with something already under the target -
   // everything else still gets cloned in alongside what's already there.
-  const targetBatch = await getSections({ schoolYearId: targetSchoolYearId, page: 0, size: CLONE_FETCH_SIZE });
+  const targetSections = await getAllSections({ schoolYearId: targetSchoolYearId });
   const existingTargetNames = new Set(
-    targetBatch.content.map((section) => section.sectionName.trim().toLowerCase())
+    targetSections.map((section) => section.sectionName.trim().toLowerCase())
   );
 
   // No sectionStatus filter here on purpose - the backend's own clone
@@ -307,8 +330,7 @@ export async function cloneSectionsAcrossSchoolYears({
   // rule for the active-source path (all sections, or all sections in one
   // grade level, never a hand-picked subset), so both clone paths behave
   // identically instead of this one allowing something the other can't.
-  const sourceBatch = await getSections({ schoolYearId: sourceSchoolYearId, gradeLevel, page: 0, size: CLONE_FETCH_SIZE });
-  const sectionsToClone = sourceBatch.content;
+  const sectionsToClone = await getAllSections({ schoolYearId: sourceSchoolYearId, gradeLevel });
 
   if (sectionsToClone.length === 0) {
     throw new Error("This school year doesn't have sections yet");
@@ -407,13 +429,9 @@ export async function startNewSchoolYearPreservingAdvisers({
   gradeLevel,
   advisers = [],
 }) {
-  const before = await getSections({
-    schoolYearId: sourceSchoolYearId,
-    page: 0,
-    size: CLONE_FETCH_SIZE,
-  });
+  const before = await getAllSections({ schoolYearId: sourceSchoolYearId });
   const adviserBySectionId = new Map(
-    before.content
+    before
       .filter((section) => section.adviser)
       .map((section) => [section.sectionId, section.adviser])
   );
@@ -424,16 +442,12 @@ export async function startNewSchoolYearPreservingAdvisers({
     gradeLevel,
   });
 
-  const after = await getSections({
-    schoolYearId: sourceSchoolYearId,
-    page: 0,
-    size: CLONE_FETCH_SIZE,
-  });
+  const after = await getAllSections({ schoolYearId: sourceSchoolYearId });
 
   const restored = [];
   const restoreFailed = [];
 
-  for (const section of after.content) {
+  for (const section of after) {
     const previousAdviserName = adviserBySectionId.get(section.sectionId);
     // Nothing to do if it had no adviser before, or if it still has one now
     // (i.e. it was never touched by clearAdvisers() in the first place).

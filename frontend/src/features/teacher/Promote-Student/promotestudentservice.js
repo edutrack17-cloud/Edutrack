@@ -123,7 +123,19 @@ export async function getCurrentSections(gradeLevel) {
   }
 }
 
-// CONNECTED: GET /api/section/{userId} (SectionController.readSectionByAdviser)
+// CONNECTED: GET /api/section/adviser/{userId} (SectionController.readSectionByAdviser)
+//
+// FIX: this used to call GET /api/section/{userId}. After the backend's
+// section endpoint split, that path now means GET /api/section/{sectionId}
+// (ONE section by its own id) - so the teacher's user id was being treated
+// as a section id and the request failed/returned the wrong shape, which
+// is why a teacher's Grade Level / Section filters on this page came up
+// empty with "Failed to load your assigned sections". Same fix
+// enrollmentService.js's getSectionsByAdviser() already got.
+//
+// The adviser route also returns 200 with [] (not a 404) for a teacher
+// with no assigned section yet, so an empty array is a normal result.
+//
 // Use this instead of getCurrentSections() when the logged-in user is a
 // TEACHER - it only returns the section(s) where that user is the
 // adviser, so the Promote Student page's Section filter (and "Select
@@ -143,9 +155,14 @@ export async function getSectionsByAdviser(userId) {
 
   const request = (async () => {
     try {
-      const { data } = await studentApi.get(`/section/${userId}`);
+      const { data } = await studentApi.get(`/section/adviser/${userId}`);
       const mapped = mapSections(data);
-      sectionsByAdviserCache.set(userId, { data: mapped, expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS });
+      // Don't cache an empty list - otherwise a teacher who has no
+      // section yet would keep seeing "none" for up to 30s (including
+      // across the window-focus refresh) after an admin assigns one.
+      if (mapped.length > 0) {
+        sectionsByAdviserCache.set(userId, { data: mapped, expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS });
+      }
       return mapped;
     } catch (error) {
       throw new Error(getErrorMessage(error, "Failed to load your assigned sections"));

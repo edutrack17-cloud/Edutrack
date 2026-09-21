@@ -11,6 +11,7 @@ import { X } from "lucide-react";
 import RfidFormModal from "./RfidFormModal";
 import StudentForm from "./StudentForm";
 import enrollSchema from "../enrollmentSchema";
+import { findStudentByRfid } from "../enrollmentService";
 
 // Best-effort split of StudentResponse's combined "fullName" - see the
 // BACKEND GAP note in initialValues below for why this exists at all.
@@ -80,6 +81,21 @@ function EditStudentModal({ isOpen, onClose, onSubmit, student, sections = [], o
       // this onSubmit prop points to.
       try {
         const payload = { ...values };
+
+        // Same duplicate-RFID pre-check as EnrollStudentModal (see the
+        // note there and in enrollmentService.js) - PATCH /api/student
+        // writes to the same @Column(unique = true) rfid column, so
+        // assigning a card that another record still holds fails the
+        // same way, with a bare 500. Only worth checking when the card
+        // actually CHANGED, and a match on this same student is their
+        // own card, not a conflict.
+        if (values.rfid && values.rfid !== student?.rfid) {
+          const cardOwner = await findStudentByRfid(values.rfid);
+          if (cardOwner && cardOwner.studentId !== student?.studentId) {
+            helpers.setStatus(`This RFID is already assigned to ${cardOwner.fullName}.`);
+            return; // the finally below still clears isSubmitting
+          }
+        }
 
         // Only send sectionId if it actually changed. StudentService.
         // updateStudent() re-validates sectionId's section (archived?

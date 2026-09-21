@@ -29,12 +29,29 @@ const studentApi = createApiClient();
 // Once the backend adds a proper exception handler that returns
 // { "message": "..." }, this will pick it up automatically with no
 // frontend changes needed.
+//
+// CHANGED: a 500's body is now IGNORED on purpose. Nothing usable ever
+// comes back on a 500 - either Spring's default { error: "Internal
+// Server Error" } or a catch-all handler's "An unexpected error
+// occurred" - and relaying either one to a user is a dead end (that's
+// exactly the toast that showed up for the duplicate-RFID crash: an
+// unhandled DataIntegrityViolationException out of
+// StudentService.enrollStudentCore()). On a 500 the CALLER's fallback
+// wins instead, since each call site knows what realistically went
+// wrong for that endpoint. 4xx bodies are still read as before, so the
+// moment the backend maps RFIDAlreadyExists/StudentAlreadyExists to a
+// 409 with a real message, that message is what shows - no change
+// needed here.
 function getErrorMessage(error, fallback) {
+  const status = error?.response?.status;
   const data = error?.response?.data;
 
   if (typeof data === "string" && data.trim()) return data;
-  if (data?.message) return data.message;
-  if (data?.error) return data.error;
+
+  if (status !== 500) {
+    if (data?.message) return data.message;
+    if (data?.error) return data.error;
+  }
 
   return fallback;
 }
@@ -128,7 +145,7 @@ export async function getSections(gradeLevel) {
   }
 }
 
-// CONNECTED: GET /api/section/{userId} (SectionController.readSectionByAdviser)
+// CONNECTED: GET /api/section/adviser/{userId} (SectionController.readSectionByAdviser)
 // Per backend dev: a logged-in TEACHER should only ever see the
 // section(s) where THEY are the assigned adviser, not the full section
 // list getSections() above returns. Use this instead of getSections()
@@ -137,12 +154,20 @@ export async function getSections(gradeLevel) {
 // PromoteStudentPage.jsx already applies via getSectionsByAdviser() in
 // promotestudentservice.js.
 //
-// Note: readSectionByAdviser throws AdvisorySectionNotFound (empty
-// result) if the teacher has no section assigned yet - that surfaces
-// here as a thrown Error too, same as any other failure, so callers
-// don't need a separate "not found" branch. A thrown/rejected result is
-// never cached, so a teacher who gets this once isn't stuck seeing it
-// for the next 30s once a section actually gets assigned.
+// CHANGED (backend section endpoint split): this used to call
+// GET /api/section/{userId}. That path now means GET /api/section/
+// {sectionId} (fetch ONE section by its own id), so the adviser lookup
+// moved to /section/adviser/{userId}. The adviser route also no longer
+// throws AdvisorySectionNotFound (404) when the teacher has no section
+// assigned yet - it returns 200 with []. So an empty array is a normal,
+// successful "no assigned sections" result here, not an error; only a
+// real network/4xx/5xx failure throws.
+//
+// Because [] is now a success (it used to be a thrown error, and a
+// thrown/rejected result is never cached), an EMPTY result is
+// deliberately NOT cached below - otherwise a teacher with no section
+// yet would keep seeing "none" for up to 30s (including across the
+// window-focus refresh) after an admin assigns them one.
 export async function getSectionsByAdviser(userId) {
   const cached = sectionsByAdviserCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
@@ -151,9 +176,12 @@ export async function getSectionsByAdviser(userId) {
 
   const request = (async () => {
     try {
-      const { data } = await studentApi.get(`/section/${userId}`);
+      const { data } = await studentApi.get(`/section/adviser/${userId}`);
       const mapped = mapSectionDropdown(data);
-      sectionsByAdviserCache.set(userId, { data: mapped, expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS });
+      // Don't cache an empty list - see the CHANGED note above.
+      if (mapped.length > 0) {
+        sectionsByAdviserCache.set(userId, { data: mapped, expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS });
+      }
       return mapped;
     } catch (error) {
       throw new Error(getErrorMessage(error, "Failed to load your assigned section"));
@@ -187,6 +215,14 @@ export async function getSchoolYearOptions() {
     return [];
   }
 }
+
+// Sentinel for the School Year filter's "All School Years" option. Can't be
+// "" because "" already means "the active year" (see EnrollmentPage's
+// schoolYear state). Real school year values are numeric ids (as strings),
+// so "all" can never collide with one. NEVER send this to the backend as
+// schoolYearId - EnrollmentPage.loadStudents() translates it to "no
+// school-year restriction" first.
+export const ALL_SCHOOL_YEARS = "all";
 
 // CONNECTED: GET /api/student?gradeLevel&sectionName&studentStatus&search&schoolYearStatuses&schoolYearId&page&size
 // Confirmed via StudentController.getStudents(). Notes:
@@ -240,6 +276,91 @@ export async function getStudents({ search, level, section, status, schoolYearSt
   }
 }
 
+// RFID OWNERSHIP INDEX (client-side pre-check)
+//
+// WHY THIS EXISTS: enrolling with a card that already belongs to a
+// DROPPED / TRANSFERRED_OUT / GRADUATED student returns a bare 500,
+// not a handled error. StudentService.enrollStudentCore() guards with
+//     existsByRfidAndStudentStatus(rfid, StudentStatus.enrolled)
+// so it only sees currently-ENROLLED students, but Student.rfid is
+// declared @Column(unique = true) - the DB constraint doesn't care
+// about studentStatus. A card held by a dropped student therefore
+// passes the service check and then blows up at save() with
+// DataIntegrityViolationException -> 500 -> "An unexpected error
+// occurred", with no hint about which field was the problem.
+//
+// Until the backend switches that guard to existsByRfid(), this builds
+// a rfid -> student map from GET /api/student so the modals can catch
+// the collision BEFORE the POST and name the student who still holds
+// the card.
+//
+// LIMIT - TEACHER accounts: StudentService.getStudents() force-applies
+// hasAdviserId(principal) for the teacher role, so a teacher's index
+// only covers their OWN advisory students. A card held by a dropped
+// student in someone else's section won't be found and the 500 will
+// still happen - that's what the improved fallback messages below are
+// for. ADMIN accounts see every student, so their index is complete.
+//
+// No studentStatus and no schoolYearStatuses params on purpose: every
+// status and every school year, since any of those rows can own the
+// row that trips the unique constraint.
+const RFID_INDEX_TTL_MS = 60_000;
+const RFID_INDEX_PAGE_SIZE = 500;
+const RFID_INDEX_MAX_PAGES = 10; // safety stop - 5,000 students
+
+let rfidIndexCache = null; // { index: Map<rfid, StudentResponse>, expiresAt }
+let rfidIndexInFlight = null;
+
+export function invalidateRfidIndex() {
+  rfidIndexCache = null;
+}
+
+async function getRfidIndex() {
+  if (rfidIndexCache && rfidIndexCache.expiresAt > Date.now()) return rfidIndexCache.index;
+  if (rfidIndexInFlight) return rfidIndexInFlight;
+
+  rfidIndexInFlight = (async () => {
+    const index = new Map();
+
+    for (let page = 0; page < RFID_INDEX_MAX_PAGES; page += 1) {
+      const { data } = await studentApi.get("/student", {
+        params: { page, size: RFID_INDEX_PAGE_SIZE },
+      });
+
+      const content = data?.content ?? [];
+      content.forEach((student) => {
+        if (student?.rfid) index.set(String(student.rfid).trim(), student);
+      });
+
+      if (content.length === 0 || page + 1 >= (data?.totalPages ?? 1)) break;
+    }
+
+    rfidIndexCache = { index, expiresAt: Date.now() + RFID_INDEX_TTL_MS };
+    return index;
+  })();
+
+  try {
+    return await rfidIndexInFlight;
+  } catch {
+    // FAIL-SOFT: this is a convenience check, never a gate. If the list
+    // can't be loaded (403, 429, offline), return an empty index so the
+    // enroll goes through to the backend as it did before instead of
+    // being blocked by our own pre-check failing.
+    return new Map();
+  } finally {
+    rfidIndexInFlight = null;
+  }
+}
+
+// Returns the StudentResponse currently holding this card, or null.
+// Callers editing an existing student must ignore a match on that same
+// student (their own card isn't a conflict) - see EditStudentModal.
+export async function findStudentByRfid(rfid) {
+  if (!rfid) return null;
+  const index = await getRfidIndex();
+  return index.get(String(rfid).trim()) ?? null;
+}
+
 // CONNECTED: POST /api/student
 // Body is CreateStudentRequest: lrn, firstName, middleName, lastName,
 // birthDate, guardian, guardianPhoneNumber, rfid, admissionType,
@@ -264,9 +385,19 @@ export async function enrollStudent(values) {
 
   try {
     const { data } = await studentApi.post("/student", payload);
+    // This student now owns that card. Drop the cached index so the
+    // next enroll within the TTL window sees it - otherwise tapping
+    // the same card again a few seconds later would pass the
+    // pre-check and hit the 500 anyway.
+    invalidateRfidIndex();
     return data;
   } catch (error) {
-    throw new Error(getErrorMessage(error, "Failed to enroll student"));
+    throw new Error(
+      getErrorMessage(
+        error,
+        "Couldn't save the student - the LRN or RFID may already belong to another record. Try a different card."
+      )
+    );
   }
 }
 
@@ -315,9 +446,17 @@ export async function updateStudent(studentId, values) {
 
   try {
     const { data } = await studentApi.patch(`/student/${studentId}`, payload);
+    // An edit can move a card from one student to another, so the
+    // index is stale after this too - same reasoning as enrollStudent().
+    invalidateRfidIndex();
     return data;
   } catch (error) {
-    throw new Error(getErrorMessage(error, "Failed to update student"));
+    throw new Error(
+      getErrorMessage(
+        error,
+        "Couldn't save the changes - the LRN or RFID may already belong to another student."
+      )
+    );
   }
 }
 

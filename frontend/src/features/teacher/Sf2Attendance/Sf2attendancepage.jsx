@@ -1,121 +1,290 @@
-import React, { useMemo, useState } from "react";
-import { ChevronDown, FileSpreadsheet } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { FileSpreadsheet } from "lucide-react";
 import SearchInput from "./Componetns/SearchInput";
 import Pagination from "./Componetns/Pagiantion";
 import Sf2AttendanceTable from "./Componetns/Sf2attendancetable";
 import ConfirmExportModal from "./Componetns/Confirmexportmodal";
+import Sf2FilterDropdown from "./Componetns/Sf2filterdropdown";
 import { exportSf2Report } from "./Componetns/Sf2exportexcel";
+import { fetchSf2Sections, fetchSf2Table } from "./Sf2attendanceservice";
 
-// TODO: BACKEND CONNECTION
-// GET /api/grade-levels, GET /api/sections
-// Same mock lists used by the Enrollment feature - swap these for the
-// real API calls once they're ready.
-//
-// Sections now need a real numeric id (matches Section.sectionId /
-// SF2ReportRequest.sectionId on the backend) since the export endpoint
-// is GET /api/schoolform/sf2/{sectionId}?period=yyyy-MM - it exports
-// exactly one section at a time, not "All Sections" combined.
+// GradeLevel is a fixed enum on the backend (Grade_4 / Grade_5 / Grade_6) and
+// no endpoint lists it, so this stays a constant. The labels match what the
+// service produces for section.gradeLevel ("Grade_4" -> "Grade 4").
 const GRADE_LEVELS = ["Grade 4", "Grade 5", "Grade 6"];
-const SECTIONS = [
-  { id: 1, name: "Apple", gradeLevel: "Grade 4" },
-  { id: 2, name: "Rose", gradeLevel: "Grade 4" },
-  { id: 3, name: "Jade", gradeLevel: "Grade 5" },
-];
-
-// A handful of nearby school years, since SF2ReportRequest.period is a
-// plain YearMonth (any year), not locked to the current one.
-function buildYearOptions(currentYear) {
-  return [currentYear - 1, currentYear, currentYear + 1];
-}
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
 
-function getDaysInMonth(monthIndex, year) {
-  // Day 0 of "next month" is the same as the last day of "this month".
-  return new Date(year, monthIndex + 1, 0).getDate();
+// "" is the "All ..." option, same convention as the Section Level filters.
+const GRADE_LEVEL_OPTIONS = [
+  { value: "", label: "All Grade Levels" },
+  ...GRADE_LEVELS.map((level) => ({ value: level, label: level })),
+];
+const MONTH_OPTIONS = [
+  { value: "", label: "All Months" },
+  ...MONTH_NAMES.map((name, index) => ({ value: String(index), label: name })),
+];
+
+// A handful of nearby years, since the period is a plain YearMonth (any
+// year), not locked to the current one.
+function buildYearOptions(currentYear) {
+  return [
+    { value: "", label: "All Years" },
+    ...[currentYear - 1, currentYear, currentYear + 1].map((y) => ({
+      value: String(y),
+      label: String(y),
+    })),
+  ];
 }
 
-// TODO: BACKEND CONNECTION
-// GET /api/attendance/sf2?month={month}&year={year}&gradeLevel=&section=
-// Should return one row per student, with a "days" map like
-// { 1: "present", 2: "absent", ... } covering every day in that month.
-// This mock version cycles through present/late/absent so the table
-// has all 3 status colors visible for checking against the design.
-function buildMockRecords(daysInMonth) {
-  const students = [
-    { id: 1, name: "Jhomell Rey", lrn: "202216598", gradeLevel: "Grade 4", section: "Rose" },
-    { id: 2, name: "Yuri Sakazaki", lrn: "090941037", gradeLevel: "Grade 4", section: "Apple" },
-    { id: 3, name: "Kyo Kusanagi", lrn: "090941038", gradeLevel: "Grade 5", section: "Jade" },
-  ];
+// SF2 rosters are small (SF2 template fits 25 boys + 27 girls), and the
+// endpoint returns the whole section at once, so paging is done here.
+const PAGE_SIZE = 15;
 
-  const CYCLE = ["absent", "absent", "present", "present"];
+// Widths: same approach as Sectionlevelfilters (per-filter width classes).
+const GRADE_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
+const SCHOOL_YEAR_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-[8.5rem]";
+const SECTION_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
+const MONTH_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-32";
+const YEAR_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28";
 
-  return students.map((student) => {
-    const days = {};
-    for (let day = 1; day <= daysInMonth; day++) {
-      days[day] = CYCLE[(day - 1) % CYCLE.length];
-    }
-    return { ...student, days };
-  });
+function ErrorBanner({ message, onRetry }) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col gap-2 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger sm:flex-row sm:items-center sm:justify-between"
+    >
+      <span>{message}</span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="cursor-pointer self-start rounded-md border border-danger/40 bg-white px-3 py-1 text-xs font-semibold text-danger transition-colors hover:bg-danger/10 sm:self-auto"
+      >
+        Try again
+      </button>
+    </div>
+  );
 }
 
 function SF2AttendancePage() {
   const today = new Date();
 
+  // Filters. "" = "All ..." for every one of them. Ids are kept as strings
+  // because that's what the dropdowns hand back. month/year hold "" (All) or a
+  // number (monthIndex 0-11 / the year).
+  //
+  // To open the page on the current month instead of "All Months", change the
+  // two initial values below to today.getMonth() and today.getFullYear().
   const [gradeLevel, setGradeLevel] = useState("");
+  const [schoolYearId, setSchoolYearId] = useState("");
   const [sectionId, setSectionId] = useState(""); // Section.sectionId, not the display name
-  const [year, setYear] = useState(today.getFullYear());
-  const [monthIndex, setMonthIndex] = useState(today.getMonth());
+  const [year, setYear] = useState("");
+  const [monthIndex, setMonthIndex] = useState("");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
+  // GET /api/section/dropdown
+  const [sections, setSections] = useState([]);
+  const [isSectionsLoading, setIsSectionsLoading] = useState(true);
+  const [sectionsError, setSectionsError] = useState("");
+  const [sectionsReloadToken, setSectionsReloadToken] = useState(0);
+
+  // GET /api/schoolform/sf2/table
+  const [tableData, setTableData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [reloadToken, setReloadToken] = useState(0); // bump to refetch (Try again)
+
+  // Export (GET /api/schoolform/sf2/{sectionId}) - unchanged flow.
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState("");
-  // Gate for the actual download - clicking "Export SF2 Report" now only
-  // opens this confirmation. exportSf2Report (the thing that actually
-  // triggers the browser download) only runs once the person hits
+  // Gate for the actual download - clicking "Export SF2 Report" only opens
+  // this confirmation. exportSf2Report only runs once the person hits
   // "Export" inside ConfirmExportModal.
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
+  // ---- Sections (and the school years derived from them) ----------------
+  useEffect(() => {
+    let ignore = false;
+    setIsSectionsLoading(true);
+    setSectionsError("");
+
+    fetchSf2Sections()
+      .then((data) => {
+        if (!ignore) setSections(data);
+      })
+      .catch((error) => {
+        if (ignore) return;
+        console.error("SF2 sections load failed:", error);
+        setSections([]);
+        setSectionsError(error?.message || "Failed to load sections. Please try again.");
+      })
+      .finally(() => {
+        if (!ignore) setIsSectionsLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [sectionsReloadToken]);
+
+  // GET /api/school-year/dropdown is ADMIN-only and this page is used by
+  // teachers too, so the school-year options are the distinct school years
+  // found on the sections the backend returned.
+  const schoolYears = useMemo(() => {
+    const byId = new Map();
+    sections.forEach((section) => {
+      if (section.schoolYearId == null) return;
+      const id = String(section.schoolYearId);
+      if (!byId.has(id)) {
+        byId.set(id, { id, name: section.schoolYearName || `School year ${id}` });
+      }
+    });
+    // Newest first ("2026-2027" sorts before "2025-2026").
+    return [...byId.values()].sort((a, b) => b.name.localeCompare(a.name));
+  }, [sections]);
+
+  // If the selected school year disappears (e.g. after a reload), fall back
+  // to "All School Years".
+  useEffect(() => {
+    if (schoolYearId && !schoolYears.some((sy) => sy.id === schoolYearId)) {
+      setSchoolYearId("");
+    }
+  }, [schoolYears, schoolYearId]);
+
+  const selectedSection = sections.find((s) => String(s.id) === String(sectionId)) || null;
+
+  // The API needs a school year, and it's always the selected section's own.
+  // That's why the School Year filter can safely be "All": it only narrows
+  // the section list, it isn't what gets sent.
+  const tableSchoolYearId = selectedSection ? String(selectedSection.schoolYearId) : "";
+
+  // SF2 is a monthly form, so the table (and the export) need one specific
+  // month + year. "All Months" / "All Years" just means "not picked yet".
+  const hasPeriod = monthIndex !== "" && year !== "";
+
+  const sectionsForFilters = sections
+    .filter(
+      (s) =>
+        (!schoolYearId || String(s.schoolYearId) === schoolYearId) &&
+        (!gradeLevel || s.gradeLevel === gradeLevel)
+    )
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name) ||
+        String(b.schoolYearName).localeCompare(String(a.schoolYearName))
+    );
+
+  // With "All School Years" the same section name can appear once per school
+  // year, so show the school year next to the name in that case.
+  const showSchoolYearInSectionLabel = !schoolYearId && schoolYears.length > 1;
+
+  const schoolYearOptions = [
+    { value: "", label: isSectionsLoading ? "Loading..." : "All School Years" },
+    ...schoolYears.map((sy) => ({ value: sy.id, label: sy.name })),
+  ];
+  const sectionOptions = [
+    { value: "", label: isSectionsLoading ? "Loading..." : "All Sections" },
+    ...sectionsForFilters.map((s) => ({
+      value: String(s.id),
+      label: showSchoolYearInSectionLabel ? `${s.name} (${s.schoolYearName})` : s.name,
+    })),
+  ];
   const yearOptions = buildYearOptions(today.getFullYear());
-  const daysInMonth = getDaysInMonth(monthIndex, year);
-  const dayNumbers = Array.from({ length: daysInMonth }, (_, index) => index + 1);
 
-  const sectionsForGradeLevel = gradeLevel
-    ? SECTIONS.filter((s) => s.gradeLevel === gradeLevel)
-    : SECTIONS;
-  const selectedSection = SECTIONS.find((s) => String(s.id) === String(sectionId)) || null;
+  // Only clear the picked section if it no longer fits the new filter.
+  function handleGradeLevelChange(value) {
+    setGradeLevel(value);
+    if (selectedSection && value && selectedSection.gradeLevel !== value) setSectionId("");
+  }
 
-  // TODO: BACKEND CONNECTION - still missing.
-  // There's no endpoint yet for reading attendance records for on-screen
-  // display (the only SF2 endpoint the backend exposes right now is the
-  // export one, which returns a finished .xlsx file, not JSON). This
-  // page still needs something like:
-  //   GET /api/attendance/sf2?sectionId={sectionId}&period=yyyy-MM
-  // returning one row per student with a "days" map ({ 1: "present", ... })
-  // so the table below reflects real data instead of this mock.
-  // Recomputed whenever the month changes, so switching months actually
-  // changes how many day-columns show up (28-31 depending on month).
-  const records = useMemo(() => buildMockRecords(daysInMonth), [daysInMonth]);
+  function handleSchoolYearChange(value) {
+    setSchoolYearId(value);
+    if (selectedSection && value && String(selectedSection.schoolYearId) !== value) {
+      setSectionId("");
+    }
+  }
 
-  const filteredRecords = records.filter((record) => {
-    const matchesSearch =
-      !search ||
-      record.name.toLowerCase().includes(search.toLowerCase()) ||
-      record.lrn.includes(search);
+  // ---- Table -----------------------------------------------------------
+  // Load whenever the section or month changes. `ignore` drops the response
+  // of a request that's been superseded, so quickly switching sections can't
+  // leave an older section's data on screen.
+  useEffect(() => {
+    if (!sectionId || !tableSchoolYearId || !hasPeriod) {
+      setTableData(null);
+      setLoadError("");
+      setIsLoading(false);
+      return undefined;
+    }
 
-    const matchesLevel = !gradeLevel || record.gradeLevel === gradeLevel;
-    const matchesSection = !selectedSection || record.section === selectedSection.name;
+    let ignore = false;
+    setIsLoading(true);
+    setLoadError("");
 
-    return matchesSearch && matchesLevel && matchesSection;
-  });
+    fetchSf2Table({ sectionId, schoolYearId: tableSchoolYearId, year, monthIndex })
+      .then((data) => {
+        if (!ignore) setTableData(data);
+      })
+      .catch((error) => {
+        if (ignore) return;
+        console.error("SF2 table load failed:", error);
+        setTableData(null);
+        setLoadError(error?.message || "Failed to load SF2 attendance. Please try again.");
+      })
+      .finally(() => {
+        if (!ignore) setIsLoading(false);
+      });
 
+    return () => {
+      ignore = true;
+    };
+  }, [sectionId, tableSchoolYearId, hasPeriod, year, monthIndex, reloadToken]);
+
+  // Back to page 1 whenever what's being shown changes.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, sectionId, year, monthIndex]);
+
+  const students = tableData?.students ?? [];
+  const schoolDays = tableData?.schoolDays ?? [];
+
+  // The endpoint is already scoped to one section, so the only client-side
+  // filter left is the search box.
+  const filteredRecords = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return students;
+    return students.filter(
+      (student) =>
+        student.name.toLowerCase().includes(query) || String(student.lrn).includes(query)
+    );
+  }, [students, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pagedRecords = filteredRecords.slice(pageStart, pageStart + PAGE_SIZE);
+
+  let emptyMessage = "No attendance records found.";
+  if (!sectionId || !hasPeriod) {
+    emptyMessage =
+      !sectionId && !isSectionsLoading && !sectionsError && sections.length === 0
+        ? "No sections available."
+        : "Select a section, month and year to view attendance.";
+  } else if (loadError) {
+    emptyMessage = "Attendance couldn't be loaded.";
+  } else if (tableData && students.length === 0) {
+    emptyMessage = "No students found in this section for the selected month.";
+  } else if (students.length > 0 && filteredRecords.length === 0) {
+    emptyMessage = "No students match your search.";
+  }
+
+  // ---- Export ----------------------------------------------------------
   function handleOpenExportConfirm() {
-    if (!sectionId) {
-      setExportError("Select a section first - SF2 is exported one section at a time.");
+    if (!sectionId || !hasPeriod) {
+      setExportError("Select a section, month and year first - SF2 is exported one section and month at a time.");
       return;
     }
     setExportError("");
@@ -131,6 +300,8 @@ function SF2AttendancePage() {
   // Downloads the actual DepEd-template .xlsx straight from the backend
   // (SF2ReportController -> SF2ReportService renders it server-side).
   // See Sf2exportexcel.js for the fetch + blob-download + error mapping.
+  // Note: the export always covers the whole section for the chosen month -
+  // the search box only filters what's shown on screen.
   async function handleConfirmExport() {
     try {
       setIsExporting(true);
@@ -145,17 +316,6 @@ function SF2AttendancePage() {
     }
   }
 
-  // Same trigger styling family as Sectionlevelfilters/PromoteStudentFilters
-  // (radius, height, weight) - these stay native <select>s (no checkmark
-  // menu here) but should still look/behave the same across breakpoints.
-  const selectClass =
-    "h-9 w-full appearance-none rounded-md border border-gray/50 shadow-sm bg-white py-2 pl-3 pr-9 text-xs font-medium text-gray-500 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:pr-10 sm:text-xs";
-  const iconClass =
-    "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 sm:right-4";
-  // Same responsive pattern as Sectionlevelfilters/PromoteStudentFilters's
-  // wrapperClass: flexible/full-width on mobile, fixed width from sm: up.
-  const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
-
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
       {/* Same breakpoint as Sectionlevelpage.jsx (sm:, not lg:) so the
@@ -164,70 +324,47 @@ function SF2AttendancePage() {
           viewport. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className={wrapperClass}>
-            <select
-              value={gradeLevel}
-              onChange={(event) => {
-                setGradeLevel(event.target.value);
-                setSectionId(""); // previously picked section may not belong to this level anymore
-              }}
-              className={selectClass}
-            >
-              <option value="">Grade Level</option>
-              {GRADE_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={iconClass} />
-          </div>
+          <Sf2FilterDropdown
+            options={GRADE_LEVEL_OPTIONS}
+            value={gradeLevel}
+            onChange={handleGradeLevelChange}
+            ariaLabel="Filter by grade level"
+            widthClass={GRADE_WIDTH}
+          />
 
-          <div className={wrapperClass}>
-            <select
-              value={sectionId}
-              onChange={(event) => setSectionId(event.target.value)}
-              className={selectClass}
-            >
-              <option value="">Section</option>
-              {sectionsForGradeLevel.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={iconClass} />
-          </div>
+          <Sf2FilterDropdown
+            options={schoolYearOptions}
+            value={schoolYearId}
+            onChange={handleSchoolYearChange}
+            ariaLabel="Filter by school year"
+            widthClass={SCHOOL_YEAR_WIDTH}
+            disabled={isSectionsLoading}
+          />
 
-          <div className={wrapperClass}>
-            <select
-              value={monthIndex}
-              onChange={(event) => setMonthIndex(Number(event.target.value))}
-              className={selectClass}
-            >
-              {MONTH_NAMES.map((name, index) => (
-                <option key={name} value={index}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={iconClass} />
-          </div>
+          <Sf2FilterDropdown
+            options={sectionOptions}
+            value={sectionId}
+            onChange={setSectionId}
+            ariaLabel="Select section"
+            widthClass={SECTION_WIDTH}
+            disabled={isSectionsLoading}
+          />
 
-          <div className={wrapperClass}>
-            <select
-              value={year}
-              onChange={(event) => setYear(Number(event.target.value))}
-              className={selectClass}
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={iconClass} />
-          </div>
+          <Sf2FilterDropdown
+            options={MONTH_OPTIONS}
+            value={String(monthIndex)}
+            onChange={(value) => setMonthIndex(value === "" ? "" : Number(value))}
+            ariaLabel="Select month"
+            widthClass={MONTH_WIDTH}
+          />
+
+          <Sf2FilterDropdown
+            options={yearOptions}
+            value={String(year)}
+            onChange={(value) => setYear(value === "" ? "" : Number(value))}
+            ariaLabel="Select year"
+            widthClass={YEAR_WIDTH}
+          />
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -236,8 +373,8 @@ function SF2AttendancePage() {
           <button
             type="button"
             onClick={handleOpenExportConfirm}
-            disabled={!sectionId}
-            title={!sectionId ? "Select a section first" : undefined}
+            disabled={!sectionId || !hasPeriod}
+            title={!sectionId || !hasPeriod ? "Select a section, month and year first" : undefined}
             className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary sm:w-auto sm:text-sm"
           >
             <FileSpreadsheet size={15} strokeWidth={2.5} />
@@ -246,9 +383,34 @@ function SF2AttendancePage() {
         </div>
       </div>
 
+      {sectionsError && (
+        <ErrorBanner
+          message={sectionsError}
+          onRetry={() => setSectionsReloadToken((token) => token + 1)}
+        />
+      )}
+
+      {loadError && (
+        <ErrorBanner message={loadError} onRetry={() => setReloadToken((token) => token + 1)} />
+      )}
+
+      {tableData && !isLoading && (
+        <p className="text-center text-xs text-gray-500 sm:text-sm">
+          {[tableData.gradeLevel, tableData.sectionName].filter(Boolean).join(" - ")},{" "}
+          {tableData.month} {year} ({schoolDays.length} school day
+          {schoolDays.length === 1 ? "" : "s"})
+        </p>
+      )}
+
       <div className="flex flex-col gap-3">
-        <Sf2AttendanceTable records={filteredRecords} dayNumbers={dayNumbers} />
-        <Pagination currentPage={currentPage} totalPages={1} onPageChange={setCurrentPage} />
+        <Sf2AttendanceTable
+          records={pagedRecords}
+          schoolDays={schoolDays}
+          startIndex={pageStart}
+          isLoading={isLoading}
+          emptyMessage={emptyMessage}
+        />
+        <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setCurrentPage} />
       </div>
 
       <ConfirmExportModal
@@ -257,11 +419,13 @@ function SF2AttendancePage() {
         onConfirm={handleConfirmExport}
         isExporting={isExporting}
         errorMessage={exportError}
-        gradeLevel={gradeLevel}
+        gradeLevel={selectedSection?.gradeLevel}
         section={selectedSection?.name}
-        monthName={MONTH_NAMES[monthIndex]}
+        monthName={MONTH_NAMES[monthIndex] ?? ""}
         year={year}
-        recordCount={filteredRecords.length}
+        // Whole section, not just what the search box currently shows -
+        // that's what the .xlsx contains.
+        recordCount={students.length}
       />
     </div>
   );

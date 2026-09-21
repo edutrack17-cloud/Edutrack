@@ -58,7 +58,7 @@ export function formatGradeLevel(gradeLevel) {
   return gradeLevel.replace("_", " ");
 }
 
-function ActionMenu({ menuRef, top, left, studentStatus, isPastYear, onView, onEdit, onTransferSection, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
+function ActionMenu({ menuRef, top, left, studentStatus, isPastYear, role, onView, onEdit, onTransferSection, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
   // The backend's dropStudent()/transferOutStudent()/graduateStudent()
   // each only guard against re-applying the SAME status (e.g.
   // StudentAlreadyGraduated) - there's no check preventing an invalid
@@ -85,6 +85,13 @@ function ActionMenu({ menuRef, top, left, studentStatus, isPastYear, onView, onE
   // left (dropped/transferred out) or graduated, their record is closed
   // and shouldn't be editable from here anymore.
   const canEdit = isEnrolled;
+
+  // Graduate is admin-only in the UI - a teacher should still see every
+  // other action here (View/Edit/Transfer Section/Dropped/Transferred
+  // Out), just not this one. Same role !== "teacher" convention
+  // ViewStudentModal already uses for canViewHistory, so this reads
+  // consistently with that gate.
+  const canGraduate = isEnrolled && role !== "teacher";
 
   return (
     <div
@@ -120,15 +127,18 @@ function ActionMenu({ menuRef, top, left, studentStatus, isPastYear, onView, onE
             <Shuffle size={16} />
             Transferred Out
           </button>
-
-          {/* Graduate is also reachable in bulk from the Promote Student
-              screen, but exposed per-row here too since the backend has a
-              dedicated single-student endpoint for it. */}
-          <button onClick={onMarkGraduated} className={`${menuButtonClass} ${actionColorClass.graduated}`}>
-            <GraduationCap size={16} />
-            Graduate
-          </button>
         </>
+      )}
+
+      {/* Graduate is also reachable in bulk from the Promote Student
+          screen, but exposed per-row here too since the backend has a
+          dedicated single-student endpoint for it. Admin-only in the
+          UI - see canGraduate above. */}
+      {canGraduate && (
+        <button onClick={onMarkGraduated} className={`${menuButtonClass} ${actionColorClass.graduated}`}>
+          <GraduationCap size={16} />
+          Graduate
+        </button>
       )}
     </div>
   );
@@ -145,6 +155,10 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
   // Same "" = active year / id = a past year convention as
   // EnrollmentPage's own schoolYear state - anything truthy here means
   // the table is currently showing a past/closed year via the filter.
+  // That includes ALL_SCHOOL_YEARS on purpose: that view mixes the active
+  // and closed years, and a row doesn't say which year its section belongs
+  // to, so it stays View-only. Pick the current year in the filter to
+  // edit / transfer / drop.
   const isPastYear = Boolean(schoolYear);
 
   const desktopMenuRef = useRef(null);
@@ -374,6 +388,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                       left={menuPosition.left}
                       studentStatus={student.studentStatus}
                       isPastYear={isPastYear}
+                      role={role}
                       onView={() => handleView(student)}
                       onEdit={() => handleEdit(student)}
                       onTransferSection={() => handleRequestTransfer(student)}
@@ -436,6 +451,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                 left={menuPosition.left}
                 studentStatus={student.studentStatus}
                 isPastYear={isPastYear}
+                role={role}
                 onView={() => handleView(student)}
                 onEdit={() => handleEdit(student)}
                 onTransferSection={() => handleRequestTransfer(student)}
@@ -473,6 +489,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
         sections={sections}
         onRefreshSections={onRefreshSections}
         isSubmitting={isTransferSubmitting}
+        role={role}
       />
 
       <StatusDetailsModal

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Archive, ArchiveRestore } from "lucide-react";
+import { MoreHorizontal, Pencil, Archive, ArchiveRestore, Eye } from "lucide-react";
 
 const thClass =
   "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
@@ -18,10 +18,13 @@ function formatGradeLevel(gradeLevel) {
     .join(" ");
 }
 
-function Sectiontable({ sections, onEdit, onToggleStatus }) {
+function Sectiontable({ sections, onEdit, onView, onToggleStatus, isSectionReadOnly }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
+
+  // Optional, same opt-in pattern as the filters - a caller that doesn't pass isSectionReadOnly gets the table exactly as it worked before.
+  const isReadOnly = (section) => Boolean(isSectionReadOnly?.(section));
 
   function toggleMenu(sectionId, event) {
     if (openMenuId === sectionId) {
@@ -117,42 +120,58 @@ function Sectiontable({ sections, onEdit, onToggleStatus }) {
                     style={{ top: menuPosition.top, left: menuPosition.left }}
                     className="fixed z-50 w-44 rounded-xl border border-gray-200 bg-white py-2 text-left shadow-xl"
                   >
-                    {section.sectionStatus !== "archived" && (
-                      <button
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          onEdit?.(section);
-                        }}
-                        className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
-                      >
-                        <Pencil size={16} />
-                        Edit
-                      </button>
-                    )}
-
                     <button
                       onClick={() => {
                         setOpenMenuId(null);
-                        onToggleStatus?.(section);
+                        onView?.(section);
                       }}
-                      className={`flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition ${
-                        section.sectionStatus === "archived"
-                          ? "text-success hover:bg-success/10"
-                          : "text-secondary hover:bg-secondary/10"
-                      }`}
+                      className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
                     >
-                      {section.sectionStatus === "archived" ? (
-                        <>
-                          <ArchiveRestore size={16} />
-                          Unarchive
-                        </>
-                      ) : (
-                        <>
-                          <Archive size={16} />
-                          Archive
-                        </>
-                      )}
+                      <Eye size={16} />
+                      View
                     </button>
+
+                    {/* Past school year: View is the only action - Edit and Archive/Unarchive are hidden. */}
+                    {!isReadOnly(section) && (
+                      <>
+                        {section.sectionStatus !== "archived" && (
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              onEdit?.(section);
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
+                          >
+                            <Pencil size={16} />
+                            Edit
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            onToggleStatus?.(section);
+                          }}
+                          className={`flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition ${
+                            section.sectionStatus === "archived"
+                              ? "text-success hover:bg-success/10"
+                              : "text-secondary hover:bg-secondary/10"
+                          }`}
+                        >
+                          {section.sectionStatus === "archived" ? (
+                            <>
+                              <ArchiveRestore size={16} />
+                              Unarchive
+                            </>
+                          ) : (
+                            <>
+                              <Archive size={16} />
+                              Archive
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </td>

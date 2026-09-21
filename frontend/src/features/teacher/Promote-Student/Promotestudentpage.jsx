@@ -23,7 +23,7 @@ const GRADE_LEVELS = [
 ];
 
 function PromoteStudentPage() {
-  const { user, role } = useAuth();
+  const { user, role, isInitializing } = useAuth();
 
   const [gradeLevel, setGradeLevel] = useState("");
   const [section, setSection] = useState("");
@@ -62,13 +62,23 @@ function PromoteStudentPage() {
 
   const [adviserSections, setAdviserSections] = useState([]);
 
-  // GET /api/section/{userId} - sections this teacher advises.
+  // GET /api/section/adviser/{userId} - sections this teacher advises.
+  //
+  // isInitializing / user?.id guard: right after an F5, AuthContext is
+  // still rehydrating and user/role are null for one render (same guard
+  // EnrollmentPage.jsx uses). The old `user.id` here would throw in that
+  // window. setSectionsError("") on success so a stale error from an
+  // earlier failed fetch doesn't stay on screen after a focus-refresh
+  // succeeds.
   useEffect(() => {
-    if (role !== "teacher") return;
+    if (isInitializing || role !== "teacher" || !user?.id) return;
     getSectionsByAdviser(user.id)
-      .then(setAdviserSections)
+      .then((sections) => {
+        setAdviserSections(sections);
+        setSectionsError("");
+      })
       .catch((error) => setSectionsError(error.message));
-  }, [role, user?.id, sectionsRefreshKey]);
+  }, [role, user?.id, isInitializing, sectionsRefreshKey]);
 
   const gradeLevelOptions =
     role === "teacher"

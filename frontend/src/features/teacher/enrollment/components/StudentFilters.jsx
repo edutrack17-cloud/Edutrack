@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { ALL_SCHOOL_YEARS } from "../enrollmentService";
 
 
 const STATUS_OPTIONS = [
@@ -19,7 +20,7 @@ const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w
 
 // Same width family as the Level/Section dropdowns, a touch wider for year
 // labels like "2049-2050".
-const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
+const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-[8.5rem] md:w-[8.5rem]";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -80,7 +81,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
       {isOpen && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
@@ -90,7 +91,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   {option.label}
                   {isSelected && <Check size={14} />}
@@ -152,7 +153,10 @@ function StudentFilters({
   // year marked "active".
   const activeSchoolYear = schoolYearOptions.find((sy) => sy.status === "active");
 
+  // "All School Years" (same label/position as Sectionlevelfilters) uses
+  // its own ALL_SCHOOL_YEARS value because "" is already the active year.
   const schoolYearMenuOptions = [
+    { value: ALL_SCHOOL_YEARS, label: "All School Years", textClass: "text-gray-700" },
     { value: "", label: activeSchoolYear?.label ?? "Current Year", textClass: "text-gray-700" },
     ...pastSchoolYears.map((sy) => ({ value: String(sy.id), label: sy.label, textClass: "text-gray-700" })),
   ];

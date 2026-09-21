@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import RfidFormModal from "./RfidFormModal";
 import StudentForm from "./StudentForm";
 import enrollSchema from "../enrollmentSchema";
+import { findStudentByRfid } from "../enrollmentService";
 
 const EMPTY_FORM = {
   level: "", // UI-only, used to filter the Section dropdown - not sent to the backend (CreateStudentRequest has no gradeLevel field, only sectionId)
@@ -66,6 +67,24 @@ function EnrollStudentModal({
       const { level, ...payload } = values;
       try {
         helpers.setStatus(undefined);
+
+        // PRE-CHECK before the POST. enrollStudentCore()'s own RFID
+        // guard is existsByRfidAndStudentStatus(rfid, enrolled), but
+        // Student.rfid is @Column(unique = true) - so a card still
+        // held by a DROPPED/TRANSFERRED_OUT/GRADUATED student passes
+        // that guard and then dies at save() with a duplicate-key 500
+        // ("An unexpected error occurred" in the toast, no field
+        // named). findStudentByRfid() catches that case here and says
+        // WHO still holds the card. See the long note on the index in
+        // enrollmentService.js - it's best-effort (incomplete for
+        // teacher accounts) and fail-soft, so this never blocks an
+        // enroll on its own failure.
+        const cardOwner = await findStudentByRfid(values.rfid);
+        if (cardOwner) {
+          helpers.setStatus(`This RFID is already assigned to ${cardOwner.fullName}.`);
+          return; // the finally below still clears isSubmitting
+        }
+
         await onSubmit?.({ ...payload, sectionId: Number(payload.sectionId) });
         helpers.resetForm();
         onClose();
