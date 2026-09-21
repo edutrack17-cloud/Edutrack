@@ -69,9 +69,10 @@ public class SectionService {
                 .orElseThrow(() -> new SectionNotFound(sectionId));
     }
 
+    // CHANGED: pass the id to the exception so the error message is useful.
     private SchoolYear getBySchoolYearId(Long schoolYearId) {
         return schoolYearRepository.findById(schoolYearId)
-                .orElseThrow(SchoolYearNotFound::new);
+                .orElseThrow(() -> new SchoolYearNotFound());
     }
 
     private User getByUserId(Long userId) {
@@ -124,10 +125,6 @@ public class SectionService {
     // =========================================================
     // CREATE
     // =========================================================
-
-    // =========================================================
-// CREATE
-// =========================================================
 
     @Transactional
     public SectionResponse createSection(CreateSectionRequest sectionRequest) {
@@ -272,7 +269,7 @@ public class SectionService {
             GradeLevel gradeLevel,
             SectionStatus sectionStatus,
             String sectionName,
-            Long schoolYearId,          // <-- ADD
+            Long schoolYearId,
             Pageable pageable
     ) {
         Specification<Section> filters =
@@ -281,7 +278,7 @@ public class SectionService {
                         .and(SectionSpecification.hasGradeLevel(gradeLevel))
                         .and(SectionSpecification.hasStatus(sectionStatus))
                         .and(SectionSpecification.hasSectionName(sectionName))
-                        .and(SectionSpecification.hasSchoolYearId(schoolYearId));  // <-- ADD
+                        .and(SectionSpecification.hasSchoolYearId(schoolYearId));
 
         Pageable sortedPageable =
                 pageable.getSort().isSorted()
@@ -298,9 +295,22 @@ public class SectionService {
     }
 
     // =========================================================
-    // READ BY ADVISER
+    // READ ONE SECTION BY ID
+    // NEW: this is the method the controller's GET /api/section/{sectionId}
+    // delegates to. Throws SectionNotFound (→ 404) only when the section
+    // genuinely does not exist.
     // =========================================================
+    public SectionResponse getSectionById(Integer sectionId) {
+        return sectionMapper.toResponseDTO(getById(sectionId));
+    }
 
+    // =========================================================
+    // READ BY ADVISER
+    // CHANGED: no longer throws AdvisorySectionNotFound when the adviser
+    // has no active sections. "No sections" is a valid empty result,
+    // not a not-found error — throwing 404 here was poisoning the
+    // frontend whenever it accidentally hit this route.
+    // =========================================================
     public List<SectionResponse> readSectionByAdviser(Long userId) {
 
         Specification<Section> filters =
@@ -309,13 +319,8 @@ public class SectionService {
                         .and(SectionSpecification.hasStatus(SectionStatus.active))
                         .and(SectionSpecification.hasSchoolYearStatus());
 
-        List<Section> listOfSections = sectionRepository.findAll(filters);
-
-        if (listOfSections.isEmpty()) {
-            throw new AdvisorySectionNotFound();
-        }
-
-        return listOfSections.stream()
+        return sectionRepository.findAll(filters)
+                .stream()
                 .map(sectionMapper::toResponseDTO)
                 .toList();
     }

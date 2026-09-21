@@ -80,11 +80,23 @@ public class SectionController {
         return ResponseEntity.ok(sectionService.countBySchoolYear(schoolYearId));
     }
 
-    //READ BY ADVISER
+    // READ BY ADVISER
+    // CHANGED: path moved from "{userId}" to "adviser/{userId}" so that
+    // "GET /api/section/{id}" can now correctly mean "get section by id"
+    // instead of "get sections advised by user id".
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    @GetMapping("{userId}")
+    @GetMapping("adviser/{userId}")
     public ResponseEntity<List<SectionResponse>> readSectionByAdviser(@PathVariable Long userId) {
         return ResponseEntity.ok(sectionService.readSectionByAdviser(userId));
+    }
+
+    // NEW: GET a single section by its sectionId.
+    // This is what the frontend's `GET /api/section/3` calls actually want,
+    // and it's the fix for the 404 error that was being logged.
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @GetMapping("{sectionId}")
+    public ResponseEntity<SectionResponse> getSectionById(@PathVariable Integer sectionId) {
+        return ResponseEntity.ok(sectionService.getSectionById(sectionId));
     }
 
     //SECTION DROPDOWN

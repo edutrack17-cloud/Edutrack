@@ -40,6 +40,14 @@ public interface SectionRepository
             SchoolYearStatus schoolYearStatus
     );
 
+    // NEW: fetch-join user + schoolYear when loading a single section by id.
+    // SectionMapper.toResponseDTO reads both associations, so without this
+    // the mapper triggers lazy loads (or LazyInitializationException if the
+    // mapping ever moves outside the transaction).
+    @EntityGraph(attributePaths = {"user", "schoolYear"})
+    @Override
+    Optional<Section> findById(Integer sectionId);
+
     @EntityGraph(attributePaths = {"user", "schoolYear"})
     @Override
     Page<Section> findAll(
@@ -89,7 +97,6 @@ public interface SectionRepository
             SchoolYear schoolYear
     );
 
-    // SectionRepository
     List<Section> findAllBySchoolYear_SchoolYearIdAndSectionNameIn(
             Long schoolYearId,
             Collection<String> sectionNames
