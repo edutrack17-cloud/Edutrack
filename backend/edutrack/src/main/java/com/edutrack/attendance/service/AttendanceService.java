@@ -17,6 +17,10 @@ import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -103,6 +107,20 @@ public class AttendanceService {
         ));
 
         return attendanceMapper.toAttendanceResponseDTO(savedAttendance);
+    }
+
+    //READ
+    public Page<AttendanceResponse> getAttendance(Pageable pageable){
+        Pageable sorted = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(
+                        pageable.getPageNumber(),
+                        pageable.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "attendanceId")
+                );
+
+        return attendanceRepository.findAll(sorted)
+                .map(attendanceMapper::toAttendanceResponseDTO);
     }
 
     //MANUAL ATTENDANCE
