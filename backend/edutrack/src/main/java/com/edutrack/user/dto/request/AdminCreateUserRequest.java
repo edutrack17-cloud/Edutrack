@@ -22,6 +22,9 @@ public record AdminCreateUserRequest(
         @Size(max = 100)
         String middleName,
 
+        @Size(max = 15)
+        String contactNumber,
+
         @NotBlank(message = "Last name is required")
         @Size(max = 100)
         String lastName
