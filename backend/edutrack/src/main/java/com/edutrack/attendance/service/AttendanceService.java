@@ -11,6 +11,7 @@ import com.edutrack.attendance.exception.*;
 import com.edutrack.attendance.mapper.AttendanceMapper;
 import com.edutrack.attendance.repository.AttendanceRepository;
 import com.edutrack.attendance.specification.AttendanceSpecification;
+import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.security.CurrentUserProvider;
 import com.edutrack.shared.util.NameUtil;
@@ -112,19 +113,18 @@ public class AttendanceService {
 
     //READ
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
-    public Page<AttendanceResponse> getAttendance(Pageable pageable) {
+    public Page<AttendanceResponse> getAttendance(GradeLevel gradeLevel, Pageable pageable) {
 
-        Specification<Attendance> spec = Specification.unrestricted();
+        // hasGradeLevel(null) → cb.conjunction() → no filter
+        Specification<Attendance> spec =
+                AttendanceSpecification.hasGradeLevel(gradeLevel);
 
         if (currentUserProvider.isTeacher()) {
-            spec = spec.and(
-                    AttendanceSpecification.isAdvisedBy(
-                            currentUserProvider.getCurrentUserId(),
-                            SectionStatus.active
-                    )
-            );
+            spec = spec.and(AttendanceSpecification.isAdvisedBy(
+                    currentUserProvider.getCurrentUserId(),
+                    SectionStatus.active
+            ));
         }
-        // ADMIN and GUARD: no extra filter → see everything
 
         Pageable sorted = pageable.getSort().isSorted()
                 ? pageable

@@ -2,6 +2,7 @@ package com.edutrack.attendance.specification;
 
 import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.enums.AttendanceStatus;
+import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.student.enums.StudentStatus;
 import org.springframework.data.jpa.domain.Specification;
@@ -16,6 +17,15 @@ public class AttendanceSpecification {
         return (root, query, cb) -> status == null
                 ? cb.conjunction()
                 : cb.equal(root.get("attendanceStatus"), status);
+    }
+
+    public static Specification<Attendance> hasGradeLevel(GradeLevel gradeLevel) {
+        return (root, query, cb) -> gradeLevel == null
+                ? cb.conjunction()
+                : cb.equal(
+                root.get("studentSectionAssignment").get("section").get("gradeLevel"),
+                gradeLevel
+        );
     }
 
     public static Specification<Attendance> createdBetween(LocalDate start, LocalDate end) {

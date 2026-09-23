@@ -4,6 +4,7 @@ import com.edutrack.attendance.dto.request.ManualAttendanceRequest;
 import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
 import com.edutrack.attendance.service.AttendanceService;
+import com.edutrack.section.enums.GradeLevel;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,11 +32,13 @@ public class AttendanceController {
         return ResponseEntity.ok(attendanceService.createAttendance(request));
     }
 
-    //READ — role + row-level scoping enforced in the service
+
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     @GetMapping
-    public ResponseEntity<Page<AttendanceResponse>> getAttendance(Pageable pageable) {
-        return ResponseEntity.ok(attendanceService.getAttendance(pageable));
+    public ResponseEntity<Page<AttendanceResponse>> getAttendance(
+            @RequestParam(required = false) GradeLevel gradeLevel,
+            Pageable pageable) {
+        return ResponseEntity.ok(attendanceService.getAttendance(gradeLevel, pageable));
     }
 
     //MANUAL ATTENDANCE
