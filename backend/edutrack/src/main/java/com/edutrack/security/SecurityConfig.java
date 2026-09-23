@@ -71,8 +71,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/refresh",
-                                "/api/auth/password/forgot",
-                                "/api/auth/password/reset"
+                                "/api/auth/forgot-password/request",
+                                "/api/auth/forgot-password/verify"
                         ).permitAll()
                         .requestMatchers("/api/user/createTeacher").hasRole("ADMIN")
                         .anyRequest().authenticated())
