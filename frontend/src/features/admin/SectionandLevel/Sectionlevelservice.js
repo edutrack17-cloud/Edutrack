@@ -198,6 +198,29 @@ export async function getSchoolYearDropdown() {
   }
 }
 
+// CONNECT: PATCH /school-year/{id}/school-year-status/active
+// BUG FIX: cloneSectionsAcrossSchoolYears() (the Closed/Archived-source
+// "Copy Sections Into" flow) never touches school year status - only
+// startNewSchoolYear() above does that, and only for an Active source.
+// So copying sections into a Planning target from a Closed source left
+// that target stuck on "Planning" forever, with no year ever becoming
+// Active again. This lets handleStartNewSchoolYear() (Sectionlevelpage.jsx)
+// activate the target itself right after a successful copy - same PATCH
+// the School Year page's own "Mark Active" row action already uses. The
+// backend's "only one Active school year" rule (SchoolYearService -
+// ActiveSchoolYearAlreadyExists / pessimistic lock) still applies: if
+// another year is already Active, this call fails and the caller should
+// treat it as "sections copied, but activation failed" rather than a
+// hard error.
+export async function activateSchoolYear(schoolYearId) {
+  try {
+    const response = await sectionApi.patch(`/school-year/${schoolYearId}/school-year-status/active`);
+    return response.data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to mark school year as active"));
+  }
+}
+
 // CONNECT: GET /api/section/dropdown
 // Returns active sections belonging to the currently-active school year
 // (unpaginated). Used as a live preview of which sections would be carried
@@ -220,16 +243,25 @@ export async function getSectionDropdown(gradeLevel) {
 }
 
 // CONNECT: POST /api/section/school-year/new-school-year
-// Closes the source school year, sets the target as active, and clones
-// the source's sections (optionally filtered by gradeLevel) into it.
-// Returns the newly created SectionResponse list.
+// Clones the source's sections (optionally filtered by gradeLevel) into
+// the target, closes the source IF it was Active, and activates the
+// target IF it was Planning. Returns the newly created SectionResponse
+// list.
 //
-// Only ever call this when the chosen source IS the currently-active
-// school year - the backend looks up "the" active year to close via its
-// own status query, independent of whatever sourceSchoolYearId is sent,
-// so calling this with a Closed year as the source would still end up
-// closing whatever unrelated year happens to be active right now. For a
-// Closed source, use cloneSectionsAcrossSchoolYears() below instead.
+// CORRECTED: this reads/writes the exact sourceSchoolYearId/
+// targetSchoolYearId sent in the request (SectionService.newSchoolYear
+// on the backend) - it does NOT look up "the" active year separately, so
+// it's safe to call with a Closed source too. The real reason
+// cloneSectionsAcrossSchoolYears() exists as a separate path is a
+// different backend rule: this endpoint rejects the whole call
+// (SchoolYearAlreadyHasSections) the moment the target already has ANY
+// active section, so it can only ever be used ONCE per target - it can't
+// support copying one grade level in now and another later. Use
+// cloneSectionsAcrossSchoolYears() whenever the clone-into-target needs
+// to be repeatable (duplicates skipped instead of the whole call
+// failing), which is why the Closed/Archived-source ("Copy Sections
+// Into") flow uses it even though this endpoint would also technically
+// accept a Closed source.
 export async function startNewSchoolYear(data) {
   try {
     const response = await sectionApi.post("/section/school-year/new-school-year", data);

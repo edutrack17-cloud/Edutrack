@@ -23,12 +23,13 @@ function PromoteStudentTable({ students, selectedIds, onToggleSelect, canBulkSel
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
       <table className="w-full min-w-160 table-fixed border-collapse">
         <colgroup>
-          <col className="w-[8%]" />
-          <col className="w-[24%]" />
+          <col className="w-[7%]" />
+          <col className="w-[20%]" />
+          <col className="w-[12%]" />
           <col className="w-[15%]" />
-          <col className="w-[18%]" />
-          <col className="w-[18%]" />
-          <col className="w-[17%]" />
+          <col className="w-[14%]" />
+          <col className="w-[16%]" />
+          <col className="w-[16%]" />
         </colgroup>
         <thead className="bg-primary">
           <tr>
@@ -39,6 +40,13 @@ function PromoteStudentTable({ students, selectedIds, onToggleSelect, canBulkSel
             <th className={thClass}>Name</th>
             <th className={thClass}>Current Level</th>
             <th className={thClass}>Section</th>
+            {/* Section names get reused across school years (a new
+                intake can land in a section with the same name as one
+                left over from the year that just closed) - without this
+                column those two look identical, which is exactly what
+                made a closed-year straggler indistinguishable from a
+                brand-new student in this same table. */}
+            <th className={thClass}>School Year</th>
             <th className={thClass}>LRN</th>
             <th className={thClass}>RFID Tag</th>
           </tr>
@@ -47,7 +55,7 @@ function PromoteStudentTable({ students, selectedIds, onToggleSelect, canBulkSel
         <tbody>
           {students.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-6 text-center text-sm text-gray">
+              <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray">
                 No students found.
               </td>
             </tr>
@@ -90,6 +98,9 @@ function PromoteStudentTable({ students, selectedIds, onToggleSelect, canBulkSel
                 <td className={tdClass}>{formatGradeLevel(student.section?.gradeLevel)}</td>
                 <td className={tdClass} title={student.section?.sectionName || undefined}>
                   {student.section?.sectionName ?? "—"}
+                </td>
+                <td className={tdClass} title={student.section?.schoolYear || undefined}>
+                  {student.section?.schoolYear ?? "—"}
                 </td>
                 <td className={tdClass}>{student.lrn}</td>
                 <td className={tdClass}>{student.rfid}</td>

@@ -11,7 +11,18 @@ import { createApiClient } from "../../../services/apiClient"; // TODO: adjust t
 // that's an acceptable, existing trade-off.
 const studentApi = createApiClient();
 
-function getErrorMessage(error, fallback) {
+// forbiddenMessage is optional: pass it from a call site when a 403 there
+// specifically means "you're not this student's adviser" (promote/
+// graduate), so the person sees that instead of a generic failure. This
+// is a frontend-only mitigation - it does NOT grant teachers the ability
+// to promote/graduate; that still needs a backend fix to
+// StudentController's promoteStudents() @PreAuthorize (it currently
+// references a nonexistent #studentId, so TEACHER can never pass it -
+// see the message drafted for the backend dev). Once that's fixed
+// server-side, a teacher who really is the adviser just won't hit this
+// branch anymore.
+function getErrorMessage(error, fallback, forbiddenMessage) {
+  if (forbiddenMessage && error?.response?.status === 403) return forbiddenMessage;
   const data = error?.response?.data;
   if (typeof data === "string" && data.trim()) return data;
   if (data?.message) return data.message;
@@ -47,8 +58,51 @@ function mapSections(data) {
 // runs this through StudentSectionAssignmentSpecification.matchesSearch()
 // - matches student name (first/middle/last) OR lrn, across the full
 // dataset, not just the current page.
+//
+// FIX: leftover students from a CLOSED/ARCHIVED school year kept showing
+// up here after a school-year rollover, unlike the Enrollment page.
+// Cause: this never sent `schoolYearStatuses`, and per StudentService.
+// getStudents()'s own comment, omitting it means "every school year" -
+// it only SORTS active-year students first within a page, it doesn't
+// exclude old ones. So a student whose latest assignment was still
+// `enrolled` in a year that has since closed (i.e. nobody promoted/
+// graduated them before the rollover) kept appearing indefinitely.
+// enrollmentService.js's getStudents() already avoids this by sending
+// `schoolYearStatuses: "active"` whenever its School Year filter is on
+// the default "" (current year) option.
+//
+// FOLLOW-UP FIX: sending ONLY "active" overcorrected - it made the
+// still-un-promoted students disappear completely, with no way to
+// select and promote them anymore. Cause: Sectionlevelservice.js's
+// startNewSchoolYear() closes the SOURCE school year the moment a new
+// one goes active ("closes the source IF it was Active" - see its own
+// comment). That only flips the YEAR's status; it does NOT touch each
+// student's current assignment (leftAt IS NULL), which still points at
+// their old section. So right after "Start New School Year," every
+// not-yet-promoted student's current section sits in a year that's now
+// "closed," not "active" - and they'd silently fall out of this list
+// with no way back in, even though these are exactly the students this
+// page exists to handle (e.g. last year's Grade 4 -> this year's
+// Grade 5). Now sending both "active" and "closed" keeps ARCHIVED years
+// excluded (the original fix above still holds - those are fully done,
+// nobody's left to promote) while still surfacing students stuck in a
+// year that just closed. "planning" stays excluded too - a planning
+// year has no student assignments yet. Sent as one comma-separated
+// string rather than an array, since StudentSectionAssignmentSpecification.
+// hasSchoolYearStatusIn() (what schoolYearStatuses is built on) takes a
+// Collection, and axios's default array serialization adds `[]` to the
+// key, which Spring won't bind back to the same param name - a plain
+// comma-separated value avoids that mismatch. promoteStudents()/
+// graduateStudent() still only ever WRITE into the current active
+// year's sections (they reject an inactive-year target server-side) -
+// this only widens which students can be picked as the SOURCE of a
+// promotion, not where they can be promoted TO. Backend note (didn't
+// touch it, just flagging): haven't seen StudentController.java in this
+// conversation, so double check it actually binds schoolYearStatuses as
+// a comma-splittable List<SchoolYearStatus> the way the Specification
+// layer implies - if it expects something else, this is a one-line fix.
 export async function getPromotableStudents({ gradeLevel, section, search, page = 0, size = 10, signal } = {}) {
-  const params = { studentStatus: "enrolled", page, size };
+  const params = { studentStatus: "enrolled", schoolYearStatuses: "active,closed", page, size };
   if (gradeLevel) params.gradeLevel = gradeLevel;
   if (section) params.sectionName = section;
   if (search) params.search = search;
@@ -182,9 +236,11 @@ export async function getSectionsByAdviser(userId) {
 // The intended design was to promote a student into a section
 // belonging to the school's NEXT (planning) school year, so the
 // current year's roster stays untouched until that year actually
-// starts. That is NOT supported by the backend today:
-//   - SectionController's GET /section/dropdown only accepts
-//     `gradeLevel` - there is no schoolYearStatus param to send.
+// starts. That is NOT supported by the backend today (confirmed against
+// SectionController.java):
+//   - GET /section/dropdown only accepts `gradeLevel` - there is no
+//     schoolYearId/schoolYearStatus param to send, and no other section
+//     endpoint exposes one either.
 //   - SectionSpecification.hasSchoolYearStatus() is hardcoded to
 //     SchoolYearStatus.active, so even if a param existed, there's no
 //     query path to `planning` sections through this endpoint.
@@ -193,21 +249,54 @@ export async function getSectionsByAdviser(userId) {
 //     target section whose school year isn't active (throws
 //     InactiveSectionNotAllowed).
 //
-// So for now this reuses the same current-active-school-year dropdown
-// as getCurrentSections() above - meaning "Promote" moves a student to
-// a next-grade-level section within the SAME school year, not a future
-// one. Kept as its own function (instead of just calling
-// getCurrentSections directly from the modal) so that once the backend
-// adds real planning-year support, only THIS function needs to change
-// (add the schoolYearStatus param here) - nothing else in the modal
-// or page needs to be touched.
+// So for now this hits the same current-active-school-year dropdown as
+// getCurrentSections() above - meaning "Promote" moves a student to a
+// next-grade-level section within the SAME (active) school year, not a
+// future one. Kept as its own function (instead of just calling
+// getCurrentSections/fetchSectionsDropdown directly from the modal) so
+// that once the backend adds real planning-year support, only THIS
+// function needs to change - nothing else in the modal or page needs
+// to be touched.
+//
+// DELIBERATELY BYPASSES sectionsDropdownCache (unlike getCurrentSections,
+// which shares it). This is what decides which real section id gets
+// written to a student's record via promoteStudents(). Since GET
+// /section/dropdown has no way to ask for a *specific* school year -
+// only "whatever's active right now" - the only signal this function
+// has for "which school year" is the moment it's called. A cached hit
+// here would keep offering sections from whatever WAS active up to 30s
+// ago even if an admin just changed the active school year in the
+// meantime (e.g. SchoolyearmanagementPage marking a new year Active,
+// closing the one this student's current section belongs to) - which
+// lets a promotion land a student in a section tied to the wrong
+// (no-longer-active) school year even though "Promote" is supposed to
+// always move them into the CURRENT active year. Fetching fresh every
+// time guarantees alignment with whichever year is active at the exact
+// moment of promotion. This only costs a network call when the modal
+// opens or the target level changes, not on every render, so skipping
+// the cache here has no real performance downside.
 export async function getTargetSections(gradeLevel) {
+  const params = {};
+  if (gradeLevel) params.gradeLevel = gradeLevel;
+
   try {
-    return await fetchSectionsDropdown(gradeLevel);
+    const { data } = await studentApi.get("/section/dropdown", { params });
+    return mapSections(data);
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to load sections"));
   }
 }
+
+// FRONTEND-ONLY MITIGATION for the backend promoteStudents() bug
+// (StudentController's @PreAuthorize checks a nonexistent #studentId,
+// so TEACHER can never pass it - see PROMOTE_PERMISSION_MESSAGE below).
+// This does not grant the permission; it just turns the resulting 403
+// into a message that tells the adviser what's actually going on
+// instead of a generic "Failed to promote students".
+const PROMOTE_PERMISSION_MESSAGE =
+  "You don't have permission to promote these students yet. Make sure you're their adviser, or ask an admin to do it.";
+const GRADUATE_PERMISSION_MESSAGE =
+  "You don't have permission to graduate this student yet. Make sure you're their adviser, or ask an admin to do it.";
 
 export async function promoteStudents(studentIds, targetSectionId) {
   try {
@@ -217,7 +306,7 @@ export async function promoteStudents(studentIds, targetSectionId) {
     });
     return data;
   } catch (error) {
-    throw new Error(getErrorMessage(error, "Failed to promote students"));
+    throw new Error(getErrorMessage(error, "Failed to promote students", PROMOTE_PERMISSION_MESSAGE));
   }
 }
 
@@ -247,7 +336,10 @@ export async function graduateStudents(studentIds, remarks = "", leftAt = new Da
       const data = await graduateOneStudent(studentId, remarks, leftAt);
       results.succeeded.push(data);
     } catch (error) {
-      results.failed.push({ studentId, message: getErrorMessage(error, "Failed to graduate student") });
+      results.failed.push({
+        studentId,
+        message: getErrorMessage(error, "Failed to graduate student", GRADUATE_PERMISSION_MESSAGE),
+      });
     }
   }
 

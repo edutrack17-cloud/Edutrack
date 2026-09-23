@@ -19,6 +19,13 @@ export const STATUS_STYLES = {
   },
 };
 
+// Matches the "No record" legend swatch below (border-gray-300 bg-gray-100).
+// FIX: this was previously never applied to actual cells - a day with no
+// mark just fell through to cellClass "" (plain white, same as the table's
+// own background), so every unmarked day looked identical to "nothing
+// rendered here" instead of a visibly distinct "no record" state.
+const NO_RECORD_CELL_CLASS = "border border-gray-300 bg-gray-100";
+
 // Props (all coming from Sf2attendancepage.jsx, which gets them from
 // GET /api/schoolform/sf2/table via Sf2attendanceservice.js):
 //
@@ -33,7 +40,7 @@ export const STATUS_STYLES = {
 //   emptyMessage - what to show when there are no rows to display
 //
 // A day with no attendance mark (no record yet, or on_school on the
-// backend) renders as an empty cell instead of crashing.
+// backend) now renders with NO_RECORD_CELL_CLASS instead of a plain cell.
 function Sf2AttendanceTable({
   records = [],
   schoolDays = [],
@@ -143,7 +150,7 @@ function Sf2AttendanceTable({
                       <td
                         key={schoolDay.date}
                         className={`whitespace-nowrap px-2 py-2 text-center text-xs font-bold sm:text-sm ${
-                          dayStatus ? dayStatus.cellClass : ""
+                          dayStatus ? dayStatus.cellClass : NO_RECORD_CELL_CLASS
                         }`}
                       >
                         {dayStatus ? dayStatus.label : ""}

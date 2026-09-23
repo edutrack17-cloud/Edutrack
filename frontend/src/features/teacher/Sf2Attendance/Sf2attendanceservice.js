@@ -3,7 +3,17 @@
 // Read side of the SF2 feature:
 //
 //   fetchSf2Sections()  -> GET /api/section/dropdown
-//                          (SectionController#sectionDropdown, ADMIN + TEACHER)
+//                          (SectionController#sectionDropdown, ADMIN + TEACHER -
+//                          but NOT adviser-scoped: it hands back the same full
+//                          list to both roles. ADMIN only - see the next line.)
+//   fetchSf2SectionsByAdviser(userId) -> GET /api/section/adviser/{userId}
+//                          (SectionController#readSectionByAdviser) - the
+//                          TEACHER-scoped list. Same split EnrollmentPage.jsx's
+//                          loadSections() already uses (getSections() vs
+//                          getSectionsByAdviser() in enrollmentService.js).
+//                          A teacher with nothing assigned yet gets a normal
+//                          200 [], not a 404 - so an empty array here is a
+//                          successful result, not an error.
 //   fetchSf2Table()     -> GET /api/schoolform/sf2/table?sectionId=&schoolYearId=&period=yyyy-MM
 //                          (SF2ReportController#getSF2Table -> SF2TableService)
 //
@@ -73,6 +83,30 @@ export async function fetchSf2Sections() {
     );
   }
 
+  return (response.data ?? []).map(mapSection);
+}
+
+// ADMIN only in practice - see fetchSf2SectionsByAdviser() below for what a
+// TEACHER should call instead. This endpoint isn't adviser-scoped at all
+// (confirmed against SectionController.java), so calling it for a teacher
+// would show every section in the school, not just theirs.
+export async function fetchSf2SectionsByAdviser(userId) {
+  let response;
+  try {
+    response = await apiClient.get(`/section/adviser/${userId}`);
+  } catch (error) {
+    throw new Error(
+      resolveErrorMessage(error, {
+        forbidden: "You're not authorized to view sections.",
+        notFound: "Sections could not be found.",
+        fallback: "Failed to load your assigned section. Please try again.",
+      })
+    );
+  }
+
+  // /section/adviser/{userId} returns the same SectionResponse shape as
+  // /section/dropdown, so the same mapper applies. [] is a normal result
+  // here (a teacher with no section assigned yet), not an error.
   return (response.data ?? []).map(mapSection);
 }
 

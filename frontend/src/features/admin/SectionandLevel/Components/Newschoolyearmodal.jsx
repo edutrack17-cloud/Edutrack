@@ -389,7 +389,8 @@ function Newschoolyearmodal({
                     {isSelectedSourcePast ? (
                       <>
                         Copies a grade level's sections - or all of them at once - into
-                        a Planning or Active year. Duplicates are skipped, and the
+                        a Planning or Active year. A Planning target becomes Active once
+                        sections are copied in. Duplicates are skipped, and the
                         originals stay put.
                       </>
                     ) : (
@@ -537,7 +538,7 @@ function Newschoolyearmodal({
                           ? "Will become the new Active school year."
                           : selectedTarget?.status === "active"
                             ? "Sections are added into the current Active school year."
-                            : 'Stays "Planning" - sections are just copied in.'}
+                            : "Will become Active once sections are copied in."}
                       </p>
                     )}
                   </div>

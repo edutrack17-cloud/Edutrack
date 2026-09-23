@@ -30,6 +30,25 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
   // "Grade_4" string enum, not a bare number.
   const currentGradeLevel = students?.[0]?.section?.gradeLevel ?? null;
   const currentSectionName = students?.[0]?.section?.sectionName ?? "";
+  const currentSchoolYear = students?.[0]?.section?.schoolYear ?? "";
+
+  // SAFETY CHECK: section NAMES repeat across school years (a section
+  // that just closed and a brand-new one can share a name, e.g. both
+  // called "Molave"), and the roster/filter on PromoteStudentPage
+  // matches by name - not by the actual Section row - so a batch built
+  // there (especially via "Select All") can silently mix a closed-year
+  // straggler in with a same-named current-year section that a brand-
+  // new student was just enrolled into. sectionId is the one field
+  // that's always unique per real Section row, so that's what's checked
+  // here rather than gradeLevel/sectionName/schoolYear individually -
+  // any of those could coincidentally match (or not) while sectionId
+  // still tells the real story.
+  const distinctSectionIds = new Set(
+    (students || [])
+      .map((student) => student.section?.sectionId)
+      .filter((id) => id !== undefined && id !== null)
+  );
+  const hasMixedSections = distinctSectionIds.size > 1;
 
   const isGraduating = currentGradeLevel === "Grade_6";
   const availableLevels = nextGradeLevels(currentGradeLevel);
@@ -114,7 +133,7 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
     setTargetSection("");
   }
 
-  const canConfirm = !isSubmitting && (isGraduating || Boolean(targetSection));
+  const canConfirm = !isSubmitting && !hasMixedSections && (isGraduating || Boolean(targetSection));
   const showNoTargetSectionsWarning =
     !isGraduating && targetLevel && targetSections.length === 0 && !sectionsError;
 
@@ -140,19 +159,39 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
             <div className="max-h-28 overflow-y-auto rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
               {/* StudentResponse only has a combined fullName, not
                   firstName/lastName - same backend gap EditStudentModal
-                  already works around. */}
+                  already works around. Grade/Section/School Year shown
+                  per student (not just once for the whole batch) so a
+                  mismatched one - e.g. a different actual section that
+                  happens to share the same name and grade - is visible
+                  right here instead of hidden behind one shared summary. */}
               {students.map((student) => (
-                <p key={student.studentId}>{student.fullName}</p>
+                <div key={student.studentId} className="flex items-center justify-between gap-2 py-0.5">
+                  <span className="truncate">{student.fullName}</span>
+                  <span className="shrink-0 text-xs text-gray-500">
+                    {formatGradeLevel(student.section?.gradeLevel)} · {student.section?.sectionName ?? "—"} ·{" "}
+                    {student.section?.schoolYear ?? "—"}
+                  </span>
+                </div>
               ))}
             </div>
           </div>
 
-          <div>
-            <p className="mb-1 text-sm font-semibold text-primary">Current Level and Section</p>
-            <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-              {formatGradeLevel(currentGradeLevel)} - {currentSectionName}
+          {hasMixedSections ? (
+            <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+              <p className="font-semibold">These students aren't all from the same section.</p>
+              <p className="mt-1 text-gray-700">
+                Please deselect students until everyone is from the same section, then try again.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div>
+              <p className="mb-1 text-sm font-semibold text-primary">Current Level and Section</p>
+              <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+                {formatGradeLevel(currentGradeLevel)} - {currentSectionName}
+                {currentSchoolYear ? ` (${currentSchoolYear})` : ""}
+              </div>
+            </div>
+          )}
 
           {sectionsError && <p className="text-sm text-danger">{sectionsError}</p>}
 

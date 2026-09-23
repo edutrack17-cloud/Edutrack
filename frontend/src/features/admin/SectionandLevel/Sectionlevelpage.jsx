@@ -19,6 +19,7 @@ import {
   getSchoolYearDropdown,
   startNewSchoolYearPreservingAdvisers,
   cloneSectionsAcrossSchoolYears,
+  activateSchoolYear,
 } from "./Sectionlevelservice";
 import { logActivity } from "../ActivityLogs/Activitylogservice";
 
@@ -426,17 +427,58 @@ function Sectionlevelpage() {
           throw new Error(failed.map((item) => `${item.sectionName}: ${item.reason}`).join(" "));
         }
 
+        // BUG FIX: unlike the Active-source path above, cloneSectionsAcrossSchoolYears()
+        // never touches school year status - so a Planning target used to stay
+        // "Planning" forever after a Closed/Archived-source copy, with no year
+        // ever becoming Active again. A Planning target that just received
+        // sections is ready to go live, so activate it the same way "Start New
+        // School Year" already would. Only attempted once per submit (not once
+        // per grade level someone copies in over multiple visits), and it's
+        // best-effort: the backend still enforces "only one Active school year"
+        // (ActiveSchoolYearAlreadyExists), so if another year is already Active
+        // this simply fails and the copied sections are left exactly as they are.
+        //
+        // NOTE: targetYear (above) came from [...planningSchoolYears, ...schoolYears],
+        // and getSchoolYears() (Sectionlevelservice.js) only returns {id, label} -
+        // no status - so targetYear.status is always undefined and can't be used
+        // here. allSchoolYears (getSchoolYearDropdown()) is the one list that
+        // actually carries each year's current status, so look the target up
+        // there instead - same source newSchoolYearSourceOptions already trusts
+        // for the source year's status above.
+        const targetSchoolYearRecord = allSchoolYears.find(
+          (sy) => sy.id === payload.targetSchoolYearId
+        );
+        const targetIsPlanning =
+          String(targetSchoolYearRecord?.status).toLowerCase() === "planning";
+
+        let activated = false;
+        let activateErrorMessage = "";
+        if (targetIsPlanning) {
+          try {
+            await activateSchoolYear(payload.targetSchoolYearId);
+            activated = true;
+          } catch (activateError) {
+            activateErrorMessage = activateError.message;
+          }
+        }
+
+        const targetYearLabel = activated ? `"${targetYear.label}" is now Active. ` : "";
         const shortfallNote = failed.length > 0 ? ` ${failed.length} couldn't be copied.` : "";
+        const activateNote = activateErrorMessage
+          ? ` Couldn't mark "${targetYear?.label}" Active: ${activateErrorMessage}`
+          : "";
+
         showToast(
-          `${created.length} section(s) copied into "${targetYear?.label}".${shortfallNote}`,
-          failed.length > 0 ? "error" : undefined
+          `${targetYearLabel}${created.length} section(s) copied into "${targetYear?.label}".${shortfallNote}${activateNote}`,
+          failed.length > 0 || activateErrorMessage ? "error" : undefined
         );
         logActivity(
           "Sections Cloned",
-          `${created.length} section(s) copied from "${sourceYear.label}" into "${targetYear?.label}".` +
+          `${targetYearLabel}${created.length} section(s) copied from "${sourceYear.label}" into "${targetYear?.label}".` +
             (failed.length > 0
               ? ` ${failed.length} failed: ${failed.map((item) => item.sectionName).join(", ")}.`
-              : "")
+              : "") +
+            (activateErrorMessage ? ` Activation failed: ${activateErrorMessage}` : "")
         );
       }
 

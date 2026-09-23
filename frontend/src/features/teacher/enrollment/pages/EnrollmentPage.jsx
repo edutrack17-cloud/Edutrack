@@ -300,11 +300,40 @@ function EnrollmentPage() {
       } else {
         showToast("Student enrolled successfully.", "success");
       }
-      // Jump back to page 1 so the newly-enrolled student is actually
-      // visible, instead of silently staying on whatever page the admin
-      // was on. If already on page 1, setCurrentPage(1) is a no-op state
-      // change and won't re-trigger the loadStudents() effect below, so
-      // call it directly in that case to still refresh the list.
+      // OPTIMISTIC INSERT: show the new/reactivated row right away
+      // instead of waiting on loadStudents() below to resolve. That
+      // await usually only takes a moment, but the row wasn't showing
+      // up even after it resolved for some admins - a listing endpoint
+      // read shortly after its own write can lag behind (cache, replica,
+      // etc.) on the backend, and that's outside anything the frontend
+      // controls. This makes the add feel instant regardless, and
+      // doesn't depend on that GET call reflecting the write yet.
+      //
+      // Only splice it in when the CURRENT view could legitimately
+      // contain it: page 1, and no filter that would otherwise hide it
+      // (a Level/Section/Status filter for a different value than this
+      // student's, a Search term that doesn't match them, or a School
+      // Year filter pinned to a past year). Outside that, don't guess -
+      // let the reload below (or the jump to page 1) be the only source
+      // of truth, same as before. Dedupes by studentId first, in case
+      // this is a reactivation of a record already sitting in the
+      // current (unfiltered) list under its old status.
+      const isDefaultUnfilteredView =
+        currentPage === 1 && !level && !section && !status && !schoolYear && !debouncedSearch;
+      if (isDefaultUnfilteredView) {
+        setStudents((prev) =>
+          [student, ...prev.filter((s) => s.studentId !== student.studentId)].slice(0, PAGE_SIZE)
+        );
+      }
+
+      // Still reconcile with the backend right after - this is what
+      // gets the correct sort order, "Page X of Y", and every row the
+      // guard above chose not to touch. Jump back to page 1 first so the
+      // student is actually on the page being reloaded, instead of
+      // silently staying on whatever page the admin was on. If already
+      // on page 1, setCurrentPage(1) is a no-op state change and won't
+      // re-trigger the loadStudents() effect below, so call it directly
+      // in that case to still refresh the list.
       if (currentPage !== 1) {
         setCurrentPage(1);
       } else {

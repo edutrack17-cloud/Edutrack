@@ -2,21 +2,43 @@ import React from "react";
 import { X } from "lucide-react";
 import AttendanceStatus from "./AttendanceStatus";
 
+// Same formatter AttendanceTable already uses for the Time In/Out
+// columns (12-hour, no leading zero) - this modal used to print the
+// raw "HH:MM" value straight from the record instead, so the same
+// attendance could read "09:39" in the modal but "9:39 AM" in the
+// table it was opened from.
+function formatDisplayTime(hhmm) {
+  if (!hhmm) return "";
+  const [hoursStr, minutesStr] = hhmm.split(":");
+  const date = new Date();
+  date.setHours(Number(hoursStr), Number(minutesStr));
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+}
+
+// Same label-above-value field ViewStudentModal's Details tab uses
+// (InfoField there) - reused here (not imported, since the two modals
+// live in different feature folders/services) so the two "View" modals
+// in the app read as one consistent family: same header treatment,
+// same section-label style, same field layout, same blue Close button
+// - instead of this one looking like a different, older component.
+function InfoField({ label, value }) {
+  return (
+    <div>
+      <p className="mb-1 text-sm font-semibold text-gray-700">{label}</p>
+      <p className="text-sm text-gray-500">{value || "—"}</p>
+    </div>
+  );
+}
+
 function ViewAttendanceModal({ isOpen, onClose, record }) {
   if (!isOpen || !record) return null;
 
   const { todayAttendance } = record;
 
-  const rows = [
-    { label: "Status", value: todayAttendance?.status || "", isStatus: true },
-    { label: "Time In", value: todayAttendance?.timeIn || "" },
-    { label: "Time Out", value: todayAttendance?.timeOut || "" },
-  ];
-
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-6 py-4">
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+        <div className="flex shrink-0 items-center border-b border-gray-200 px-4 py-4 sm:px-6">
           <div className="w-6" />
           <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
             Attendance Record
@@ -30,33 +52,59 @@ function ViewAttendanceModal({ isOpen, onClose, record }) {
           </button>
         </div>
 
-        <div className="flex flex-col gap-4 px-6 py-6">
-          <div>
-            <p className="text-sm font-semibold text-gray-700">{record.name}</p>
-            <p className="text-xs text-gray-500">
-              {record.gradeLevel} - {record.section}
-            </p>
-          </div>
-
-          <div className="flex flex-col divide-y divide-gray-100 rounded-lg border border-gray-100">
-            {rows.map((row) => (
-              <div key={row.label} className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-xs font-medium text-gray-500">{row.label}</span>
-                {row.isStatus && todayAttendance?.status ? (
-                  <AttendanceStatus status={todayAttendance.status} />
-                ) : (
-                  <span className="text-sm font-semibold text-gray-700">{row.value}</span>
-                )}
+        {/* text-left here on purpose: this modal is rendered from inside
+            AttendanceTable's ActionKebab, which sits inside a <td> that
+            has text-center on it (tdClass) - without resetting it back
+            here, every heading/label/value below silently inherits that
+            centering instead of matching ViewStudentModal's left-
+            aligned look, even though the classes on each one are
+            otherwise identical. ViewStudentModal doesn't need this
+            because it's rendered outside any <td>, as a sibling of the
+            table itself. */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 text-left sm:px-6">
+          <div className="flex flex-col gap-7">
+            <div>
+              <h3 className="mb-4 text-sm font-bold tracking-wide text-primary uppercase">
+                Student Information
+              </h3>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+                <InfoField label="Name" value={record.name} />
+                <InfoField label="Level" value={record.gradeLevel} />
+                <InfoField label="Section" value={record.section} />
+                <InfoField label="LRN" value={record.lrn} />
+                <InfoField label="RFID UID" value={record.rfid} />
               </div>
-            ))}
+            </div>
+
+            <div>
+              <h3 className="mb-4 mt-2 text-sm font-bold tracking-wide text-primary uppercase">
+                Today's Attendance
+              </h3>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+                <div>
+                  <p className="mb-1 text-sm font-semibold text-gray-700">Status</p>
+                  {todayAttendance?.status ? (
+                    <AttendanceStatus status={todayAttendance.status} />
+                  ) : (
+                    <p className="text-sm text-gray-500">—</p>
+                  )}
+                </div>
+                <InfoField label="Time In" value={formatDisplayTime(todayAttendance?.timeIn)} />
+                <InfoField label="Time Out" value={formatDisplayTime(todayAttendance?.timeOut)} />
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex border-t border-gray-200 px-6 py-4">
+        {/* Solid blue, matching ViewStudentModal's Close button - this
+            was the app's one red (bg-secondary) Close button on an
+            otherwise plain informational modal, which read as a
+            destructive/cancel action rather than "just close this". */}
+        <div className="shrink-0 border-t border-gray-200 px-4 py-4 sm:px-6">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+            className="w-full cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
           >
             Close
           </button>

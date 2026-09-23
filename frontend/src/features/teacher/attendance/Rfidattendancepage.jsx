@@ -149,6 +149,15 @@ function sameTodayAttendance(a, b) {
   );
 }
 
+// Collapses whitespace and case so two names that are the SAME student
+// but were built by two different bits of backend code (roster's
+// student.fullName vs attendance's NameUtil.buildFullName) still match
+// even if one has an extra space or different casing than the other.
+// Only used as a lookup key - never touches what's actually displayed.
+function normalizeName(name) {
+  return (name || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 // Merges today's attendance records (GET /api/attendance?sectionName=)
 // into roster rows. AttendanceResponse.java (backend) has NO rfid or
 // studentId field - only studentName - so matching by name is what
@@ -162,12 +171,12 @@ function mergeTodaysAttendance(rows, todaysAttendance) {
   const byName = new Map();
   for (const a of todaysAttendance) {
     if (a.rfid) byRfid.set(a.rfid, a);
-    else if (a.name) byName.set(a.name, a);
+    else if (a.name) byName.set(normalizeName(a.name), a);
   }
 
   let changed = false;
   const merged = rows.map((r) => {
-    const a = (r.rfid && byRfid.get(r.rfid)) || byName.get(r.name);
+    const a = (r.rfid && byRfid.get(r.rfid)) || byName.get(normalizeName(r.name));
     if (!a) return r;
     const next = { id: a.id, status: a.status, timeIn: a.timeIn, timeOut: a.timeOut };
     if (sameTodayAttendance(r.todayAttendance, next)) return r;
@@ -215,6 +224,21 @@ function RFIDAttendancePage() {
   const TAP_COOLDOWN_MS = 3000;
   const lastTapRef = useRef({ rfid: null, atMs: 0 });
 
+  // FIX: an accidental double tap (student taps again because the
+  // confirmation wasn't fast enough, or the reader "bounces") could slip
+  // past TAP_COOLDOWN_MS above - which only blocks a repeat of the SAME
+  // rfid within 3s - and then get treated by recordTap as a genuine
+  // second/dismissal tap, silently firing a time-out right after the
+  // present/time-in had just succeeded. This tracks, per rfid, the
+  // moment THIS page last confirmed someone present/timed-in; recordTap
+  // checks it (recentlyConfirmed*Ref.current.get(rfid)) before ever
+  // assuming a second tap means "they're leaving." 15s comfortably
+  // covers a nervous re-tap while staying far shorter than any real gap
+  // before a legitimate dismissal tap.
+  const DOUBLE_TAP_GRACE_MS = 15000;
+  const recentlyConfirmedPresentRef = useRef(new Map());
+  const recentlyConfirmedTimedInRef = useRef(new Map());
+
   const [records, setRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -244,6 +268,30 @@ function RFIDAttendancePage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // FIX: the roster (GET /api/student via loadRecords below) used to
+  // only fetch on mount and whenever level/section/search/page changed -
+  // so a student enrolled from the Enrollment page (a different tab/
+  // session) never showed up here until this page's filters were
+  // touched or the browser was reloaded. AttendaceFilters/
+  // Promotestudentpage.jsx already refresh their SECTION dropdowns this
+  // same way (bump a key on window focus/tab visibility) - this applies
+  // that same pattern to the roster itself so switching back to this
+  // tab is enough to pick up a newly-enrolled student.
+  const [rosterRefreshKey, setRosterRefreshKey] = useState(0);
+  useEffect(() => {
+    function handleRefetch() {
+      if (document.visibilityState === "visible") {
+        setRosterRefreshKey((prev) => prev + 1);
+      }
+    }
+    window.addEventListener("focus", handleRefetch);
+    document.addEventListener("visibilitychange", handleRefetch);
+    return () => {
+      window.removeEventListener("focus", handleRefetch);
+      document.removeEventListener("visibilitychange", handleRefetch);
+    };
+  }, []);
 
   const [pendingAssignmentId, setPendingAssignmentId] = useState(null);
 
@@ -343,26 +391,40 @@ function RFIDAttendancePage() {
         const cache = loadAttendanceCache();
         let merged = fetched.map((r) => (cache[r.rfid] ? { ...r, todayAttendance: cache[r.rfid] } : r));
 
-        // GET /api/attendance?sectionName= - only meaningful once a
-        // section is picked (same constraint "Mark Absent" already has).
-        // Matched by rfid, not assignmentId - see the comment on
-        // fetchTodaysAttendanceForSection in Attendanceservice.js for
-        // why. A failure here is non-fatal: the roster (and cache
-        // overlay above) are still usable, just without a fresher
-        // status than whatever was already cached.
-        if (section) {
-          try {
-            const todaysAttendance = await fetchTodaysAttendanceForSection(section);
-            merged = mergeTodaysAttendance(merged, todaysAttendance);
-          } catch (attendanceError) {
-            // Non-fatal (roster still usable without today's status), but
-            // it used to fail completely silently - a blank Status column
-            // looked identical whether nobody had tapped yet or this call
-            // just failed (429, network blip, etc). Logging it means a
-            // "why is this row blank" check starts in the console instead
-            // of guessing.
-            console.error("GET /api/attendance?sectionName=" + section + " failed:", attendanceError);
-          }
+        // GET /api/attendance?sectionName= - FIX: this used to only run
+        // "if (section)", i.e. only once a SPECIFIC Section was picked in
+        // the filter dropdown - picking just a Grade Level (or nothing)
+        // skipped it entirely. That gate never actually bought anything:
+        // AttendanceService.getAttendance on the backend ignores
+        // sectionName completely (see fetchTodaysAttendanceForSection's
+        // comment) and just returns the most recent records overall, so
+        // the param has never been required for this call to return
+        // useful data. With the gate in place, a guard's tap that set
+        // on_school in the database would sit there correctly, but this
+        // page would never ask for it unless a Section was explicitly
+        // selected - every row fell back to whatever this ONE browser's
+        // localStorage cache already had (see TODAY_ATTENDANCE_CACHE_KEY
+        // above), which is why the Status column could come up blank for
+        // guard taps, and why admin and teacher (two different browsers,
+        // two independent caches) could show two different things for
+        // the exact same student. Running this unconditionally means
+        // Status/Time In/Time Out load from the live backend regardless
+        // of which filters are set. Matched by rfid, not assignmentId -
+        // see the comment on fetchTodaysAttendanceForSection in
+        // Attendanceservice.js for why. A failure here is non-fatal: the
+        // roster (and cache overlay above) are still usable, just
+        // without a fresher status than whatever was already cached.
+        try {
+          const todaysAttendance = await fetchTodaysAttendanceForSection(section);
+          merged = mergeTodaysAttendance(merged, todaysAttendance);
+        } catch (attendanceError) {
+          // Non-fatal (roster still usable without today's status), but
+          // it used to fail completely silently - a blank Status column
+          // looked identical whether nobody had tapped yet or this call
+          // just failed (429, network blip, etc). Logging it means a
+          // "why is this row blank" check starts in the console instead
+          // of guessing.
+          console.error("GET /api/attendance failed:", attendanceError);
         }
 
         if (!ignore) {
@@ -383,7 +445,7 @@ function RFIDAttendancePage() {
     return () => {
       ignore = true;
     };
-  }, [currentPage, level, section, debouncedSearch]);
+  }, [currentPage, level, section, debouncedSearch, rosterRefreshKey]);
 
   // Keeps TODAY_ATTENDANCE_CACHE_KEY in sync with whatever this page
   // currently has on screen - covers every path that can set
@@ -410,14 +472,20 @@ function RFIDAttendancePage() {
   // only happens when the student taps THIS page's scanner
   // (PATCH /api/attendance/present) or via the manual Present action.
   //
-  // DEPENDS ON: GET /api/attendance?sectionName=. The AttendanceController
-  // this was checked against has no GET mapping at all, so the request
-  // comes back 404/405 and NOTHING can show "On School" on this page until
-  // the backend adds it. When that happens, this stops itself instead of
-  // firing a failing request every few seconds; once the endpoint exists
-  // it just works, no frontend change needed.
+  // DEPENDS ON: GET /api/attendance?sectionName=. This used to have no GET
+  // mapping at all on the backend, so the request came back 404/405 and
+  // NOTHING could show "On School" on this page - the 404/405 handling
+  // below stopped the polling in that case instead of retrying a failing
+  // request every few seconds. The endpoint exists now, but it's not
+  // scoped to sectionName or to today; fetchTodaysAttendanceForSection in
+  // Attendanceservice.js handles that gap by pulling a large page and
+  // filtering client-side, so no change was needed here.
   useEffect(() => {
-    if (role === "guard" || !section) return;
+    // FIX: was "role === 'guard' || !section" - same unnecessary Section
+    // requirement as the loadRecords fetch above, blocking the poll (and
+    // therefore any live "On School" update) whenever only a Grade Level
+    // was picked or no filter was set at all.
+    if (role === "guard") return;
 
     let ignore = false;
     let isRefreshing = false;
@@ -520,6 +588,21 @@ function RFIDAttendancePage() {
     );
   }
 
+  // timeOut() on the backend can fail with a plain 400 for two DIFFERENT
+  // reasons - NoClassromTap.java ("didn't tap their card on the classroom
+  // yet") and AlreadyTimedOut.java ("already marked as timed out") - and
+  // status code alone can't tell them apart, only the message text can
+  // (confirmed against both exception classes). Treating both as one
+  // generic "already-done" was wrong for the NoClassromTap case: a
+  // student who never got confirmed present in class isn't "done", they
+  // just haven't been tapped in yet.
+  function resolveTimeOutErrorAction(error) {
+    if (error.status !== 400) return "no-record";
+    const message = error.message || "";
+    if (/tap.*classroom/i.test(message)) return "no-classroom-tap";
+    return "already-done";
+  }
+
   async function recordTap(rfid) {
     const nowMs = Date.now();
     if (
@@ -546,19 +629,30 @@ function RFIDAttendancePage() {
       try {
         // POST /api/attendance (gate time-in)
         const timedIn = await timeInAttendance(rfid);
+        recentlyConfirmedTimedInRef.current.set(rfid, nowMs);
         setLastScan({ ...timedIn, action: "timed-in" });
         applyAttendanceUpdate(rfid, timedIn);
       } catch (timeInError) {
         if (timeInError.status === 409) {
-          // AlreadyHasARecord - already tapped in once today, so this
-          // second gate tap means the student is leaving campus.
+          // AlreadyHasARecord - normally means the student is leaving
+          // campus (their second gate tap of the day). FIX: an
+          // accidental double tap right after the first one also lands
+          // here (same 409), so check whether THIS page just confirmed
+          // their time-in a moment ago before assuming that - otherwise
+          // a nervous re-tap immediately recorded a leaving-campus time
+          // seconds after the student arrived.
+          const confirmedAtMs = recentlyConfirmedTimedInRef.current.get(rfid);
+          if (confirmedAtMs && nowMs - confirmedAtMs < DOUBLE_TAP_GRACE_MS) {
+            setLastScan({ action: "already-present" });
+            return;
+          }
           try {
             // PATCH /api/attendance/time-out
             const timedOut = await timeOutAttendance(rfid);
             setLastScan({ ...timedOut, action: "timed-out" });
             applyAttendanceUpdate(rfid, timedOut);
           } catch (timeOutError) {
-            setLastScan({ action: timeOutError.status === 400 ? "already-done" : "no-record" });
+            setLastScan({ action: resolveTimeOutErrorAction(timeOutError) });
           }
         } else {
           setLastScan({ action: "no-record" });
@@ -570,6 +664,7 @@ function RFIDAttendancePage() {
     try {
       // PATCH /api/attendance/present
       const markedPresent = await markAttendancePresent(rfid);
+      recentlyConfirmedPresentRef.current.set(rfid, nowMs);
       setLastScan({ ...markedPresent, action: "present" });
       applyAttendanceUpdate(rfid, markedPresent);
     } catch (presentError) {
@@ -584,17 +679,29 @@ function RFIDAttendancePage() {
         // already-absent student back in with a dateTimeOut.
         setLastScan({ action: "already-absent" });
       } else {
+        // Anything else here is typically the backend rejecting a second
+        // "present" call because the student already has one today. FIX:
+        // this used to fall straight into attempting a time-out no
+        // matter how it got here, so an accidental double tap right
+        // after a successful Present silently fired a time-out a few
+        // seconds later - a student who'd just arrived would look like
+        // they'd already gone home. Only treat it as a real dismissal
+        // tap once enough time has passed since THIS page last confirmed
+        // them present; a repeat within DOUBLE_TAP_GRACE_MS is almost
+        // certainly the same accidental tap, not someone leaving seconds
+        // after arriving.
+        const confirmedAtMs = recentlyConfirmedPresentRef.current.get(rfid);
+        if (confirmedAtMs && nowMs - confirmedAtMs < DOUBLE_TAP_GRACE_MS) {
+          setLastScan({ action: "already-present" });
+          return;
+        }
         try {
           // PATCH /api/attendance/time-out
           const timedOut = await timeOutAttendance(rfid);
           setLastScan({ ...timedOut, action: "timed-out" });
           applyAttendanceUpdate(rfid, timedOut);
         } catch (timeOutError) {
-          if (timeOutError.status === 400) {
-            setLastScan({ action: "already-done" });
-          } else {
-            setLastScan({ action: "no-record" });
-          }
+          setLastScan({ action: resolveTimeOutErrorAction(timeOutError) });
         }
       }
     }
@@ -750,9 +857,21 @@ function RFIDAttendancePage() {
                 </>
               )}
 
+              {lastScan.action === "already-present" && (
+                <p className="mt-6 text-sm font-semibold text-success">
+                  {role === "guard" ? "Already tapped in today" : "Already marked present today"}
+                </p>
+              )}
+
               {lastScan.action === "already-absent" && (
                 <p className="mt-6 text-sm font-semibold text-danger">
                   Already marked absent today
+                </p>
+              )}
+
+              {lastScan.action === "no-classroom-tap" && (
+                <p className="mt-6 text-sm font-semibold text-warning">
+                  Hasn't tapped in class yet
                 </p>
               )}
 

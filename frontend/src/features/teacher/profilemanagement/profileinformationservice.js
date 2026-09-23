@@ -67,7 +67,6 @@ api.interceptors.response.use(
 );
 
 // GET /api/user/{userId}  ->  UserResponse
-// @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')") - see UserController.
 export async function getUserProfile(userId) {
   const response = await api.get(`/${userId}`);
   return response.data;

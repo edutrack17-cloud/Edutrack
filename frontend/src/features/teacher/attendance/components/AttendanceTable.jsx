@@ -95,7 +95,9 @@ function ActionKebab({
   const state = getRowActionState(record.todayAttendance);
 
   if (state === "needs-present") {
-    return <span className="text-xs font-medium text-gray-400">Awaiting scanner tap</span>;
+    // Blank on purpose - On School rows get no Action label/menu until
+    // the student taps the classroom scanner.
+    return null;
   }
 
   function handleSelect(action) {

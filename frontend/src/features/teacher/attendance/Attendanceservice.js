@@ -42,6 +42,20 @@ function buildTodayDateTimeISO(hhmm) {
   return `${yyyy}-${mm}-${dd}T${hours}:${minutes}:00`;
 }
 
+// Same yyyy-mm-dd construction as buildTodayDateTimeISO above, but with no
+// time part - used by fetchTodaysAttendanceForSection to filter records
+// client-side. Built from LOCAL getFullYear/getMonth/getDate (not
+// toISOString, which is UTC and would roll over to the wrong day for a
+// few hours around PH midnight), so it lines up with the backend's
+// LocalDate.now() as long as the server also runs in PH time.
+function getTodayDateStr() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 // Backend enum values look like "Grade_6" (or "Grade_6 - Sampaguita" inside
 // gradeAndSection). The UI should always show "Grade 6", so normalize any
 // "Grade_<n>" occurrence to "Grade <n>" before it reaches a component.
@@ -147,12 +161,17 @@ export async function fetchStudentRecords({
   // server-side before).
   if (search) params.set("search", search);
   params.set("studentStatus", "enrolled");
-  // NOTE: deliberately NOT sending schoolYearStatuses. StudentService
-  // .getStudents treats it as "no filter" when omitted (and puts
-  // active-year students first within each page). Forcing "active" here
-  // emptied the roster whenever a section's school year wasn't literally
-  // `active`, so the table showed "No enrolled students found" and no
-  // tap/status could appear.
+  // UPDATED: now scoping to the active school year so a student who's
+  // still "enrolled" but hasn't been promoted into a section under this
+  // year yet (previous year now closed/archived) no longer shows up as a
+  // stale row. This used to be left off because forcing "active" emptied
+  // the roster - but that was from before schoolYearStatuses became a
+  // real optional List on the backend; StudentService now treats it as
+  // "no filter" only when omitted entirely, so a single value here is
+  // safe. If some currently-in-use school year turns out to still be
+  // sitting in "planning" status admin-side, add it here too:
+  // params.append("schoolYearStatuses", "planning")
+  params.set("schoolYearStatuses", "active");
   params.set("page", String(page - 1));
   params.set("size", "20");
 
@@ -198,19 +217,39 @@ export async function fetchStudentRecords({
 
 // GET /api/attendance?sectionName={sectionName}
 //
-// Backend now returns today's attendance for every currently-enrolled
-// assignment in a section (see AttendanceController.getTodaysAttendanceForSection).
-// Each record carries `rfid`, which is the only field the roster rows
-// (from fetchStudentRecords) and this response actually share - there's
-// no shared numeric id between them (fetchStudentRecords' `assignmentId`
-// is really just studentId, not the backend's real StudentSectionAssignment
-// id), so callers should merge these into a roster by rfid, the same way
-// RFIDAttendancePage's own live-tap handler (applyAttendanceUpdate)
-// already does.
+// UPDATED: the backend now has a GET /api/attendance mapping (it used to
+// have none at all, which is why RFIDAttendancePage's polling effect
+// still has 404/405 handling that stops itself - that's kept as a
+// defensive fallback in case the mapping ever disappears again, but it
+// shouldn't fire anymore). What's live right now
+// (AttendanceController.getAttendance -> AttendanceService.getAttendance)
+// is a plain paginated "every attendance record ever" endpoint: it has no
+// `sectionName` binding (the param is still sent below, harmlessly - a
+// Spring @RequestParam-less query param is just ignored - in case the
+// backend adds real support later) and no date filtering, and it returns
+// a Spring Page envelope ({content, totalPages, ...}), not a bare array,
+// so the old `Array.isArray(data) ? data : []` check used to always fall
+// through to [] here. This now:
+//   1. reads `data.content` instead of `data`
+//   2. asks for a big `size` so today's records - which sit at the front,
+//      since the backend sorts unsorted requests by attendanceId DESC -
+//      are guaranteed to be inside the one page fetched
+//   3. filters to today client-side by each record's dateTimeIn date
+// Records from OTHER sections coming back in that page are harmless -
+// RFIDAttendancePage's mergeTodaysAttendance only pulls matches for
+// names that exist in the (already section-filtered) roster, so any
+// extra rows are just never matched to anything.
+const TODAYS_ATTENDANCE_PAGE_SIZE = 1000;
+
 export async function fetchTodaysAttendanceForSection(sectionName) {
   try {
-    const { data } = await attendanceApi.get("/attendance", { params: { sectionName } });
-    return (Array.isArray(data) ? data : []).map(mapAttendanceRecord);
+    const { data } = await attendanceApi.get("/attendance", {
+      params: { sectionName, size: TODAYS_ATTENDANCE_PAGE_SIZE },
+    });
+    const content = Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : [];
+    const todayStr = getTodayDateStr();
+    const todaysRecords = content.filter((record) => formatDate(record.dateTimeIn) === todayStr);
+    return todaysRecords.map(mapAttendanceRecord);
   } catch (error) {
     throw buildAttendanceError(error, "GET /api/attendance");
   }
@@ -342,7 +381,25 @@ export function invalidateSectionsByAdviserCache(userId) {
   }
 }
 
-// GET /api/section/{userId}
+// GET /api/section/adviser/{userId} (SectionController.readSectionByAdviser)
+//
+// FIX: this used to call GET /api/section/{userId}. The backend later
+// split that path - it now means GET /api/section/{sectionId} (fetch
+// ONE section by its own id), and the adviser lookup moved to
+// /section/adviser/{userId} (see enrollmentService.js's
+// getSectionsByAdviser(), which already made this switch). This file
+// was never updated, so a teacher's request here was silently
+// resolving to an unrelated single SectionResponse object (whatever
+// section happened to have that sectionId) instead of their real
+// section list - which Array.isArray(data) below then reduced to [],
+// with no error, no catch-fallback, just an empty Grade Level/Section
+// dropdown for a teacher who genuinely has a section assigned.
+//
+// Also: an empty [] is a normal, successful "no assigned sections yet"
+// result on this endpoint (it used to 404), not an error - so it's
+// deliberately NOT cached, same as getSectionsByAdviser() in
+// enrollmentService.js. Otherwise a teacher who just got a section
+// assigned by an admin could still see "none" here for up to 30s.
 async function fetchRawSectionsByAdviser(userId) {
   const cached = sectionsByAdviserCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) {
@@ -356,16 +413,18 @@ async function fetchRawSectionsByAdviser(userId) {
   const request = (async () => {
     let data;
     try {
-      ({ data } = await attendanceApi.get(`/section/${userId}`));
+      ({ data } = await attendanceApi.get(`/section/adviser/${userId}`));
     } catch (error) {
-      throw new Error(`GET /api/section/${userId} failed (${error.response?.status})`);
+      throw new Error(`GET /api/section/adviser/${userId} failed (${error.response?.status})`);
     }
 
     const sections = Array.isArray(data) ? data : [];
-    sectionsByAdviserCache.set(userId, {
-      data: sections,
-      expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS,
-    });
+    if (sections.length > 0) {
+      sectionsByAdviserCache.set(userId, {
+        data: sections,
+        expiresAt: Date.now() + SECTIONS_CACHE_TTL_MS,
+      });
+    }
     return sections;
   })();
 

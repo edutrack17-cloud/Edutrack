@@ -276,7 +276,7 @@ export async function getStudents({ search, level, section, status, schoolYearSt
   }
 }
 
-// RFID OWNERSHIP INDEX (client-side pre-check)
+// RFID OWNERSHIP CHECK (pre-check before POST/PATCH)
 //
 // WHY THIS EXISTS: enrolling with a card that already belongs to a
 // DROPPED / TRANSFERRED_OUT / GRADUATED student returns a bare 500,
@@ -289,76 +289,68 @@ export async function getStudents({ search, level, section, status, schoolYearSt
 // DataIntegrityViolationException -> 500 -> "An unexpected error
 // occurred", with no hint about which field was the problem.
 //
-// Until the backend switches that guard to existsByRfid(), this builds
-// a rfid -> student map from GET /api/student so the modals can catch
-// the collision BEFORE the POST and name the student who still holds
-// the card.
+// FIXED - ADMIN VS TEACHER SEEING DIFFERENT RESULTS: this used to build
+// a client-side rfid -> student Map by paginating through GET
+// /api/student (up to 5,000 rows, cached 60s). That endpoint is
+// adviser-scoped for TEACHER (StudentService.getStudents() force-
+// applies hasAdviserId(principal)), so a teacher's map only ever
+// covered their OWN advisory students - a card held by a student in
+// someone else's section was invisible to it. The pre-check silently
+// passed, the POST/PATCH went through anyway, and the teacher hit the
+// same raw 500 the admin's complete index always caught. That's the
+// "magkaiba ang nalabas sa admin at teacher" bug.
 //
-// LIMIT - TEACHER accounts: StudentService.getStudents() force-applies
-// hasAdviserId(principal) for the teacher role, so a teacher's index
-// only covers their OWN advisory students. A card held by a dropped
-// student in someone else's section won't be found and the 500 will
-// still happen - that's what the improved fallback messages below are
-// for. ADMIN accounts see every student, so their index is complete.
+// FIX: stop rebuilding the whole table client-side and ask the backend
+// directly for the ONE record that owns this card. See the BACKEND
+// DEPENDENCY note on findStudentByRfid() below - the new endpoint must
+// NOT apply adviser-scoping, since "does this card already belong to
+// anyone" is a uniqueness check, not "browse other teachers'
+// students" - it should answer the same way for every role. It also
+// only needs to return a minimal { studentId, fullName, studentStatus }
+// shape (not a full StudentResponse), so a teacher still never sees an
+// unrelated student's LRN/birthdate/guardian info through this check -
+// just enough to name who to contact about the card, same as what
+// admin already sees today.
 //
-// No studentStatus and no schoolYearStatuses params on purpose: every
-// status and every school year, since any of those rows can own the
-// row that trips the unique constraint.
-const RFID_INDEX_TTL_MS = 60_000;
-const RFID_INDEX_PAGE_SIZE = 500;
-const RFID_INDEX_MAX_PAGES = 10; // safety stop - 5,000 students
+// No client cache needed anymore either: this is only called once per
+// Add/Edit submit (plus once more on Edit if the rfid field actually
+// changed), not on every render, so a live call is simpler and always
+// current - nothing to invalidate after enrollStudent()/updateStudent()
+// like the old index required.
 
-let rfidIndexCache = null; // { index: Map<rfid, StudentResponse>, expiresAt }
-let rfidIndexInFlight = null;
-
-export function invalidateRfidIndex() {
-  rfidIndexCache = null;
-}
-
-async function getRfidIndex() {
-  if (rfidIndexCache && rfidIndexCache.expiresAt > Date.now()) return rfidIndexCache.index;
-  if (rfidIndexInFlight) return rfidIndexInFlight;
-
-  rfidIndexInFlight = (async () => {
-    const index = new Map();
-
-    for (let page = 0; page < RFID_INDEX_MAX_PAGES; page += 1) {
-      const { data } = await studentApi.get("/student", {
-        params: { page, size: RFID_INDEX_PAGE_SIZE },
-      });
-
-      const content = data?.content ?? [];
-      content.forEach((student) => {
-        if (student?.rfid) index.set(String(student.rfid).trim(), student);
-      });
-
-      if (content.length === 0 || page + 1 >= (data?.totalPages ?? 1)) break;
-    }
-
-    rfidIndexCache = { index, expiresAt: Date.now() + RFID_INDEX_TTL_MS };
-    return index;
-  })();
-
-  try {
-    return await rfidIndexInFlight;
-  } catch {
-    // FAIL-SOFT: this is a convenience check, never a gate. If the list
-    // can't be loaded (403, 429, offline), return an empty index so the
-    // enroll goes through to the backend as it did before instead of
-    // being blocked by our own pre-check failing.
-    return new Map();
-  } finally {
-    rfidIndexInFlight = null;
-  }
-}
-
-// Returns the StudentResponse currently holding this card, or null.
-// Callers editing an existing student must ignore a match on that same
-// student (their own card isn't a conflict) - see EditStudentModal.
+// BACKEND DEPENDENCY: GET /api/student/rfid/{rfid}
+//   - Allowed for BOTH ADMIN and TEACHER, with no hasAdviserId(...)
+//     scoping (unlike GET /api/student) - this one check needs the
+//     same, complete answer regardless of who's asking.
+//   - 200 + { studentId, fullName, studentStatus } if any student, in
+//     ANY status, currently holds this rfid (matches Student.rfid's
+//     unique constraint, which doesn't care about status either).
+//   - 404 (or 204) if no one holds it.
+// This doesn't exist yet - ask backend to add it. Until then (and for
+// any other failure - 403, network, etc.), this fails soft exactly
+// like the old index did: a convenience check is never a gate, so an
+// enroll/edit still proceeds to the real POST/PATCH instead of being
+// blocked by this check's own failure.
+//
+// Returns { studentId, fullName, studentStatus } for whoever currently
+// holds this card, or null. Callers editing an existing student must
+// ignore a match on that same student (their own card isn't a
+// conflict) - see EditStudentModal.
 export async function findStudentByRfid(rfid) {
   if (!rfid) return null;
-  const index = await getRfidIndex();
-  return index.get(String(rfid).trim()) ?? null;
+  const trimmed = String(rfid).trim();
+  if (!trimmed) return null;
+
+  try {
+    const { data } = await studentApi.get(`/student/rfid/${encodeURIComponent(trimmed)}`);
+    // Guard against a 200-with-empty-body "not found" shape too, in
+    // case the backend ends up signaling "no owner" that way instead
+    // of a 404/204 - either way, no studentId means no real match.
+    return data?.studentId ? data : null;
+  } catch (error) {
+    if (error?.response?.status === 404) return null;
+    return null;
+  }
 }
 
 // CONNECTED: POST /api/student
@@ -385,11 +377,6 @@ export async function enrollStudent(values) {
 
   try {
     const { data } = await studentApi.post("/student", payload);
-    // This student now owns that card. Drop the cached index so the
-    // next enroll within the TTL window sees it - otherwise tapping
-    // the same card again a few seconds later would pass the
-    // pre-check and hit the 500 anyway.
-    invalidateRfidIndex();
     return data;
   } catch (error) {
     throw new Error(
@@ -446,9 +433,6 @@ export async function updateStudent(studentId, values) {
 
   try {
     const { data } = await studentApi.patch(`/student/${studentId}`, payload);
-    // An edit can move a card from one student to another, so the
-    // index is stale after this too - same reasoning as enrollStudent().
-    invalidateRfidIndex();
     return data;
   } catch (error) {
     throw new Error(

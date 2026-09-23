@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
 import SearchInput from "./Componetns/SearchInput";
 import Pagination from "./Componetns/Pagiantion";
@@ -6,12 +6,23 @@ import Sf2AttendanceTable from "./Componetns/Sf2attendancetable";
 import ConfirmExportModal from "./Componetns/Confirmexportmodal";
 import Sf2FilterDropdown from "./Componetns/Sf2filterdropdown";
 import { exportSf2Report } from "./Componetns/Sf2exportexcel";
-import { fetchSf2Sections, fetchSf2Table } from "./Sf2attendanceservice";
+import { fetchSf2Sections, fetchSf2SectionsByAdviser, fetchSf2Table } from "./Sf2attendanceservice";
+// Same context EnrollmentPage.jsx uses for its own role/adviser split
+// (src/Context/Authcontext.jsx). Path depth assumes this file lives in the
+// same folder as Sf2attendanceservice.js, matching that file's own
+// "../../../services/apiClient" import - adjust the "../" count if this
+// file actually lives somewhere deeper (e.g. a "pages" subfolder).
+import { useAuth } from "../../../Context/Authcontext";
 
-// GradeLevel is a fixed enum on the backend (Grade_4 / Grade_5 / Grade_6) and
-// no endpoint lists it, so this stays a constant. The labels match what the
-// service produces for section.gradeLevel ("Grade_4" -> "Grade 4").
-const GRADE_LEVELS = ["Grade 4", "Grade 5", "Grade 6"];
+// GradeLevel is a fixed enum on the backend (Grade_4 / Grade_5 / Grade_6).
+// This only pins display order (4 -> 5 -> 6) - the actual option list is
+// derived from `sections` further down, which is now itself role-scoped
+// (ADMIN gets every section via /section/dropdown; TEACHER gets only their
+// own via /section/adviser/{userId} - see the sections-loading effect
+// above). So a TEACHER genuinely only sees the grade level(s) they're
+// assigned to. Labels match what the service produces for
+// section.gradeLevel ("Grade_4" -> "Grade 4").
+const GRADE_LEVEL_ORDER = ["Grade 4", "Grade 5", "Grade 6"];
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -19,10 +30,6 @@ const MONTH_NAMES = [
 ];
 
 // "" is the "All ..." option, same convention as the Section Level filters.
-const GRADE_LEVEL_OPTIONS = [
-  { value: "", label: "All Grade Levels" },
-  ...GRADE_LEVELS.map((level) => ({ value: level, label: level })),
-];
 const MONTH_OPTIONS = [
   { value: "", label: "All Months" },
   ...MONTH_NAMES.map((name, index) => ({ value: String(index), label: name })),
@@ -70,23 +77,29 @@ function ErrorBanner({ message, onRetry }) {
 }
 
 function SF2AttendancePage() {
+  const { user, role, isInitializing } = useAuth();
   const today = new Date();
 
-  // Filters. "" = "All ..." for every one of them. Ids are kept as strings
-  // because that's what the dropdowns hand back. month/year hold "" (All) or a
-  // number (monthIndex 0-11 / the year).
+  // Filters. "" = "All ..." for Grade Level / School Year / Section. Ids are
+  // kept as strings because that's what the dropdowns hand back.
   //
-  // To open the page on the current month instead of "All Months", change the
-  // two initial values below to today.getMonth() and today.getFullYear().
+  // Month/Year default to *this* month/year instead of "All" - SF2 is a
+  // monthly report, so "All Months"/"All Year" was never actually a useful
+  // resting state, just two more required clicks (on top of Grade Level ->
+  // School Year -> Section) before the table or the Export button did
+  // anything. Still fully overridable via the dropdowns below.
   const [gradeLevel, setGradeLevel] = useState("");
   const [schoolYearId, setSchoolYearId] = useState("");
   const [sectionId, setSectionId] = useState(""); // Section.sectionId, not the display name
-  const [year, setYear] = useState("");
-  const [monthIndex, setMonthIndex] = useState("");
+  const [year, setYear] = useState(today.getFullYear());
+  const [monthIndex, setMonthIndex] = useState(today.getMonth());
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // GET /api/section/dropdown
+  // GET /api/section/dropdown (ADMIN) or GET /api/section/adviser/{userId}
+  // (TEACHER) - see the effect below, which branches on role exactly like
+  // EnrollmentPage.jsx's loadSections() does. A TEACHER only ever gets
+  // their own assigned section(s) this way; ADMIN still gets every section.
   const [sections, setSections] = useState([]);
   const [isSectionsLoading, setIsSectionsLoading] = useState(true);
   const [sectionsError, setSectionsError] = useState("");
@@ -106,13 +119,49 @@ function SF2AttendancePage() {
   // "Export" inside ConfirmExportModal.
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-  // ---- Sections (and the school years derived from them) ----------------
+  // FIX: sections and the attendance table below used to only (re)fetch on
+  // mount, a filter change, or a manual "Try again" click - so a section
+  // added/archived, a student enrolled/transferred, or an attendance mark
+  // changed elsewhere never showed up here until this page's filters were
+  // touched or the browser was reloaded. Same gap already fixed on
+  // Rfidattendancepage.jsx (rosterRefreshKey) and Promotestudentpage.jsx
+  // (sectionsRefreshKey extended to loadStudents) - bumping this on window
+  // focus/tab visibility and including it in both effects below closes it
+  // here too, for both the section list and the table data in one go.
+  const [focusRefreshKey, setFocusRefreshKey] = useState(0);
   useEffect(() => {
+    function handleRefetch() {
+      if (document.visibilityState === "visible") {
+        setFocusRefreshKey((prev) => prev + 1);
+      }
+    }
+    window.addEventListener("focus", handleRefetch);
+    document.addEventListener("visibilitychange", handleRefetch);
+    return () => {
+      window.removeEventListener("focus", handleRefetch);
+      document.removeEventListener("visibilitychange", handleRefetch);
+    };
+  }, []);
+
+  // ---- Sections (and the school years derived from them) ----------------
+  // TEACHER vs ADMIN scoping: same split as EnrollmentPage.jsx's
+  // loadSections() - a TEACHER only ever gets the section(s) they advise
+  // (GET /api/section/adviser/{userId}), never the full /section/dropdown
+  // list. isInitializing guards against AuthContext's rehydrate-on-refresh:
+  // without it, this could fire once with role still null (falling into the
+  // ADMIN branch) before re-firing once role actually resolves to "teacher" -
+  // a redundant fetch and a brief flash of the wrong, unscoped section list.
+  useEffect(() => {
+    if (isInitializing) return;
+
     let ignore = false;
     setIsSectionsLoading(true);
     setSectionsError("");
 
-    fetchSf2Sections()
+    const request =
+      role === "teacher" ? fetchSf2SectionsByAdviser(user?.id) : fetchSf2Sections();
+
+    request
       .then((data) => {
         if (!ignore) setSections(data);
       })
@@ -129,7 +178,7 @@ function SF2AttendancePage() {
     return () => {
       ignore = true;
     };
-  }, [sectionsReloadToken]);
+  }, [role, user?.id, isInitializing, sectionsReloadToken, focusRefreshKey]);
 
   // GET /api/school-year/dropdown is ADMIN-only and this page is used by
   // teachers too, so the school-year options are the distinct school years
@@ -147,13 +196,44 @@ function SF2AttendancePage() {
     return [...byId.values()].sort((a, b) => b.name.localeCompare(a.name));
   }, [sections]);
 
-  // If the selected school year disappears (e.g. after a reload), fall back
-  // to "All School Years".
+  // School Year defaults to the most recent one available - same convention
+  // Student Management's own School Year filter already follows (it opens
+  // on a real year, not "All School Years"; only Grade Level/Section/Status
+  // open on "All" there, and stay that way below). Runs once, the moment we
+  // actually know what years exist, so picking "All School Years" by hand
+  // afterwards sticks instead of snapping back.
+  const hasDefaultedSchoolYear = useRef(false);
+  useEffect(() => {
+    if (hasDefaultedSchoolYear.current || schoolYears.length === 0) return;
+    hasDefaultedSchoolYear.current = true;
+    setSchoolYearId(schoolYears[0].id);
+  }, [schoolYears]);
+
+  // If the selected school year disappears afterwards (e.g. a reload under
+  // a different account), fall back to "All School Years".
   useEffect(() => {
     if (schoolYearId && !schoolYears.some((sy) => sy.id === schoolYearId)) {
       setSchoolYearId("");
     }
   }, [schoolYears, schoolYearId]);
+
+  // Grade Level options, same idea as schoolYears above: only the level(s)
+  // actually present in `sections`, which is now role-scoped (see the
+  // sections-loading effect) - so a TEACHER only sees the grade(s) they're
+  // actually assigned to, and ADMIN sees every level in use.
+  const gradeLevels = useMemo(() => {
+    const present = new Set(sections.map((s) => s.gradeLevel).filter(Boolean));
+    return GRADE_LEVEL_ORDER.filter((level) => present.has(level));
+  }, [sections]);
+
+  // If the selected grade level disappears (e.g. reassigned, or a reload
+  // under a different account), fall back to "All Grade Levels" instead of
+  // silently filtering everything out.
+  useEffect(() => {
+    if (gradeLevel && !gradeLevels.includes(gradeLevel)) {
+      setGradeLevel("");
+    }
+  }, [gradeLevels, gradeLevel]);
 
   const selectedSection = sections.find((s) => String(s.id) === String(sectionId)) || null;
 
@@ -166,33 +246,75 @@ function SF2AttendancePage() {
   // month + year. "All Months" / "All Years" just means "not picked yet".
   const hasPeriod = monthIndex !== "" && year !== "";
 
-  const sectionsForFilters = sections
-    .filter(
-      (s) =>
-        (!schoolYearId || String(s.schoolYearId) === schoolYearId) &&
-        (!gradeLevel || s.gradeLevel === gradeLevel)
-    )
-    .sort(
-      (a, b) =>
-        a.name.localeCompare(b.name) ||
-        String(b.schoolYearName).localeCompare(String(a.schoolYearName))
-    );
+  const sectionsForFilters = useMemo(
+    () =>
+      sections
+        .filter(
+          (s) =>
+            (!schoolYearId || String(s.schoolYearId) === schoolYearId) &&
+            (!gradeLevel || s.gradeLevel === gradeLevel)
+        )
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(b.name) ||
+            String(b.schoolYearName).localeCompare(String(a.schoolYearName))
+        ),
+    [sections, schoolYearId, gradeLevel]
+  );
+
+  // A teacher almost always has exactly one assigned section, and an admin
+  // often narrows Grade Level + School Year down to exactly one too. Either
+  // way, once there's only one section left to pick, making that a required
+  // third click is just friction for an answer that's already unambiguous -
+  // that's the "only shows up once every dropdown is exactly right"
+  // confusion. Auto-pick it, and step aside the moment there's a real choice
+  // to make (sectionsForFilters.length > 1).
+  useEffect(() => {
+    if (sectionsForFilters.length !== 1) return;
+    const onlyOption = String(sectionsForFilters[0].id);
+    if (onlyOption !== sectionId) setSectionId(onlyOption);
+  }, [sectionsForFilters, sectionId]);
 
   // With "All School Years" the same section name can appear once per school
   // year, so show the school year next to the name in that case.
   const showSchoolYearInSectionLabel = !schoolYearId && schoolYears.length > 1;
 
+  const gradeLevelOptions = [
+    { value: "", label: isSectionsLoading ? "Loading..." : "All Grade Levels" },
+    ...gradeLevels.map((level) => ({ value: level, label: level })),
+  ];
   const schoolYearOptions = [
     { value: "", label: isSectionsLoading ? "Loading..." : "All School Years" },
     ...schoolYears.map((sy) => ({ value: sy.id, label: sy.name })),
   ];
-  const sectionOptions = [
-    { value: "", label: isSectionsLoading ? "Loading..." : "All Sections" },
-    ...sectionsForFilters.map((s) => ({
-      value: String(s.id),
-      label: showSchoolYearInSectionLabel ? `${s.name} (${s.schoolYearName})` : s.name,
-    })),
-  ];
+  // Unlike Grade Level/School Year, "All Sections" was never a real,
+  // usable state here - the table needs exactly one section no matter what,
+  // so it always either got auto-picked back (the effect above) or just sat
+  // empty. Drop the "All" framing entirely: when there's exactly one match
+  // it's already selected, so there's nothing to place-hold; otherwise show
+  // a plain "pick one" placeholder that says what's actually going on.
+  let sectionPlaceholderLabel = "Select a Section";
+  if (isSectionsLoading) sectionPlaceholderLabel = "Loading...";
+  else if (sections.length === 0) sectionPlaceholderLabel = "No sections";
+  else if (sectionsForFilters.length === 0) sectionPlaceholderLabel = "No matching section";
+
+  const sectionOptions =
+    sectionsForFilters.length === 1
+      ? [
+          {
+            value: String(sectionsForFilters[0].id),
+            label: showSchoolYearInSectionLabel
+              ? `${sectionsForFilters[0].name} (${sectionsForFilters[0].schoolYearName})`
+              : sectionsForFilters[0].name,
+          },
+        ]
+      : [
+          { value: "", label: sectionPlaceholderLabel },
+          ...sectionsForFilters.map((s) => ({
+            value: String(s.id),
+            label: showSchoolYearInSectionLabel ? `${s.name} (${s.schoolYearName})` : s.name,
+          })),
+        ];
   const yearOptions = buildYearOptions(today.getFullYear());
 
   // Only clear the picked section if it no longer fits the new filter.
@@ -241,7 +363,7 @@ function SF2AttendancePage() {
     return () => {
       ignore = true;
     };
-  }, [sectionId, tableSchoolYearId, hasPeriod, year, monthIndex, reloadToken]);
+  }, [sectionId, tableSchoolYearId, hasPeriod, year, monthIndex, reloadToken, focusRefreshKey]);
 
   // Back to page 1 whenever what's being shown changes.
   useEffect(() => {
@@ -269,10 +391,18 @@ function SF2AttendancePage() {
 
   let emptyMessage = "No attendance records found.";
   if (!sectionId || !hasPeriod) {
-    emptyMessage =
-      !sectionId && !isSectionsLoading && !sectionsError && sections.length === 0
-        ? "No sections available."
-        : "Select a section, month and year to view attendance.";
+    if (!isSectionsLoading && !sectionsError && sections.length === 0) {
+      emptyMessage = "No sections available.";
+    } else if (!sectionId && sections.length > 0 && sectionsForFilters.length === 0) {
+      // Grade Level + School Year narrowed the Section dropdown down to
+      // nothing - say so, instead of a generic message that gives no clue
+      // why there's nothing left to pick.
+      emptyMessage = "No section matches that Grade Level and School Year. Try a different combination.";
+    } else if (!sectionId) {
+      emptyMessage = "Select a section to view attendance.";
+    } else {
+      emptyMessage = "Select a month and year to view attendance.";
+    }
   } else if (loadError) {
     emptyMessage = "Attendance couldn't be loaded.";
   } else if (tableData && students.length === 0) {
@@ -281,10 +411,19 @@ function SF2AttendancePage() {
     emptyMessage = "No students match your search.";
   }
 
-  // ---- Export ----------------------------------------------------------
+  // ---- Export ------------------------------------------------------------
+  // "Select a section" vs "Select a month and year" - not always all three,
+  // now that Month/Year already default to the current period. Shared by
+  // the button's disabled title below and this confirm-gate check.
+  const exportDisabledReason = !sectionId
+    ? "Select a section first"
+    : !hasPeriod
+    ? "Select a month and year first"
+    : "";
+
   function handleOpenExportConfirm() {
     if (!sectionId || !hasPeriod) {
-      setExportError("Select a section, month and year first - SF2 is exported one section and month at a time.");
+      setExportError(`${exportDisabledReason} - SF2 is exported one section and month at a time.`);
       return;
     }
     setExportError("");
@@ -325,11 +464,12 @@ function SF2AttendancePage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Sf2FilterDropdown
-            options={GRADE_LEVEL_OPTIONS}
+            options={gradeLevelOptions}
             value={gradeLevel}
             onChange={handleGradeLevelChange}
             ariaLabel="Filter by grade level"
             widthClass={GRADE_WIDTH}
+            disabled={isSectionsLoading}
           />
 
           <Sf2FilterDropdown
@@ -374,7 +514,7 @@ function SF2AttendancePage() {
             type="button"
             onClick={handleOpenExportConfirm}
             disabled={!sectionId || !hasPeriod}
-            title={!sectionId || !hasPeriod ? "Select a section, month and year first" : undefined}
+            title={exportDisabledReason || undefined}
             className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary sm:w-auto sm:text-sm"
           >
             <FileSpreadsheet size={15} strokeWidth={2.5} />

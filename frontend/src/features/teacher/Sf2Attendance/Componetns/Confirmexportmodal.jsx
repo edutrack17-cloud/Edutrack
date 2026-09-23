@@ -67,8 +67,8 @@ function ConfirmExportModal({
               Export SF2 Report?
             </h2>
             <p className="mt-1 text-sm text-gray-600">
-              Downloads {gradeLevel || "All Levels"} - {section || "All Sections"},{" "}
-              {monthName} {year} ({recordCount} student{recordCount === 1 ? "" : "s"}) as Excel.
+              Downloads {gradeLevel} - {section}, {monthName} {year} ({recordCount} student
+              {recordCount === 1 ? "" : "s"}) as Excel.
             </p>
           </div>
         </div>

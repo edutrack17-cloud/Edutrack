@@ -159,9 +159,16 @@ function PromoteStudentPage() {
     }
   }
 
+  // FIX: this used to only depend on the filters/page/search, so a
+  // student enrolled from the Enrollment page (a different tab/session)
+  // never showed up here until the admin/teacher manually changed a
+  // filter or reloaded - unlike the sections list above, which already
+  // refreshes via sectionsRefreshKey whenever the tab regains focus/
+  // visibility. Reusing that same key here closes that gap for the
+  // roster itself instead of just the section dropdowns.
   useEffect(() => {
     loadStudents();
-  }, [gradeLevel, section, currentPage, debouncedSearch]);
+  }, [gradeLevel, section, currentPage, debouncedSearch, sectionsRefreshKey]);
 
   const visibleStudents = students;
 
