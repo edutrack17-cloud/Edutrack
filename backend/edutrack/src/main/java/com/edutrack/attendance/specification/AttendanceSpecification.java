@@ -2,6 +2,7 @@ package com.edutrack.attendance.specification;
 
 import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.enums.AttendanceStatus;
+import com.edutrack.schoolyear.enums.SchoolYearStatus;
 import com.edutrack.section.enums.GradeLevel;
 import com.edutrack.section.enums.SectionStatus;
 import com.edutrack.student.enums.StudentStatus;
@@ -45,6 +46,21 @@ public class AttendanceSpecification {
         return (root, query, cb) -> cb.equal(
                 root.get("studentSectionAssignment").get("student").get("studentStatus"),
                 StudentStatus.enrolled
+        );
+    }
+
+    /**
+     * Attendance rows whose section does NOT belong to a school year that
+     * has been closed. Planning / active / archived school years are all
+     * still visible; only `closed` is excluded.
+     */
+    public static Specification<Attendance> schoolYearIsNotClosed() {
+        return (root, query, cb) -> cb.notEqual(
+                root.get("studentSectionAssignment")
+                        .get("section")
+                        .get("schoolYear")
+                        .get("schoolYearStatus"),
+                SchoolYearStatus.closed
         );
     }
 

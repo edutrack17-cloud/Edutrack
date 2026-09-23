@@ -115,9 +115,10 @@ public class AttendanceService {
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     public Page<AttendanceResponse> getAttendance(GradeLevel gradeLevel, Pageable pageable) {
 
-        // hasGradeLevel(null) → cb.conjunction() → no filter
-        Specification<Attendance> spec =
-                AttendanceSpecification.hasGradeLevel(gradeLevel);
+        Specification<Attendance> spec = Specification
+                .where(AttendanceSpecification.schoolYearIsNotClosed())
+                .and(AttendanceSpecification.studentIsEnrolled())
+                .and(AttendanceSpecification.hasGradeLevel(gradeLevel));
 
         if (currentUserProvider.isTeacher()) {
             spec = spec.and(AttendanceSpecification.isAdvisedBy(

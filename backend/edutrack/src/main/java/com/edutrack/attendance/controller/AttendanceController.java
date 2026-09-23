@@ -32,7 +32,7 @@ public class AttendanceController {
         return ResponseEntity.ok(attendanceService.createAttendance(request));
     }
 
-
+    //READ
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     @GetMapping
     public ResponseEntity<Page<AttendanceResponse>> getAttendance(
