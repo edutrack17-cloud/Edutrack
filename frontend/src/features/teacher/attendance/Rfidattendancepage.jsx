@@ -5,7 +5,7 @@ import {
   timeOutAttendance,
   closeAttendanceForSection,
   fetchStudentRecords,
-  fetchTodaysAttendanceForSection,
+  fetchTodaysAttendance,
   markPresentManual,
   manualTimeOut,
 } from "./Attendanceservice";
@@ -23,19 +23,15 @@ const SCHOOL_NAME = "Cecilio M. Saliba Elementary School";
 // Grade level / section / status filters used to reset to blank on every
 // browser refresh (they were plain useState("") with nothing behind
 // them), which silently broke Time In / Time Out too: the
-// fetchTodaysAttendanceForSection call below is section-scoped and only
-// runs when `section` is truthy, so losing the selected section on
-// refresh meant the roster still loaded fine but every row's
-// todayAttendance came back null - Status, Time In and Time Out all
-// rendered blank until the section was picked again. Persisting the
-// three filters to sessionStorage (cleared when the tab closes, unlike
-// localStorage) and reading them back via the lazy useState
-// initializers below means the very first fetch after a refresh already
-// has the right section and pulls today's attendance status with it.
-// AttendaceFilters already clears out any value that isn't valid for
-// the signed-in user (see its levels.some/sections.some checks), so a
-// stale filter left behind by a different user on a shared device gets
-// dropped automatically rather than leaking through.
+// fetchTodaysAttendance call below runs regardless of section now (see
+// the fetch effect), but persisting the three filters to sessionStorage
+// (cleared when the tab closes, unlike localStorage) and reading them
+// back via the lazy useState initializers below means the very first
+// fetch after a refresh already has the right filters. AttendaceFilters
+// already clears out any value that isn't valid for the signed-in user
+// (see its levels.some/sections.some checks), so a stale filter left
+// behind by a different user on a shared device gets dropped
+// automatically rather than leaking through.
 const FILTERS_STORAGE_KEY = "rfid-attendance:filters";
 
 function readPersistedFilter(key) {
@@ -56,18 +52,18 @@ function writePersistedFilter(key, value) {
 }
 
 // TODAY'S ATTENDANCE CACHE
-// fetchTodaysAttendanceForSection below is the ONLY place this page ever
-// learns about an "On School" row - a guard's gate tap never reaches
-// this page live (separate kiosk, separate login, no socket connecting
-// them). So on every refresh, that one request has to succeed again
-// before Time In / Time Out can show up at all; while it's in flight
-// (or if it happens to be slow or fail once) rows that were already
-// showing a status a moment ago go back to blank, which looks like the
-// data was lost. Caching the last known todayAttendance per student (by
-// rfid, thrown away the moment the calendar date changes) means a
-// refresh can repaint the same status/time immediately from what was
-// already on screen, and the live fetch then confirms or corrects it -
-// the table no longer has to sit blank while waiting on the network.
+// fetchTodaysAttendance below is the ONLY place this page ever learns
+// about an "On School" row - a guard's gate tap never reaches this page
+// live (separate kiosk, separate login, no socket connecting them). So
+// on every refresh, that one request has to succeed again before Time In
+// / Time Out can show up at all; while it's in flight (or if it happens
+// to be slow or fail once) rows that were already showing a status a
+// moment ago go back to blank, which looks like the data was lost.
+// Caching the last known todayAttendance per student (by rfid, thrown
+// away the moment the calendar date changes) means a refresh can repaint
+// the same status/time immediately from what was already on screen, and
+// the live fetch then confirms or corrects it - the table no longer has
+// to sit blank while waiting on the network.
 const TODAY_ATTENDANCE_CACHE_KEY = "rfid-attendance:today-attendance";
 
 function getTodayKey() {
@@ -131,11 +127,10 @@ function formatDisplayTime(hhmm) {
 // HOW THE TEACHER SEES A GUARD TAP: the guard kiosk is a separate
 // login/browser, so nothing pushes its taps to this page. The only way
 // this page learns a student is now "On School" is by asking the
-// backend again (GET /api/attendance?sectionName=), so while a section
-// is selected it re-asks every TODAY_ATTENDANCE_POLL_MS (and right away
-// when the tab becomes visible again). Raise this number if the backend
-// rate limit gets tight; lower it if the teacher needs to see gate taps
-// faster.
+// backend again (GET /api/attendance), so it re-asks every
+// TODAY_ATTENDANCE_POLL_MS (and right away when the tab becomes visible
+// again). Raise this number if the backend rate limit gets tight; lower
+// it if the teacher needs to see gate taps faster.
 const TODAY_ATTENDANCE_POLL_MS = 15_000;
 
 function sameTodayAttendance(a, b) {
@@ -158,12 +153,12 @@ function normalizeName(name) {
   return (name || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-// Merges today's attendance records (GET /api/attendance?sectionName=)
-// into roster rows. AttendanceResponse.java (backend) has NO rfid or
-// studentId field - only studentName - so matching by name is what
-// actually works today. It still prefers rfid when a record carries one,
-// so if the backend ever adds rfid/studentId to the response this starts
-// matching by that automatically (and duplicate names stop being a risk).
+// Merges today's attendance records (GET /api/attendance) into roster
+// rows. AttendanceResponse.java (backend) has NO rfid or studentId
+// field - only studentName - so matching by name is what actually works
+// today. It still prefers rfid when a record carries one, so if the
+// backend ever adds rfid/studentId to the response this starts matching
+// by that automatically (and duplicate names stop being a risk).
 // Returns the SAME array when nothing changed so a poll that finds no
 // news doesn't re-render the table or rewrite the localStorage cache.
 function mergeTodaysAttendance(rows, todaysAttendance) {
@@ -332,7 +327,7 @@ function RFIDAttendancePage() {
   // immediately with the OLD page number + NEW filters (wasted/wrong
   // request), then setCurrentPage(1) landed and re-triggered the fetch
   // effect a second time with the corrected page - two GET /api/student
-  // calls for one filter change, eating into the shared 10 req/min
+  // calls for one filter change, eating into the shared rate-limit
   // bucket. Setting the page here, batched with setDebouncedSearch in
   // the same tick, means the fetch effect below sees both the new
   // search term AND page=1 together in a single render - one fetch.
@@ -366,7 +361,7 @@ function RFIDAttendancePage() {
       setLoadError(null);
       try {
         // GET /api/student
-        // debouncedSearch is sent through as `studentName` (see
+        // debouncedSearch is sent through as `search` (see
         // fetchStudentRecords in Attendanceservice.js) - this was never
         // wired in before, so typing a search term only ever re-filtered
         // whichever ~20 rows happened to already be loaded for the
@@ -391,31 +386,22 @@ function RFIDAttendancePage() {
         const cache = loadAttendanceCache();
         let merged = fetched.map((r) => (cache[r.rfid] ? { ...r, todayAttendance: cache[r.rfid] } : r));
 
-        // GET /api/attendance?sectionName= - FIX: this used to only run
+        // GET /api/attendance?gradeLevel= - FIX: this used to only run
         // "if (section)", i.e. only once a SPECIFIC Section was picked in
         // the filter dropdown - picking just a Grade Level (or nothing)
         // skipped it entirely. That gate never actually bought anything:
-        // AttendanceService.getAttendance on the backend ignores
-        // sectionName completely (see fetchTodaysAttendanceForSection's
-        // comment) and just returns the most recent records overall, so
-        // the param has never been required for this call to return
-        // useful data. With the gate in place, a guard's tap that set
-        // on_school in the database would sit there correctly, but this
-        // page would never ask for it unless a Section was explicitly
-        // selected - every row fell back to whatever this ONE browser's
-        // localStorage cache already had (see TODAY_ATTENDANCE_CACHE_KEY
-        // above), which is why the Status column could come up blank for
-        // guard taps, and why admin and teacher (two different browsers,
-        // two independent caches) could show two different things for
-        // the exact same student. Running this unconditionally means
+        // the backend's AttendanceService.getAttendance now always
+        // scopes to enrolled students and optionally filters by
+        // gradeLevel, so the call is useful whether or not a specific
+        // section is picked. Running this unconditionally means
         // Status/Time In/Time Out load from the live backend regardless
-        // of which filters are set. Matched by rfid, not assignmentId -
-        // see the comment on fetchTodaysAttendanceForSection in
+        // of which filters are set. Matched by name (falling back from
+        // rfid) - see the comment on fetchTodaysAttendance in
         // Attendanceservice.js for why. A failure here is non-fatal: the
         // roster (and cache overlay above) are still usable, just
         // without a fresher status than whatever was already cached.
         try {
-          const todaysAttendance = await fetchTodaysAttendanceForSection(section);
+          const todaysAttendance = await fetchTodaysAttendance({ gradeLevel: level });
           merged = mergeTodaysAttendance(merged, todaysAttendance);
         } catch (attendanceError) {
           // Non-fatal (roster still usable without today's status), but
@@ -472,14 +458,11 @@ function RFIDAttendancePage() {
   // only happens when the student taps THIS page's scanner
   // (PATCH /api/attendance/present) or via the manual Present action.
   //
-  // DEPENDS ON: GET /api/attendance?sectionName=. This used to have no GET
-  // mapping at all on the backend, so the request came back 404/405 and
-  // NOTHING could show "On School" on this page - the 404/405 handling
-  // below stopped the polling in that case instead of retrying a failing
-  // request every few seconds. The endpoint exists now, but it's not
-  // scoped to sectionName or to today; fetchTodaysAttendanceForSection in
-  // Attendanceservice.js handles that gap by pulling a large page and
-  // filtering client-side, so no change was needed here.
+  // DEPENDS ON: GET /api/attendance. This used to have no GET mapping at
+  // all on the backend, so the request came back 404/405 and NOTHING
+  // could show "On School" on this page - the 404/405 handling below
+  // stopped the polling in that case instead of retrying a failing
+  // request every few seconds. The endpoint exists now.
   useEffect(() => {
     // FIX: was "role === 'guard' || !section" - same unnecessary Section
     // requirement as the loadRecords fetch above, blocking the poll (and
@@ -501,14 +484,14 @@ function RFIDAttendancePage() {
       isRefreshing = true;
       const startedAt = Date.now();
       try {
-        // GET /api/attendance?sectionName=
-        const todaysAttendance = await fetchTodaysAttendanceForSection(section);
+        // GET /api/attendance?gradeLevel=
+        const todaysAttendance = await fetchTodaysAttendance({ gradeLevel: level });
         if (ignore || lastLocalChangeRef.current > startedAt) return;
         setRecords((prev) => mergeTodaysAttendance(prev, todaysAttendance));
       } catch (error) {
         if (error.status === 404 || error.status === 405) {
           console.warn(
-            "GET /api/attendance?sectionName= doesn't exist on the backend yet - " +
+            "GET /api/attendance doesn't exist on the backend yet - " +
               "stopping the background refresh. Guard taps (On School) can't show up here until it does."
           );
           stopPolling();
@@ -526,7 +509,7 @@ function RFIDAttendancePage() {
       ignore = true;
       stopPolling();
     };
-  }, [role, section]);
+  }, [role, level]);
 
   // GET /api/student never returns today's attendance (fetchStudentRecords
   // always sets todayAttendance: null - see the comment there), so a full
