@@ -3,10 +3,7 @@ package com.edutrack.attendance.controller;
 import com.edutrack.attendance.dto.request.ManualAttendanceRequest;
 import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
-import com.edutrack.attendance.entity.Attendance;
 import com.edutrack.attendance.service.AttendanceService;
-import com.edutrack.student.dto.response.StudentResponse;
-import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,7 +16,8 @@ import java.util.List;
 @RestController
 @RequestMapping("api/attendance")
 public class AttendanceController {
-    private AttendanceService attendanceService;
+
+    private final AttendanceService attendanceService;
 
     public AttendanceController(AttendanceService attendanceService) {
         this.attendanceService = attendanceService;
@@ -28,54 +26,55 @@ public class AttendanceController {
     //CREATE
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     @PostMapping
-    public ResponseEntity<AttendanceResponse> createAttendance(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
-        AttendanceResponse savedAttendance = attendanceService.createAttendance(request);
-        return ResponseEntity.ok(savedAttendance);
+    public ResponseEntity<AttendanceResponse> createAttendance(
+            @Valid @RequestBody TimeInAndOutAttendanceRequest request) {
+        return ResponseEntity.ok(attendanceService.createAttendance(request));
     }
 
-    //READ
+    //READ — role + row-level scoping enforced in the service
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     @GetMapping
-    public ResponseEntity<Page<AttendanceResponse>> getAttendance(Pageable pageable){
+    public ResponseEntity<Page<AttendanceResponse>> getAttendance(Pageable pageable) {
         return ResponseEntity.ok(attendanceService.getAttendance(pageable));
     }
 
     //MANUAL ATTENDANCE
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PostMapping("manual/{studentId}")
-    public ResponseEntity<AttendanceResponse> manualAttendance(@PathVariable Long studentId, @RequestBody ManualAttendanceRequest request){
-        AttendanceResponse savedManualAttendance = attendanceService.manualAttendance(studentId, request);
-        return ResponseEntity.ok(savedManualAttendance);
+    public ResponseEntity<AttendanceResponse> manualAttendance(
+            @PathVariable Long studentId,
+            @RequestBody ManualAttendanceRequest request) {
+        return ResponseEntity.ok(attendanceService.manualAttendance(studentId, request));
     }
 
     //MANUAL TIME-OUT
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PatchMapping("manual-timeout/{studentId}")
-    public ResponseEntity<AttendanceResponse> manualTimeOut(@PathVariable Long studentId){
-        AttendanceResponse savedTimedOutAttendance = attendanceService.manualTimeOut(studentId);
-        return ResponseEntity.ok(savedTimedOutAttendance);
+    public ResponseEntity<AttendanceResponse> manualTimeOut(@PathVariable Long studentId) {
+        return ResponseEntity.ok(attendanceService.manualTimeOut(studentId));
     }
 
     //MARK AS PRESENT
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PatchMapping("present")
-    public ResponseEntity<AttendanceResponse> markAsPresent(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
-        AttendanceResponse confirmedAttendance = attendanceService.markAsPresent(request);
-        return ResponseEntity.ok(confirmedAttendance);
+    public ResponseEntity<AttendanceResponse> markAsPresent(
+            @Valid @RequestBody TimeInAndOutAttendanceRequest request) {
+        return ResponseEntity.ok(attendanceService.markAsPresent(request));
     }
 
     //TIME-OUT
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
     @PatchMapping("time-out")
-    public ResponseEntity<AttendanceResponse> timeOut(@Valid @RequestBody TimeInAndOutAttendanceRequest request){
-        AttendanceResponse timedOutAttendance = attendanceService.timeOut(request);
-        return ResponseEntity.ok(timedOutAttendance);
+    public ResponseEntity<AttendanceResponse> timeOut(
+            @Valid @RequestBody TimeInAndOutAttendanceRequest request) {
+        return ResponseEntity.ok(attendanceService.timeOut(request));
     }
 
     //MULTIPLE ABSENT
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PostMapping("close-attendance")
-    public ResponseEntity<List<AttendanceResponse>> bulkMarkAsAbsent(@RequestParam String sectionName){
+    public ResponseEntity<List<AttendanceResponse>> bulkMarkAsAbsent(
+            @RequestParam String sectionName) {
         return ResponseEntity.ok(attendanceService.bulkMarkAsAbsent(sectionName));
     }
 }

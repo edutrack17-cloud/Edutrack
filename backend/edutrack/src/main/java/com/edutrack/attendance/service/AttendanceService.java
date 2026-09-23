@@ -11,8 +11,9 @@ import com.edutrack.attendance.exception.*;
 import com.edutrack.attendance.mapper.AttendanceMapper;
 import com.edutrack.attendance.repository.AttendanceRepository;
 import com.edutrack.attendance.specification.AttendanceSpecification;
+import com.edutrack.section.enums.SectionStatus;
+import com.edutrack.security.CurrentUserProvider;
 import com.edutrack.shared.util.NameUtil;
-import com.edutrack.student.mapper.StudentMapper;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
 import com.edutrack.studentsectionassignment.specification.StudentSectionAssignmentSpecification;
@@ -38,24 +39,24 @@ import java.util.stream.Stream;
 @Transactional(readOnly = true)
 public class AttendanceService {
 
-    private final StudentMapper studentMapper;
     private final AttendanceRepository attendanceRepository;
     private final AttendanceMapper attendanceMapper;
     private final StudentSectionAssignmentRepository studentSectionAssignmentRepository;
     private final ActivityLogService activityLogService;
+    private final CurrentUserProvider currentUserProvider;
     private final ApplicationEventPublisher eventPublisher;
 
-    public AttendanceService(StudentMapper studentMapper,
-                             AttendanceRepository attendanceRepository,
+    public AttendanceService(AttendanceRepository attendanceRepository,
                              AttendanceMapper attendanceMapper,
                              StudentSectionAssignmentRepository studentSectionAssignmentRepository,
                              ActivityLogService activityLogService,
+                             CurrentUserProvider currentUserProvider,
                              ApplicationEventPublisher eventPublisher) {
-        this.studentMapper = studentMapper;
         this.attendanceRepository = attendanceRepository;
         this.attendanceMapper = attendanceMapper;
         this.studentSectionAssignmentRepository = studentSectionAssignmentRepository;
         this.activityLogService = activityLogService;
+        this.currentUserProvider = currentUserProvider;
         this.eventPublisher = eventPublisher;
     }
 
@@ -110,16 +111,30 @@ public class AttendanceService {
     }
 
     //READ
-    public Page<AttendanceResponse> getAttendance(Pageable pageable){
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
+    public Page<AttendanceResponse> getAttendance(Pageable pageable) {
+
+        Specification<Attendance> spec = Specification.unrestricted();
+
+        if (currentUserProvider.isTeacher()) {
+            spec = spec.and(
+                    AttendanceSpecification.isAdvisedBy(
+                            currentUserProvider.getCurrentUserId(),
+                            SectionStatus.active
+                    )
+            );
+        }
+        // ADMIN and GUARD: no extra filter → see everything
+
         Pageable sorted = pageable.getSort().isSorted()
                 ? pageable
                 : PageRequest.of(
-                        pageable.getPageNumber(),
-                        pageable.getPageSize(),
-                        Sort.by(Sort.Direction.DESC, "attendanceId")
-                );
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "attendanceId")
+        );
 
-        return attendanceRepository.findAll(sorted)
+        return attendanceRepository.findAll(spec, sorted)
                 .map(attendanceMapper::toAttendanceResponseDTO);
     }
 
