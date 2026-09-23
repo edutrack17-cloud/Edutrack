@@ -3,12 +3,20 @@ import { useFormik } from "formik";
 import { X, Eye, EyeOff } from "lucide-react";
 import { createUserSchema } from "../UsermanagementSchema";
 
+// Same pattern as StudentForm's guardianPhoneNumber handling - strips
+// non-digits and caps length while typing, so the field can never hold
+// letters/symbols or exceed 11 chars before Yup's MOBILE_REGEX even runs.
+function sanitizeDigits(value, maxDigits) {
+  return value.replace(/\D/g, "").slice(0, maxDigits);
+}
+
 const EMPTY_FORM = {
   username: "",
   password: "",
   firstName: "",
   middleName: "",
   lastName: "",
+  contactNumber: "",
 };
 
 function Createusermodal({ isOpen, onClose, onSubmit }) {
@@ -33,6 +41,10 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
 
   function handleClear() {
     formik.resetForm();
+  }
+
+  function handleContactNumberChange(event) {
+    formik.setFieldValue("contactNumber", sanitizeDigits(event.target.value, 11));
   }
 
   const inputClass = (hasError) =>
@@ -148,6 +160,23 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
                 <p className={errorClass}>{formik.errors.lastName}</p>
               )}
             </div>
+          </div>
+
+          <div className="w-full">
+            <label className={labelClass}>Contact Number</label>
+            <input
+              name="contactNumber"
+              value={formik.values.contactNumber}
+              onChange={handleContactNumberChange}
+              onBlur={formik.handleBlur}
+              placeholder="09xxxxxxxxx"
+              className={inputClass(formik.touched.contactNumber && formik.errors.contactNumber)}
+              maxLength={11}
+              inputMode="numeric"
+            />
+            {formik.touched.contactNumber && formik.errors.contactNumber && (
+              <p className={errorClass}>{formik.errors.contactNumber}</p>
+            )}
           </div>
         </div>
 

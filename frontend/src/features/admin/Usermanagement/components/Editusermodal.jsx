@@ -14,6 +14,7 @@ function Editusermodal({ isOpen, onClose, onSubmit, user }) {
       firstName: user?.firstName ?? "",
       middleName: user?.middleName ?? "",
       lastName: user?.lastName ?? "",
+      contactNumber: user?.contactNumber ?? "",
     },
     validationSchema: editUserSchema,
     onSubmit: async (values, helpers) => {
@@ -104,6 +105,21 @@ function Editusermodal({ isOpen, onClose, onSubmit, user }) {
               />
               {formik.touched.lastName && formik.errors.lastName && (
                 <p className={errorClass}>{formik.errors.lastName}</p>
+              )}
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className={labelClass}>Contact Number</label>
+              <input
+                name="contactNumber"
+                value={formik.values.contactNumber}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                placeholder="09xxxxxxxxx"
+                className={inputClass(formik.touched.contactNumber && formik.errors.contactNumber)}
+              />
+              {formik.touched.contactNumber && formik.errors.contactNumber && (
+                <p className={errorClass}>{formik.errors.contactNumber}</p>
               )}
             </div>
           </div>

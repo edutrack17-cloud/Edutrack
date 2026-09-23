@@ -142,55 +142,45 @@ api.interceptors.response.use(
 // Fully unauthenticated flow, so it runs on its own axios instance - no
 // Authorization header ever gets attached (there's no session yet), and
 // it deliberately skips `api`'s 401-refresh interceptor. A wrong/expired
-// OTP naturally comes back as a 401/400, and that should just surface as
+// OTP naturally comes back as an error, and that should just surface as
 // a form error, not kick off a refresh attempt and redirect-to-login.
 //
-// TODO (backend): endpoints/payloads below are PLACEHOLDERS - nothing has
-// been agreed on yet. Confirm before wiring this up for real:
-//   POST /forgot-password/request-otp  { identifier }              -> 204, no body
-//   POST /forgot-password/verify-otp   { identifier, otp }         -> { resetToken }
-//   POST /forgot-password/reset        { resetToken, newPassword } -> 204, no body
+// Matches PasswordResetController.java (api/auth/forgot-password):
+//   POST /forgot-password/request  { username }                    -> 202, no body
+//   POST /forgot-password/verify   { username, code, newPassword } -> 204, no body
+// Only 2 steps, not 3 - /verify checks the OTP AND sets the new password
+// in the same call (PasswordResetService.completeReset). There is no
+// resetToken on the backend - don't try to carry one between steps.
 //
-// Security note for backend: /request-otp should return the same generic
-// "if that account exists, a code was sent" response whether or not
-// `identifier` matches a real admin account - otherwise this endpoint can
-// be used to enumerate valid usernames/emails. Also worth rate-limiting
-// (per identifier + per IP) since it's unauthenticated.
+// Also: lookup is by username only (userRepository.findByUsername) -
+// there's no email path, so don't offer "or email" in the UI copy.
 const forgotPasswordClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
 const FORGOT_PASSWORD_ENDPOINTS = {
-  requestOtp: "/forgot-password/request-otp", // PLACEHOLDER - confirm with backend
-  verifyOtp: "/forgot-password/verify-otp", // PLACEHOLDER - confirm with backend
-  reset: "/forgot-password/reset", // PLACEHOLDER - confirm with backend
+  request: "/forgot-password/request",
+  verify: "/forgot-password/verify",
 };
 
-// Step 1: admin submits their username/email, backend sends an OTP to
-// whatever contact info (email/SMS) is on file for that account.
-export async function requestPasswordResetOtp(identifier) {
-  await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.requestOtp, {
-    identifier,
+// Step 1: admin submits their username, backend sends an OTP via SMS to
+// the contact number on file. Always resolves normally (202) whether or
+// not the username exists / has a phone on file / is an admin or
+// disabled account - backend intentionally never reveals which, so
+// don't try to branch UI behavior on the response here.
+export async function requestPasswordResetOtp(username) {
+  await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.request, {
+    username,
   });
 }
 
-// Step 2: admin submits the OTP they received. On success, backend
-// returns a short-lived resetToken that step 3 uses to actually set the
-// new password - the OTP itself is single-use and shouldn't double as
-// the reset credential.
-export async function verifyPasswordResetOtp(identifier, otp) {
-  const response = await forgotPasswordClient.post(
-    FORGOT_PASSWORD_ENDPOINTS.verifyOtp,
-    { identifier, otp }
-  );
-  return response.data.resetToken;
-}
-
-// Step 3: admin submits their new password along with the resetToken
-// from step 2.
-export async function resetPasswordWithOtp(resetToken, newPassword) {
-  await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.reset, {
-    resetToken,
+// Step 2: admin submits the OTP they received together with their new
+// password, in one call. Success (204) means the code was valid and the
+// password is already changed - there's nothing further to submit.
+export async function resetPasswordWithOtp(username, code, newPassword) {
+  await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.verify, {
+    username,
+    code,
     newPassword,
   });
 }
@@ -250,6 +240,11 @@ export async function logoutUser() {
 // Body:   { currentPassword: string, newPassword: string }
 // Success: 200/204, no body required
 // Errors:  401 if currentPassword is wrong, 400 for validation
+//
+// HEADS UP (backend): this endpoint isn't in AuthController.java - only
+// login / refresh / logout exist there. PATCH /api/auth/change-password
+// taking { currentPassword, newPassword } needs to be added before this
+// works. Not something I can add from the frontend - flag for backend dev.
 export async function changePassword({ currentPassword, newPassword }) {
   const response = await api.patch("/change-password", {
     currentPassword,

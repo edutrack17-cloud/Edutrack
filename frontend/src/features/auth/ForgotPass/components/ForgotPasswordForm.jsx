@@ -8,12 +8,10 @@ import Button from "../../../../components/ui/Button";
 import OtpInput from "./OtpInput";
 import {
   requestOtpSchema,
-  verifyOtpSchema,
-  resetPasswordSchema,
+  resetWithOtpSchema,
 } from "../forgotPasswordSchema";
 import {
   requestPasswordResetOtp,
-  verifyPasswordResetOtp,
   resetPasswordWithOtp,
 } from "../../authService";
 
@@ -22,13 +20,12 @@ const RESEND_COOLDOWN_SECONDS = 30;
 function ForgotPasswordForm() {
   const navigate = useNavigate();
 
-  // "request" -> "verify" -> "reset" -> "done".
-  // identifier and resetToken carry state across steps so the admin
-  // never has to re-type their username/email, and step 3 has the
-  // short-lived token it needs to actually change the password.
+  // "request" -> "resetWithOtp" -> "done".
+  // username carries over from step 1 so the admin doesn't have to
+  // retype it - the backend's single /verify call needs it alongside
+  // the OTP and new password (there's no separate resetToken step).
   const [step, setStep] = useState("request");
-  const [identifier, setIdentifier] = useState("");
-  const [resetToken, setResetToken] = useState("");
+  const [username, setUsername] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownIntervalRef = useRef(null);
 
@@ -48,15 +45,15 @@ function ForgotPasswordForm() {
 
   // --- Step 1: request an OTP ---------------------------------------
   const requestForm = useFormik({
-    initialValues: { identifier: "" },
+    initialValues: { username: "" },
     validationSchema: requestOtpSchema,
     onSubmit: async (values, helpers) => {
       helpers.setStatus(undefined);
       try {
-        await requestPasswordResetOtp(values.identifier);
-        setIdentifier(values.identifier);
+        await requestPasswordResetOtp(values.username);
+        setUsername(values.username);
         startResendCooldown();
-        setStep("verify");
+        setStep("resetWithOtp");
       } catch (error) {
         helpers.setStatus(
           "Something went wrong sending the code. Please try again."
@@ -66,16 +63,15 @@ function ForgotPasswordForm() {
     },
   });
 
-  // --- Step 2: verify the OTP -----------------------------------------
-  const verifyForm = useFormik({
-    initialValues: { otp: "" },
-    validationSchema: verifyOtpSchema,
+  // --- Step 2: verify the OTP and set the new password, in one call ----
+  const resetForm = useFormik({
+    initialValues: { otp: "", newPassword: "", confirmNewPassword: "" },
+    validationSchema: resetWithOtpSchema,
     onSubmit: async (values, helpers) => {
       helpers.setStatus(undefined);
       try {
-        const token = await verifyPasswordResetOtp(identifier, values.otp);
-        setResetToken(token);
-        setStep("reset");
+        await resetPasswordWithOtp(username, values.otp, values.newPassword);
+        setStep("done");
       } catch (error) {
         helpers.setStatus("Invalid or expired code. Please try again.");
       }
@@ -86,51 +82,33 @@ function ForgotPasswordForm() {
   async function handleResendOtp() {
     if (resendCooldown > 0) return;
     try {
-      await requestPasswordResetOtp(identifier);
+      await requestPasswordResetOtp(username);
       startResendCooldown();
     } catch (error) {
-      verifyForm.setStatus("Couldn't resend the code. Please try again.");
+      resetForm.setStatus("Couldn't resend the code. Please try again.");
     }
   }
-
-  // --- Step 3: set the new password ------------------------------------
-  const resetForm = useFormik({
-    initialValues: { newPassword: "", confirmNewPassword: "" },
-    validationSchema: resetPasswordSchema,
-    onSubmit: async (values, helpers) => {
-      helpers.setStatus(undefined);
-      try {
-        await resetPasswordWithOtp(resetToken, values.newPassword);
-        setStep("done");
-      } catch (error) {
-        helpers.setStatus(
-          "Couldn't reset your password. Please restart the process."
-        );
-      }
-      helpers.setSubmitting(false);
-    },
-  });
 
   if (step === "request") {
     return (
       <form onSubmit={requestForm.handleSubmit} className="flex flex-col gap-4">
         <p className="text-sm text-gray">
-          Enter your username or email, and we'll send a one-time code to
-          the contact info linked to your account.
+          Enter your username, and we'll send a one-time code to the
+          contact number linked to your account.
         </p>
 
         <Input
-          label="Username or Email"
+          label="Username"
           icon={<User size={18} />}
-          id="identifier"
-          name="identifier"
+          id="username"
+          name="username"
           type="text"
-          placeholder="Username or email"
-          value={requestForm.values.identifier}
+          placeholder="Username"
+          value={requestForm.values.username}
           onChange={requestForm.handleChange}
           onBlur={requestForm.handleBlur}
-          error={requestForm.errors.identifier}
-          touched={requestForm.touched.identifier}
+          error={requestForm.errors.username}
+          touched={requestForm.touched.username}
         />
 
         {requestForm.status && (
@@ -156,64 +134,25 @@ function ForgotPasswordForm() {
     );
   }
 
-  if (step === "verify") {
+  if (step === "resetWithOtp") {
     return (
-      <form onSubmit={verifyForm.handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={resetForm.handleSubmit} className="flex flex-col gap-4">
         <p className="text-sm text-gray">
-          Enter the 6-digit code we sent to the contact info on file for{" "}
-          <span className="font-semibold">{identifier}</span>.
+          Enter the 6-digit code we sent to the contact number on file for{" "}
+          <span className="font-semibold">{username}</span>, then set your
+          new password.
         </p>
 
         <OtpInput
           name="otp"
-          value={verifyForm.values.otp}
-          onChange={(val) => verifyForm.setFieldValue("otp", val)}
-          onBlur={() => verifyForm.setFieldTouched("otp", true)}
-          error={verifyForm.errors.otp}
-          touched={verifyForm.touched.otp}
-          disabled={verifyForm.isSubmitting}
+          value={resetForm.values.otp}
+          onChange={(val) => resetForm.setFieldValue("otp", val)}
+          onBlur={() => resetForm.setFieldTouched("otp", true)}
+          error={resetForm.errors.otp}
+          touched={resetForm.touched.otp}
+          disabled={resetForm.isSubmitting}
         />
 
-        {verifyForm.status && (
-          <p className="text-sm text-danger">{verifyForm.status}</p>
-        )}
-
-        <Button
-          type="submit"
-          disabled={verifyForm.isSubmitting}
-          className="w-full bg-primary text-white hover:bg-sky-700 disabled:opacity-70"
-        >
-          Verify Code
-        </Button>
-
-        <div className="flex items-center justify-between text-sm">
-          <button
-            type="button"
-            onClick={handleResendOtp}
-            disabled={resendCooldown > 0}
-            className="text-gray-900 underline disabled:text-gray disabled:no-underline"
-          >
-            {resendCooldown > 0
-              ? `Resend code in ${resendCooldown}s`
-              : "Resend Code"}
-          </button>
-
-          {/* TODO: point this at your actual support flow (contact page, email, etc). */}
-          <button
-            type="button"
-            onClick={() => navigate("/support")}
-            className="text-gray-900 underline"
-          >
-            Need Help?
-          </button>
-        </div>
-      </form>
-    );
-  }
-
-  if (step === "reset") {
-    return (
-      <form onSubmit={resetForm.handleSubmit} className="flex flex-col gap-4">
         <Input
           label="New Password"
           icon={<Lock size={18} />}
@@ -253,6 +192,28 @@ function ForgotPasswordForm() {
         >
           Reset Password
         </Button>
+
+        <div className="flex items-center justify-between text-sm">
+          <button
+            type="button"
+            onClick={handleResendOtp}
+            disabled={resendCooldown > 0}
+            className="text-gray-900 underline disabled:text-gray disabled:no-underline"
+          >
+            {resendCooldown > 0
+              ? `Resend code in ${resendCooldown}s`
+              : "Resend Code"}
+          </button>
+
+          {/* TODO: point this at your actual support flow (contact page, email, etc). */}
+          <button
+            type="button"
+            onClick={() => navigate("/support")}
+            className="text-gray-900 underline"
+          >
+            Need Help?
+          </button>
+        </div>
       </form>
     );
   }

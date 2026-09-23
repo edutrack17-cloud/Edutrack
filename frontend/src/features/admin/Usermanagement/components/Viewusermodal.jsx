@@ -55,6 +55,7 @@ function Viewusermodal({ isOpen, onClose, user }) {
                 <InfoField label="Full Name" value={fullName} />
               </div>
               <InfoField label="Username" value={user.username} />
+              <InfoField label="Contact Number" value={user.contactNumber} />
               <InfoField label="Role" value={user.role} />
               <InfoField label="Status" value={user.status} />
               {isTeacher && <InfoField label="Assigned Section" value={assignedSection} />}

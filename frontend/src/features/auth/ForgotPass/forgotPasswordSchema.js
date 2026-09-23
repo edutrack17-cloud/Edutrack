@@ -1,21 +1,21 @@
 import * as Yup from "yup";
 
 // Step 1 - request a code
+// Backend (ForgotPasswordRequest) only has a "username" field - lookup
+// is by username only, there's no email path.
 export const requestOtpSchema = Yup.object({
-  identifier: Yup.string().required("Username or email is required"),
+  username: Yup.string().required("Username is required"),
 });
 
-// Step 2 - verify the code
-// TODO (backend): adjust the digit count/pattern once backend confirms
-// the actual OTP format (assuming a 6-digit numeric code for now).
-export const verifyOtpSchema = Yup.object({
+// Step 2 - verify the code AND set the new password in the same call.
+// Backend's /forgot-password/verify (ResetPasswordRequest) takes
+// { username, code, newPassword } together - there's no separate
+// reset-token step, so this schema covers both at once.
+export const resetWithOtpSchema = Yup.object({
   otp: Yup.string()
     .matches(/^\d{6}$/, "Enter the 6-digit code")
     .required("OTP code is required"),
-});
 
-// Step 3 - set the new password
-export const resetPasswordSchema = Yup.object({
   newPassword: Yup.string()
     .min(8, "New password must be at least 8 characters")
     .required("New password is required"),

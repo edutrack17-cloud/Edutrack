@@ -37,6 +37,7 @@ function mapTeacherResponse(user) {
     firstName,
     middleName,
     lastName,
+    contactNumber: user.contactNumber,
 
     role: ROLE_LABELS[user.userRole] ?? user.userRole,
     status: user.accountStatus === "active" ? "Active" : "Disabled",
@@ -149,6 +150,7 @@ export async function createUser(formData) {
       firstName: formData.firstName,
       middleName: formData.middleName,
       lastName: formData.lastName,
+      contactNumber: formData.contactNumber,
     });
     return mapTeacherResponse(data);
   } catch (error) {
@@ -159,11 +161,15 @@ export async function createUser(formData) {
 // CONNECTED: PATCH /api/user/update/{userId}
 export async function updateUser(userId, formData) {
   try {
+    // NOTE: UpdateUserRequest.java has a contactNumber field, but UserService.updateUser()
+    // on the backend never reads/applies it - sending it here won't actually persist a
+    // change until the backend adds that handling. Kept here so it's ready once it does.
     const payload = {
       username: formData.username,
       firstName: formData.firstName,
       middleName: formData.middleName,
       lastName: formData.lastName,
+      contactNumber: formData.contactNumber,
     };
 
     if (formData.newPassword) {

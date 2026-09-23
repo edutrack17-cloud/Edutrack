@@ -2,6 +2,10 @@ import * as Yup from "yup";
 
 const USERNAME_REGEX = /^[a-zA-Z0-9._]+$/;
 
+// Same format enrollmentSchema.js uses for guardianPhoneNumber - kept in
+// sync so both forms accept/reject the same PH mobile numbers.
+const MOBILE_REGEX = /^09\d{9}$/;
+
 const usernameField = Yup.string()
   .min(3, "Username must be at least 3 characters")
   .max(100, "Username must not exceed 100 characters")
@@ -32,12 +36,21 @@ const lastNameField = Yup.string()
   .required("Last name is required")
   .max(100, "Last name must not exceed 100 characters");
 
+// Backend column is contact_number, max 15, unique, NOT NULL (User.java).
+// Format now matches enrollmentSchema.js's guardianPhoneNumber (09XXXXXXXXX,
+// 11 digits) - the .max(15) is no longer needed since the regex itself
+// pins the exact length, but MOBILE_REGEX is the actual enforcement.
+const contactNumberField = Yup.string()
+  .required("Contact number is required")
+  .matches(MOBILE_REGEX, "Mobile number must be exactly 11 digits and start with 09");
+
 export const createUserSchema = Yup.object({
   username: usernameField,
   password: passwordField,
   firstName: firstNameField,
   middleName: middleNameField,
   lastName: lastNameField,
+  contactNumber: contactNumberField,
 });
 
 export const editUserSchema = Yup.object({
@@ -45,5 +58,6 @@ export const editUserSchema = Yup.object({
   firstName: firstNameField,
   middleName: middleNameField,
   lastName: lastNameField,
+  contactNumber: contactNumberField,
   newPassword: newPasswordField,
 });
