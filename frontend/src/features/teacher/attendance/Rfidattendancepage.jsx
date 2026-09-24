@@ -20,6 +20,26 @@ import { useAuth } from "../../../Context/Authcontext";
 
 const SCHOOL_NAME = "Cecilio M. Saliba Elementary School";
 
+// STATUS FILTER FIX: Status (On School/Present/Absent) used to be a
+// purely client-side filter over whatever ~20-row page happened to
+// already be loaded (see fetchStudentRecords' `size`) - Level/Section/
+// Search all narrow the SERVER query, but Status never did. That's why
+// it "worked" for a teacher (their roster is usually one section, well
+// under 20 total, so everything relevant was already on the one page)
+// but looked broken for admin (hundreds of students across many pages -
+// the 20 rows on screen could easily have zero matches for whatever
+// status was picked, even though plenty existed on other pages).
+// PAGE_SIZE matches fetchStudentRecords' own default and is what a
+// status-filtered result gets paginated by, client-side, once fetched.
+const PAGE_SIZE = 20;
+// Fetches the WHOLE level/section/search-matching roster in one shot
+// (instead of one 20-row page) whenever a Status filter is picked, so
+// filtering can be applied - and then paginated - over every matching
+// student, not just whichever 20 the server would have handed back for
+// the current page. 1000 comfortably covers a single elementary
+// school's enrollment; raise it if a school ever gets bigger than that.
+const STATUS_FETCH_SIZE = 1000;
+
 // Grade level / section / status filters used to reset to blank on every
 // browser refresh (they were plain useState("") with nothing behind
 // them), which silently broke Time In / Time Out too: the
@@ -360,6 +380,11 @@ function RFIDAttendancePage() {
       setIsLoading(true);
       setLoadError(null);
       try {
+        // See the STATUS FILTER FIX comment near PAGE_SIZE/STATUS_FETCH_SIZE
+        // above - a Status filter needs the WHOLE matching roster in hand
+        // before it can filter+page correctly, not just one server page.
+        const isStatusFilterActive = Boolean(status);
+
         // GET /api/student
         // debouncedSearch is sent through as `search` (see
         // fetchStudentRecords in Attendanceservice.js) - this was never
@@ -372,10 +397,11 @@ function RFIDAttendancePage() {
         // non-debounced `search`) stays layered on top of this and is
         // the only thing that makes LRN search work at all.
         const { records: fetched, totalPages: fetchedTotalPages } = await fetchStudentRecords({
-          page: currentPage,
+          page: isStatusFilterActive ? 1 : currentPage,
           level,
           section,
           search: debouncedSearch,
+          size: isStatusFilterActive ? STATUS_FETCH_SIZE : PAGE_SIZE,
         });
 
         // Repaint any status/times this page has already seen today
@@ -414,8 +440,25 @@ function RFIDAttendancePage() {
         }
 
         if (!ignore) {
-          setRecords(merged);
-          setTotalPages(fetchedTotalPages);
+          if (isStatusFilterActive) {
+            // Now that todayAttendance is merged in, filter by the
+            // selected status across the WHOLE fetched roster, then page
+            // the filtered result ourselves - AttendanceTable's own
+            // matchesStatus check still runs too, but it's a no-op here
+            // since `records` is already narrowed to just this status.
+            const matching = merged.filter((r) => r.todayAttendance?.status === status);
+            const computedTotalPages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+            // currentPage can be left pointing past the end after the
+            // matching count shrinks (e.g. switching from "Present" - many
+            // matches - to "Absent" - few) - clamp it back onto a real page.
+            const clampedPage = Math.min(currentPage, computedTotalPages);
+            if (clampedPage !== currentPage) setCurrentPage(clampedPage);
+            setRecords(matching.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE));
+            setTotalPages(computedTotalPages);
+          } else {
+            setRecords(merged);
+            setTotalPages(fetchedTotalPages);
+          }
         }
       } catch (error) {
         if (!ignore) {
@@ -431,7 +474,7 @@ function RFIDAttendancePage() {
     return () => {
       ignore = true;
     };
-  }, [currentPage, level, section, debouncedSearch, rosterRefreshKey]);
+  }, [currentPage, level, section, debouncedSearch, rosterRefreshKey, status]);
 
   // Keeps TODAY_ATTENDANCE_CACHE_KEY in sync with whatever this page
   // currently has on screen - covers every path that can set
@@ -914,10 +957,16 @@ function RFIDAttendancePage() {
               setSection(e.target.value);
               setCurrentPage(1);
             }}
-            // status is a client-side-only filter (AttendanceTable filters
-            // the already-loaded page by it) - it never appears in
-            // fetchStudentRecords' params, so it doesn't need a page reset.
-            onStatusChange={(e) => setStatus(e.target.value)}
+            // FIX: Status now actually hits the server (see the STATUS
+            // FILTER FIX comment near PAGE_SIZE/STATUS_FETCH_SIZE, and the
+            // isStatusFilterActive branch in loadRecords above) instead of
+            // only ever narrowing whatever page was already loaded - so,
+            // same as Level/Section, a change here needs its own page
+            // reset too.
+            onStatusChange={(e) => {
+              setStatus(e.target.value);
+              setCurrentPage(1);
+            }}
             role={role}
             userId={user?.id}
           />

@@ -124,6 +124,7 @@ function SchoolYearFilterDropdown({ schoolYearId, onSchoolYearChange }) {
         (data || []).map((schoolYear) => ({
           value: String(schoolYear.schoolYearId),
           label: schoolYear.schoolYearName,
+          status: schoolYear.status,
         }))
       );
     } catch {
@@ -149,7 +150,18 @@ function SchoolYearFilterDropdown({ schoolYearId, onSchoolYearChange }) {
     loadOptions();
   }, [loadOptions]);
 
-  const allOptions = [ALL_SCHOOL_YEARS_OPTION, ...options];
+  // Active year goes right after "All School Years" - same ordering as
+  // StudentFilters.jsx's schoolYear dropdown - instead of wherever the
+  // API happens to return it, since that's the one an admin wants most.
+  const activeOption = options.find((option) => option.status === "active");
+  // Newest first, same sort StudentFilters.jsx/Sectionlevelfilters.jsx use -
+  // getSchoolYearDropdown() just returns findAll() order (oldest first), so
+  // without this the latest years were buried at the bottom of the list
+  // instead of near the top.
+  const restOptions = options
+    .filter((option) => option.status !== "active")
+    .sort((a, b) => b.label.localeCompare(a.label, undefined, { numeric: true }));
+  const allOptions = [ALL_SCHOOL_YEARS_OPTION, ...(activeOption ? [activeOption] : []), ...restOptions];
   const selected = allOptions.find((option) => option.value === String(schoolYearId ?? "")) || ALL_SCHOOL_YEARS_OPTION;
   const isDisabled = isLoading;
 

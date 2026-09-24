@@ -276,7 +276,7 @@ function Sectionformmodal({
                 <div key={detail.label} className="min-w-0">
                   <dt className="text-sm font-semibold text-gray-700">{detail.label}</dt>
                   <dd className="mt-1 wrap-break-words text-sm font-normal text-gray-500">
-                    {detail.value || "—"}
+                    {detail.value || ""}
                   </dd>
                 </div>
               ))}

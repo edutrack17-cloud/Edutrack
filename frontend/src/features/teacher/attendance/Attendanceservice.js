@@ -139,6 +139,7 @@ export async function fetchStudentRecords({
   level = "",
   section = "",
   search = "",
+  size = 20,
 } = {}) {
   const params = new URLSearchParams();
   if (level) params.set("gradeLevel", LABEL_TO_GRADE_LEVEL[level] ?? level);
@@ -156,7 +157,7 @@ export async function fetchStudentRecords({
   // `active`, so the table showed "No enrolled students found" and no
   // tap/status could appear.
   params.set("page", String(page - 1));
-  params.set("size", "20");
+  params.set("size", String(size));
 
   const queryString = params.toString();
 
@@ -214,9 +215,16 @@ export async function fetchStudentRecords({
 // NOTE: the response DTO does NOT include `rfid` - callers that need to
 // correlate these rows with a roster should key on the attendance id or
 // the student name + gradeAndSection, not on rfid.
-export async function fetchTodaysAttendance({ gradeLevel } = {}) {
+export async function fetchTodaysAttendance({ gradeLevel, size = 1000 } = {}) {
   try {
-    const params = {};
+    // FIX: no `size` used to be sent at all, so this rode whatever the
+    // backend's default Pageable size is (commonly 20) - fine for a
+    // teacher's one section, but for a whole school's worth of today's
+    // taps (admin, no gradeLevel picked) it silently dropped everyone
+    // past the first page, same root cause as fetchStudentRecords'
+    // missing `size` above. An explicit large size is harmless when
+    // there's less data than that - Spring just returns everything.
+    const params = { size };
     if (gradeLevel) {
       params.gradeLevel = LABEL_TO_GRADE_LEVEL[gradeLevel] ?? gradeLevel;
     }

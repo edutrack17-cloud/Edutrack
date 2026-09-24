@@ -14,7 +14,7 @@ function ForgotPasswordPage() {
             Forgot Password
           </h1>
           <p className="mt-1 text-sm text-gray">
-            Reset access to your admin account
+            Reset your account password
           </p>
         </div>
 

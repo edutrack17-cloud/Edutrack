@@ -1,8 +1,9 @@
 import axios from "axios";
 
 // Falls back to localhost for local dev; override per environment
-// (e.g. .env.production -> VITE_API_BASE_URL=https://api.edutrack.com/api/auth)
-// without touching this file.
+// (e.g. .env.production -> VITE_API_BASE_URL=https://api.edutrack.com/api)
+// without touching this file. Do NOT put "/auth" in the env value - it is
+// appended below, so ".../api/auth" would end up as ".../api/auth/auth".
 const API_ROOT = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
 const API_BASE_URL = `${API_ROOT}/auth`;
 
@@ -154,6 +155,18 @@ api.interceptors.response.use(
 //
 // Also: lookup is by username only (userRepository.findByUsername) -
 // there's no email path, so don't offer "or email" in the UI copy.
+//
+// Who can use this: all roles, including admin - since there's normally
+// only one admin account, "contact another administrator" isn't a real
+// fallback for them. The old admin-exclusion banner in ForgotPasswordForm
+// has been removed to match.
+//
+// NOT YET DONE ON BACKEND: PasswordResetService still silently ignores
+// admin in requestReset() and throws OtpInvalidException for admin in
+// completeReset() - both role checks need to be removed there before this
+// actually works end-to-end for admin. Until backend ships that, admin
+// users will see this UI act like it works but requestReset()/completeReset()
+// will still no-op / reject them server-side. Flag this to backend.
 const forgotPasswordClient = axios.create({
   baseURL: API_BASE_URL,
 });
@@ -163,7 +176,7 @@ const FORGOT_PASSWORD_ENDPOINTS = {
   verify: "/forgot-password/verify",
 };
 
-// Step 1: admin submits their username, backend sends an OTP via SMS to
+// Step 1: the user submits their username, backend sends an OTP via SMS to
 // the contact number on file. Always resolves normally (202) whether or
 // not the username exists / has a phone on file / is an admin or
 // disabled account - backend intentionally never reveals which, so
@@ -174,7 +187,7 @@ export async function requestPasswordResetOtp(username) {
   });
 }
 
-// Step 2: admin submits the OTP they received together with their new
+// Step 2: the user submits the OTP they received together with their new
 // password, in one call. Success (204) means the code was valid and the
 // password is already changed - there's nothing further to submit.
 export async function resetPasswordWithOtp(username, code, newPassword) {
