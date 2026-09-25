@@ -29,22 +29,20 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-// "" is the "All ..." option, same convention as the Section Level filters.
-const MONTH_OPTIONS = [
-  { value: "", label: "All Months" },
-  ...MONTH_NAMES.map((name, index) => ({ value: String(index), label: name })),
-];
+const MONTH_OPTIONS = MONTH_NAMES.map((name, index) => ({
+  value: String(index),
+  label: name,
+}));
 
 // A handful of nearby years, since the period is a plain YearMonth (any
-// year), not locked to the current one.
+// year), not locked to the current one. No "All Years" option - SF2 always
+// needs one specific YearMonth, so "All" was never a real resting state
+// here (see the Month/Year state comment below).
 function buildYearOptions(currentYear) {
-  return [
-    { value: "", label: "All Years" },
-    ...[currentYear - 1, currentYear, currentYear + 1].map((y) => ({
-      value: String(y),
-      label: String(y),
-    })),
-  ];
+  return [currentYear - 1, currentYear, currentYear + 1].map((y) => ({
+    value: String(y),
+    label: String(y),
+  }));
 }
 
 // SF2 rosters are small (SF2 template fits 25 boys + 27 girls), and the
@@ -83,11 +81,10 @@ function SF2AttendancePage() {
   // Filters. "" = "All ..." for Grade Level / School Year / Section. Ids are
   // kept as strings because that's what the dropdowns hand back.
   //
-  // Month/Year default to *this* month/year instead of "All" - SF2 is a
-  // monthly report, so "All Months"/"All Year" was never actually a useful
-  // resting state, just two more required clicks (on top of Grade Level ->
-  // School Year -> Section) before the table or the Export button did
-  // anything. Still fully overridable via the dropdowns below.
+  // Month/Year always hold a concrete value (default: this month/year) -
+  // there's no "All Months"/"All Year" option to pick, since SF2 is a
+  // monthly report and always needs one specific YearMonth. Still fully
+  // overridable via the dropdowns below, just never to "All".
   const [gradeLevel, setGradeLevel] = useState("");
   const [schoolYearId, setSchoolYearId] = useState("");
   const [sectionId, setSectionId] = useState(""); // Section.sectionId, not the display name
@@ -226,31 +223,21 @@ function SF2AttendancePage() {
     return GRADE_LEVEL_ORDER.filter((level) => present.has(level));
   }, [sections]);
 
-  // ADMIN: Grade Level defaults to the first available level, same
-  // convention as the School Year default above - so narrowing (and
-  // auto-selecting) a section happens right away, the same way it already
-  // does for TEACHER simply by having one assigned section. There's no
-  // "All Grade Levels" option for ADMIN any more (see gradeLevelOptions
-  // below), so this also guarantees gradeLevel is never left at "" once
-  // levels are known. TEACHER keeps "All Grade Levels" - untouched, since
-  // that side already works.
-  const hasDefaultedGradeLevel = useRef(false);
-  useEffect(() => {
-    if (role !== "admin") return;
-    if (hasDefaultedGradeLevel.current || gradeLevels.length === 0) return;
-    hasDefaultedGradeLevel.current = true;
-    setGradeLevel(gradeLevels[0]);
-  }, [role, gradeLevels]);
+  // No auto-defaulting here (unlike School Year above) - the dropdown opens
+  // on a plain "Grade Level" placeholder for ADMIN (see gradeLevelOptions
+  // below) instead of jumping straight to "Grade 4", so nothing pre-selects
+  // a level on load. Selecting the placeholder behaves the same as TEACHER's
+  // "All Grade Levels": gradeLevel stays "" and sectionsForFilters simply
+  // doesn't filter by level.
 
   // If the selected grade level disappears (e.g. reassigned, or a reload
-  // under a different account): TEACHER falls back to "All Grade Levels";
-  // ADMIN falls back to the first remaining level, since "All" isn't a
-  // choice it has any more.
+  // under a different account), fall back to the placeholder/"All Grade
+  // Levels" state rather than guessing a replacement level.
   useEffect(() => {
     if (gradeLevel && !gradeLevels.includes(gradeLevel)) {
-      setGradeLevel(role === "admin" ? gradeLevels[0] ?? "" : "");
+      setGradeLevel("");
     }
-  }, [gradeLevels, gradeLevel, role]);
+  }, [gradeLevels, gradeLevel]);
 
   const selectedSection = sections.find((s) => String(s.id) === String(sectionId)) || null;
 
@@ -258,10 +245,6 @@ function SF2AttendancePage() {
   // That's why the School Year filter can safely be "All": it only narrows
   // the section list, it isn't what gets sent.
   const tableSchoolYearId = selectedSection ? String(selectedSection.schoolYearId) : "";
-
-  // SF2 is a monthly form, so the table (and the export) need one specific
-  // month + year. "All Months" / "All Years" just means "not picked yet".
-  const hasPeriod = monthIndex !== "" && year !== "";
 
   const sectionsForFilters = useMemo(
     () =>
@@ -296,16 +279,18 @@ function SF2AttendancePage() {
   // year, so show the school year next to the name in that case.
   const showSchoolYearInSectionLabel = !schoolYearId && schoolYears.length > 1;
 
-  // ADMIN has no "All Grade Levels" option any more - it always resolves to
-  // a real level (defaulted above, or reset above if it ever disappears),
-  // so picking a section is at most Grade Level -> Section instead of
-  // Grade Level -> School Year -> Section, same as TEACHER already gets
-  // for free from having one assigned section. TEACHER keeps "All Grade
-  // Levels", since that side already works.
+  // ADMIN gets a plain "Grade Level" placeholder (not "All Grade Levels" -
+  // it just says "pick one", so the dropdown doesn't open already showing
+  // "Grade 4"/"Grade 5"/"Grade 6"). TEACHER keeps its existing "All Grade
+  // Levels" wording, since that side already works and already reads fine
+  // as a real, selectable "view everything" state.
   const gradeLevelOptions = isSectionsLoading
     ? [{ value: "", label: "Loading..." }]
     : role === "admin"
-    ? gradeLevels.map((level) => ({ value: level, label: level }))
+    ? [
+        { value: "", label: "Grade Level" },
+        ...gradeLevels.map((level) => ({ value: level, label: level })),
+      ]
     : [
         { value: "", label: "All Grade Levels" },
         ...gradeLevels.map((level) => ({ value: level, label: level })),
@@ -362,7 +347,7 @@ function SF2AttendancePage() {
   // of a request that's been superseded, so quickly switching sections can't
   // leave an older section's data on screen.
   useEffect(() => {
-    if (!sectionId || !tableSchoolYearId || !hasPeriod) {
+    if (!sectionId || !tableSchoolYearId) {
       setTableData(null);
       setLoadError("");
       setIsLoading(false);
@@ -390,7 +375,7 @@ function SF2AttendancePage() {
     return () => {
       ignore = true;
     };
-  }, [sectionId, tableSchoolYearId, hasPeriod, year, monthIndex, reloadToken, focusRefreshKey]);
+  }, [sectionId, tableSchoolYearId, year, monthIndex, reloadToken, focusRefreshKey]);
 
   // Back to page 1 whenever what's being shown changes.
   useEffect(() => {
@@ -417,18 +402,16 @@ function SF2AttendancePage() {
   const pagedRecords = filteredRecords.slice(pageStart, pageStart + PAGE_SIZE);
 
   let emptyMessage = "No attendance records found.";
-  if (!sectionId || !hasPeriod) {
+  if (!sectionId) {
     if (!isSectionsLoading && !sectionsError && sections.length === 0) {
       emptyMessage = "No sections available.";
-    } else if (!sectionId && sections.length > 0 && sectionsForFilters.length === 0) {
+    } else if (sections.length > 0 && sectionsForFilters.length === 0) {
       // Grade Level + School Year narrowed the Section dropdown down to
       // nothing - say so, instead of a generic message that gives no clue
       // why there's nothing left to pick.
       emptyMessage = "No section matches that Grade Level and School Year. Try a different combination.";
-    } else if (!sectionId) {
-      emptyMessage = "Select a section to view attendance.";
     } else {
-      emptyMessage = "Select a month and year to view attendance.";
+      emptyMessage = "Select a section to view attendance.";
     }
   } else if (loadError) {
     emptyMessage = "Attendance couldn't be loaded.";
@@ -439,17 +422,11 @@ function SF2AttendancePage() {
   }
 
   // ---- Export ------------------------------------------------------------
-  // "Select a section" vs "Select a month and year" - not always all three,
-  // now that Month/Year already default to the current period. Shared by
-  // the button's disabled title below and this confirm-gate check.
-  const exportDisabledReason = !sectionId
-    ? "Select a section first"
-    : !hasPeriod
-    ? "Select a month and year first"
-    : "";
+  // Shared by the button's disabled title below and this confirm-gate check.
+  const exportDisabledReason = !sectionId ? "Select a section first" : "";
 
   function handleOpenExportConfirm() {
-    if (!sectionId || !hasPeriod) {
+    if (!sectionId) {
       setExportError(`${exportDisabledReason} - SF2 is exported one section and month at a time.`);
       return;
     }
@@ -500,15 +477,6 @@ function SF2AttendancePage() {
           />
 
           <Sf2FilterDropdown
-            options={schoolYearOptions}
-            value={schoolYearId}
-            onChange={handleSchoolYearChange}
-            ariaLabel="Filter by school year"
-            widthClass={SCHOOL_YEAR_WIDTH}
-            disabled={isSectionsLoading}
-          />
-
-          <Sf2FilterDropdown
             options={sectionOptions}
             value={sectionId}
             onChange={setSectionId}
@@ -518,9 +486,18 @@ function SF2AttendancePage() {
           />
 
           <Sf2FilterDropdown
+            options={schoolYearOptions}
+            value={schoolYearId}
+            onChange={handleSchoolYearChange}
+            ariaLabel="Filter by school year"
+            widthClass={SCHOOL_YEAR_WIDTH}
+            disabled={isSectionsLoading}
+          />
+
+          <Sf2FilterDropdown
             options={MONTH_OPTIONS}
             value={String(monthIndex)}
-            onChange={(value) => setMonthIndex(value === "" ? "" : Number(value))}
+            onChange={(value) => setMonthIndex(Number(value))}
             ariaLabel="Select month"
             widthClass={MONTH_WIDTH}
           />
@@ -528,7 +505,7 @@ function SF2AttendancePage() {
           <Sf2FilterDropdown
             options={yearOptions}
             value={String(year)}
-            onChange={(value) => setYear(value === "" ? "" : Number(value))}
+            onChange={(value) => setYear(Number(value))}
             ariaLabel="Select year"
             widthClass={YEAR_WIDTH}
           />
@@ -540,7 +517,7 @@ function SF2AttendancePage() {
           <button
             type="button"
             onClick={handleOpenExportConfirm}
-            disabled={!sectionId || !hasPeriod}
+            disabled={!sectionId}
             title={exportDisabledReason || undefined}
             className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary sm:w-auto sm:text-sm"
           >

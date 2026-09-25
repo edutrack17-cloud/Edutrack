@@ -18,15 +18,40 @@ import enrollSchema from "../enrollmentSchema";
 
 // Best-effort split of StudentResponse's combined "fullName" - see the
 // BACKEND GAP note in initialValues below for why this exists at all.
+//
+// The backend (NameUtil.buildFullName) sends this as
+// "LastName, FirstName MiddleName" - e.g. "Trafalgar, Water Law D".
+// Split off lastName on the comma first, then read the last remaining
+// word as middleName and everything before it as firstName (firstName
+// can be more than one word, as in that example: "Water Law").
 function splitFullName(fullName) {
   if (!fullName) return { firstName: "", middleName: "", lastName: "" };
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
-  if (parts.length === 2) return { firstName: parts[0], middleName: "", lastName: parts[1] };
+
+  const commaIndex = fullName.indexOf(",");
+  if (commaIndex === -1) {
+    // No comma - shouldn't happen once the backend sends the new
+    // format, but fall back to the old best-effort behavior just in
+    // case an older record slips through.
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
+    if (parts.length === 2) return { firstName: parts[0], middleName: "", lastName: parts[1] };
+    return {
+      firstName: parts[0],
+      middleName: parts.slice(1, -1).join(" "),
+      lastName: parts[parts.length - 1],
+    };
+  }
+
+  const lastName = fullName.slice(0, commaIndex).trim();
+  const restParts = fullName.slice(commaIndex + 1).trim().split(/\s+/).filter(Boolean);
+
+  if (restParts.length === 0) return { firstName: "", middleName: "", lastName };
+  if (restParts.length === 1) return { firstName: restParts[0], middleName: "", lastName };
+
   return {
-    firstName: parts[0],
-    middleName: parts.slice(1, -1).join(" "),
-    lastName: parts[parts.length - 1],
+    firstName: restParts.slice(0, -1).join(" "),
+    middleName: restParts[restParts.length - 1],
+    lastName,
   };
 }
 

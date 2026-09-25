@@ -34,25 +34,29 @@ function getDisplayDate(range) {
   if (range === "Month") {
     return today.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   }
+  // NOTE: the backend's "weekly" range (DashboardDateRangeResolver) is
+  // Monday-Friday (school week), not Monday-Sunday - it only ever
+  // returns 5 buckets (Mon..Fri). This header must match that exactly,
+  // or it implies a 7-day range while the chart only ever shows 5 bars.
   const dayOfWeek = today.getDay();
   const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 
   const monday = new Date(today);
   monday.setDate(today.getDate() + diffToMonday);
 
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
 
-  const sameMonth = monday.getMonth() === sunday.getMonth();
-  const sameYear = monday.getFullYear() === sunday.getFullYear();
+  const sameMonth = monday.getMonth() === friday.getMonth();
+  const sameYear = monday.getFullYear() === friday.getFullYear();
 
   if (sameMonth) {
     const monthLabel = monday.toLocaleDateString("en-US", { month: "short" });
-    return `${monthLabel} ${monday.getDate()}-${sunday.getDate()}`;
+    return `${monthLabel} ${monday.getDate()}-${friday.getDate()}`;
   }
 
   const startLabel = monday.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const endLabel = sunday.toLocaleDateString(
+  const endLabel = friday.toLocaleDateString(
     "en-US",
     sameYear
       ? { month: "short", day: "numeric" }

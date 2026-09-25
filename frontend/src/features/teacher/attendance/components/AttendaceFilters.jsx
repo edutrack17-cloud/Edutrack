@@ -32,7 +32,7 @@ function getSectionDefaultOption(role) {
 }
 
 const STATUS_OPTIONS = [
-  { value: "", label: "Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
+  { value: "", label: "All Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
   { value: "On School", label: "On School", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
   { value: "Present", label: "Present", textClass: "text-success", selectedBgClass: "bg-success/10" },
   { value: "Absent", label: "Absent", textClass: "text-danger", selectedBgClass: "bg-danger/10" },
@@ -42,7 +42,7 @@ const STATUS_OPTIONS = [
 // so both filter bars look and behave identically.
 const triggerClass =
   "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const wrapperClass = "relative min-w-[90px] flex-1 sm:min-w-0 sm:flex-none sm:w-24 md:w-28";
+const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-34";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {

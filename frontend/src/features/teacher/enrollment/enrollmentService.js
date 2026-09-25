@@ -399,14 +399,17 @@ export async function enrollStudent(values) {
 export function wasStudentReactivated(submittedValues, studentResponse) {
   if (!studentResponse) return false;
 
-  const submittedFullName = [
-    submittedValues.firstName,
-    submittedValues.middleName,
-    submittedValues.lastName,
-  ]
+  // Matches NameUtil.buildFullName() on the backend: "LastName,
+  // FirstName MiddleName" (e.g. "Cruz, Sofia Marie"). Must stay in sync
+  // with that method - this is only a client-side guess at what the
+  // backend will return, not a real round-trip.
+  const namePart = [submittedValues.firstName, submittedValues.middleName]
     .filter(Boolean)
-    .join(" ")
-    .trim();
+    .join(" ");
+
+  const submittedFullName = submittedValues.lastName
+    ? `${submittedValues.lastName}, ${namePart}`.trim()
+    : "";
 
   const comparisons = [
     [submittedFullName, studentResponse.fullName],
