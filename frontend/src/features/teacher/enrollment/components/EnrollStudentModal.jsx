@@ -4,7 +4,10 @@ import { X } from "lucide-react";
 import RfidFormModal from "./RfidFormModal";
 import StudentForm from "./StudentForm";
 import enrollSchema from "../enrollmentSchema";
-import { findStudentByRfid } from "../enrollmentService";
+// TODO: RE-ENABLE once backend ships GET /api/student/rfid/{rfid} - see
+// the commented-out pre-check block in onSubmit below for why this is
+// unused for now.
+// import { findStudentByRfid } from "../enrollmentService";
 
 const EMPTY_FORM = {
   level: "", // UI-only, used to filter the Section dropdown - not sent to the backend (CreateStudentRequest has no gradeLevel field, only sectionId)
@@ -68,22 +71,24 @@ function EnrollStudentModal({
       try {
         helpers.setStatus(undefined);
 
-        // PRE-CHECK before the POST. enrollStudentCore()'s own RFID
-        // guard is existsByRfidAndStudentStatus(rfid, enrolled), but
-        // Student.rfid is @Column(unique = true) - so a card still
-        // held by a DROPPED/TRANSFERRED_OUT/GRADUATED student passes
-        // that guard and then dies at save() with a duplicate-key 500
-        // ("An unexpected error occurred" in the toast, no field
-        // named). findStudentByRfid() catches that case here and says
-        // WHO still holds the card. See the long note on the index in
-        // enrollmentService.js - it's best-effort (incomplete for
-        // teacher accounts) and fail-soft, so this never blocks an
-        // enroll on its own failure.
-        const cardOwner = await findStudentByRfid(values.rfid);
-        if (cardOwner) {
-          helpers.setStatus(`This RFID is already assigned to ${cardOwner.fullName}.`);
-          return; // the finally below still clears isSubmitting
-        }
+        // TODO: RE-ENABLE once backend ships GET /api/student/rfid/{rfid}.
+        // This used to pre-check the card here, because enrollStudentCore()'s
+        // own RFID guard is existsByRfidAndStudentStatus(rfid, enrolled),
+        // but Student.rfid is @Column(unique = true) - so a card still held
+        // by a DROPPED/TRANSFERRED_OUT/GRADUATED student passes that guard
+        // and then dies at save() with a duplicate-key 500 ("An unexpected
+        // error occurred" in the toast, no field named). Disabled for now:
+        // the endpoint doesn't exist on the backend yet, so this call was a
+        // guaranteed 500 on every single submit (extra latency + console
+        // noise) - findStudentByRfid() fails soft and always returned null
+        // anyway, so removing it changes no behavior today. Restore once
+        // the endpoint ships:
+        //
+        // const cardOwner = await findStudentByRfid(values.rfid);
+        // if (cardOwner) {
+        //   helpers.setStatus(`This RFID is already assigned to ${cardOwner.fullName}.`);
+        //   return; // the finally below still clears isSubmitting
+        // }
 
         await onSubmit?.({ ...payload, sectionId: Number(payload.sectionId) });
         helpers.resetForm();

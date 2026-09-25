@@ -140,6 +140,21 @@ export async function fetchStudentRecords({
   section = "",
   search = "",
   size = 20,
+  // FIX: previously this deliberately sent NO schoolYearStatuses at all,
+  // which StudentService.getStudents treats as "no filter" - so the
+  // roster included students from sections in EVERY school year
+  // (planning/active/archived/closed), not just the one currently being
+  // used for attendance. That's why students from unrelated school
+  // years were showing up here (unlike the Student Management page,
+  // which has an explicit school-year dropdown driving this same param).
+  // Scoped to ["active", "planning"] rather than just ["active"] alone -
+  // an earlier attempt to force "active" only emptied the roster
+  // whenever the currently-used school year's sections weren't yet
+  // flipped to literally `active` in the data. If that empty-roster
+  // symptom comes back, it means a school year that should count as
+  // "current" isn't active or planning - that's a data/admin-side fix,
+  // not something to chase from here.
+  schoolYearStatuses = ["active", "planning"],
 } = {}) {
   const params = new URLSearchParams();
   if (level) params.set("gradeLevel", LABEL_TO_GRADE_LEVEL[level] ?? level);
@@ -150,12 +165,7 @@ export async function fetchStudentRecords({
   // server-side before).
   if (search) params.set("search", search);
   params.set("studentStatus", "enrolled");
-  // NOTE: deliberately NOT sending schoolYearStatuses. StudentService
-  // .getStudents treats it as "no filter" when omitted (and puts
-  // active-year students first within each page). Forcing "active" here
-  // emptied the roster whenever a section's school year wasn't literally
-  // `active`, so the table showed "No enrolled students found" and no
-  // tap/status could appear.
+  schoolYearStatuses.forEach((s) => params.append("schoolYearStatuses", s));
   params.set("page", String(page - 1));
   params.set("size", String(size));
 

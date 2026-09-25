@@ -978,24 +978,31 @@ function RFIDAttendancePage() {
               placeholder="Search LRN or Name"
             />
 
-            <button
-              type="button"
-              onClick={handleMarkRemainingAbsent}
-              disabled={isMarkingRemainingAbsent || !section}
-              title={
-                !section
-                  ? "Select a section first"
-                  : "Marks every student in this section with no record today, or still \"On School\" (tapped at the gate but never in class), as absent."
-              }
-              className="flex h-9 w-fit shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-secondary px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
-            >
-              {isMarkingRemainingAbsent ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <UserX size={14} />
-              )}
-              {isMarkingRemainingAbsent ? "Marking..." : "Mark Absent"}
-            </button>
+            {/* GUARD only taps the gate scanner (see recordTap's role ===
+                "guard" branch above) - closing out a whole section's
+                attendance is the same kind of admin/teacher-only bulk
+                action as the table's manual Present/Time-out buttons, so
+                it's hidden here rather than just disabled. */}
+            {role !== "guard" && (
+              <button
+                type="button"
+                onClick={handleMarkRemainingAbsent}
+                disabled={isMarkingRemainingAbsent || !section}
+                title={
+                  !section
+                    ? "Select a section first"
+                    : "Marks every student in this section with no record today, or still \"On School\" (tapped at the gate but never in class), as absent."
+                }
+                className="flex h-9 w-fit shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-secondary px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {isMarkingRemainingAbsent ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <UserX size={14} />
+                )}
+                {isMarkingRemainingAbsent ? "Marking..." : "Mark Absent"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -1013,6 +1020,7 @@ function RFIDAttendancePage() {
               level={level}
               section={section}
               status={status}
+              role={role}
               pendingAssignmentId={pendingAssignmentId}
               onPresentClick={handlePresentClick}
               onTimeOutClick={handleTimeOutClick}

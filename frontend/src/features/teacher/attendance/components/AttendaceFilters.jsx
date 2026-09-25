@@ -3,15 +3,33 @@ import { Check, ChevronDown } from "lucide-react";
 import { fetchSections, fetchSectionsByAdviser, fetchGradeLevelsByAdviser } from "../Attendanceservice";
 
 const DEFAULT_LEVEL_OPTION = { value: "", label: "Grade Level", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
+// Admin gets all three levels in one list with nothing selected by
+// default, so that blank state actually means "all" - guard hits the
+// same fetch path (see loadLevels' `role !== "teacher"` branch below)
+// but doesn't manage the full roster the way admin does, so it keeps
+// the plain "Grade Level" placeholder instead of this one.
+const ALL_LEVELS_DEFAULT_OPTION = { value: "", label: "All Grade Level", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
 
-const ALL_LEVEL_OPTIONS = [
-  DEFAULT_LEVEL_OPTION,
+const GRADE_LEVEL_CHOICES = [
   { value: "Grade 4", label: "Grade 4", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
   { value: "Grade 5", label: "Grade 5", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
   { value: "Grade 6", label: "Grade 6", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
 ];
 
+// role === "admin" -> "All Grade Level" placeholder; anyone else on this
+// branch (currently just guard) -> plain "Grade Level".
+function buildAllLevelOptions(role) {
+  return [role === "admin" ? ALL_LEVELS_DEFAULT_OPTION : DEFAULT_LEVEL_OPTION, ...GRADE_LEVEL_CHOICES];
+}
+
 const DEFAULT_SECTION_OPTION = { value: "", label: "Section", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
+// Same reasoning as ALL_LEVELS_DEFAULT_OPTION above, for the Section
+// dropdown - admin only.
+const ALL_SECTIONS_DEFAULT_OPTION = { value: "", label: "All Section", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
+
+function getSectionDefaultOption(role) {
+  return role === "admin" ? ALL_SECTIONS_DEFAULT_OPTION : DEFAULT_SECTION_OPTION;
+}
 
 const STATUS_OPTIONS = [
   { value: "", label: "Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
@@ -71,7 +89,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen }) {
   // updater function. Updater functions must be pure - React (in
   // StrictMode / dev) invokes them twice to check for that, which was
   // firing onOpen() twice per click, doubling every dropdown-open fetch
-  // (GET /api/section/dropdown, /api/section/{userId}) and burning
+  // (GET /api/section/dropdown, /api/section/adviser/{userId}) and burning
   // through the 10 req/min rate limit, which is what was causing the
   // 429s on /api/student. The effect now runs once, outside the
   // updater, based on the current isOpen state read at click time.
@@ -147,20 +165,20 @@ function AttendaceFilters({
     setRefreshKey((prev) => prev + 1);
   }
 
-  const [levelOptions, setLevelOptions] = useState(ALL_LEVEL_OPTIONS);
+  const [levelOptions, setLevelOptions] = useState(() => buildAllLevelOptions(role));
   useEffect(() => {
     let ignore = false;
 
     async function loadLevels() {
       if (role !== "teacher") {
-        setLevelOptions(ALL_LEVEL_OPTIONS);
+        setLevelOptions(buildAllLevelOptions(role));
         return;
       }
 
       if (!userId) return;
 
       try {
-        // GET /api/section/{userId}
+        // GET /api/section/adviser/{userId}
         const levels = await fetchGradeLevelsByAdviser({ userId });
         if (ignore) return;
 
@@ -175,7 +193,7 @@ function AttendaceFilters({
           onLevelChange({ target: { value: levels[0].value } });
         }
       } catch (error) {
-        if (!ignore) setLevelOptions(ALL_LEVEL_OPTIONS);
+        if (!ignore) setLevelOptions(buildAllLevelOptions(role));
       }
     }
 
@@ -185,7 +203,7 @@ function AttendaceFilters({
     };
   }, [role, userId, refreshKey]);
 
-  const [sectionOptions, setSectionOptions] = useState([DEFAULT_SECTION_OPTION]);
+  const [sectionOptions, setSectionOptions] = useState(() => [getSectionDefaultOption(role)]);
   useEffect(() => {
     let ignore = false;
 
@@ -193,7 +211,7 @@ function AttendaceFilters({
       if (role === "teacher" && !userId) return;
 
       try {
-        // TEACHER: GET /api/section/{userId}
+        // TEACHER: GET /api/section/adviser/{userId}
         // ADMIN: GET /api/section/dropdown?gradeLevel={level}
         const sections =
           role === "teacher"
@@ -202,7 +220,7 @@ function AttendaceFilters({
         if (ignore) return;
 
         setSectionOptions([
-          DEFAULT_SECTION_OPTION,
+          getSectionDefaultOption(role),
           ...sections.map((s) => ({ ...s, textClass: "text-gray-700", selectedBgClass: "bg-gray-100" })),
         ]);
 
@@ -212,7 +230,7 @@ function AttendaceFilters({
           onSectionChange({ target: { value: sections[0].value } });
         }
       } catch (error) {
-        if (!ignore) setSectionOptions([DEFAULT_SECTION_OPTION]);
+        if (!ignore) setSectionOptions([getSectionDefaultOption(role)]);
       }
     }
 

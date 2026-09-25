@@ -93,8 +93,8 @@ function LiveClock() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-2 sm:mt-6">
-      <p className="text-sm font-semibold">{formatDateLong(now)}</p>
+    <div className="flex flex-col items-center gap-2">
+      <p className="whitespace-nowrap text-base font-semibold tracking-tight sm:text-lg">{formatDateLong(now)}</p>
       <p className="text-3xl font-bold tracking-tight">{formatClockTimeWithSeconds(now)}</p>
     </div>
   );
@@ -276,10 +276,31 @@ function GuardAttendancePage() {
       />
 
         {/* Widened from lg:w-70 to lg:w-96 so the scan/status panel has more room. */}
-        <div className="flex w-full flex-col justify-between text-center bg-primary p-4 text-white rounded-2xl shadow-md lg:w-96 lg:shrink-0">
+        <div
+          className="w-full text-white bg-primary rounded-2xl shadow-md p-4 lg:w-96 lg:shrink-0"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "24px",
+            minHeight: "70vh",
+            textAlign: "center",
+          }}
+        >
           <LiveClock />
 
-          <div className="flex min-h-52 flex-col items-center justify-center rounded-lg bg-white border border-gray shadow-sm px-4 py-8 text-center text-gray-800">
+          <div
+            className="w-full bg-white border border-gray shadow-sm rounded-lg text-gray-800 px-4 py-8"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "208px",
+              textAlign: "center",
+            }}
+          >
             {lastScan ? (
               <>
                 {/* Only "tapped-in" comes with a name; the other outcomes have no record to show one from. */}
@@ -327,7 +348,7 @@ function GuardAttendancePage() {
 
           <div>
             <p className="text-sm font-semibold">{SCHOOL_NAME}</p>
-            <p className="text-xs text-white/70">Attendance Management System</p>
+            <p className="text-xs text-white/90">Attendance Management System</p>
           </div>
         </div>
 

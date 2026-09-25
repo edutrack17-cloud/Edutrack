@@ -36,8 +36,14 @@
 // apiClient's logout-and-redirect.
 //
 // The school-year list is derived from these sections instead of calling
-// GET /api/school-year/dropdown, because that endpoint is ADMIN-only and
-// this page is used by teachers too.
+// GET /api/school-year/dropdown. That endpoint is NOT ADMIN-only anymore
+// (SchoolYearController#schoolYearDropdown now allows TEACHER too) - the
+// old comment here was stale. The real reason to keep deriving it from
+// `sections` instead: it only lists years that actually have a section
+// under them, so a teacher/admin never sees a `planning`-only or
+// dataless year with nothing to show underneath it, and it's already
+// scoped exactly like `sections` is (adviser-only for TEACHER, every
+// section for ADMIN) with no second request needed.
 // ---------------------------------------------------------------------
 //
 // SF2TableResponse (already confirmed from the controller/service source):

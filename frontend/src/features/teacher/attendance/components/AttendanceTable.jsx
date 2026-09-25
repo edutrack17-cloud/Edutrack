@@ -22,6 +22,7 @@ function formatDisplayTime(hhmm) {
 
 function ActionKebab({
   record,
+  role,
   isPending,
   onPresentClick,
   onTimeOutClick,
@@ -97,6 +98,17 @@ function ActionKebab({
   if (state === "needs-present") {
     // Blank on purpose - On School rows get no Action label/menu until
     // the student taps the classroom scanner.
+    return null;
+  }
+
+  // GUARD only ever taps the gate scanner (see recordTap's role ===
+  // "guard" branch in Rfidattendancepage.jsx) - markPresentManual/
+  // manualTimeOut (what these two buttons call) are manual overrides
+  // for the SAME admin/teacher-scoped attendance actions as the
+  // classroom scanner tap, so a guard has no legitimate reason to use
+  // them and would just hit a 403 if they tried. "done" rows still
+  // show View below - that's read-only, so every role keeps it.
+  if (role === "guard" && (state === "needs-status" || state === "needs-timeout")) {
     return null;
   }
 
@@ -177,6 +189,7 @@ function AttendanceTable({
   level = "",
   section = "",
   status = "",
+  role = "",
   pendingAssignmentId = null,
   onPresentClick,
   onTimeOutClick,
@@ -268,6 +281,7 @@ function AttendanceTable({
                 <div className="flex justify-center">
                   <ActionKebab
                     record={record}
+                    role={role}
                     isPending={pendingAssignmentId === record.assignmentId}
                     onPresentClick={onPresentClick}
                     onTimeOutClick={onTimeOutClick}

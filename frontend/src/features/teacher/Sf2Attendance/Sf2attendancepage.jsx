@@ -226,14 +226,31 @@ function SF2AttendancePage() {
     return GRADE_LEVEL_ORDER.filter((level) => present.has(level));
   }, [sections]);
 
+  // ADMIN: Grade Level defaults to the first available level, same
+  // convention as the School Year default above - so narrowing (and
+  // auto-selecting) a section happens right away, the same way it already
+  // does for TEACHER simply by having one assigned section. There's no
+  // "All Grade Levels" option for ADMIN any more (see gradeLevelOptions
+  // below), so this also guarantees gradeLevel is never left at "" once
+  // levels are known. TEACHER keeps "All Grade Levels" - untouched, since
+  // that side already works.
+  const hasDefaultedGradeLevel = useRef(false);
+  useEffect(() => {
+    if (role !== "admin") return;
+    if (hasDefaultedGradeLevel.current || gradeLevels.length === 0) return;
+    hasDefaultedGradeLevel.current = true;
+    setGradeLevel(gradeLevels[0]);
+  }, [role, gradeLevels]);
+
   // If the selected grade level disappears (e.g. reassigned, or a reload
-  // under a different account), fall back to "All Grade Levels" instead of
-  // silently filtering everything out.
+  // under a different account): TEACHER falls back to "All Grade Levels";
+  // ADMIN falls back to the first remaining level, since "All" isn't a
+  // choice it has any more.
   useEffect(() => {
     if (gradeLevel && !gradeLevels.includes(gradeLevel)) {
-      setGradeLevel("");
+      setGradeLevel(role === "admin" ? gradeLevels[0] ?? "" : "");
     }
-  }, [gradeLevels, gradeLevel]);
+  }, [gradeLevels, gradeLevel, role]);
 
   const selectedSection = sections.find((s) => String(s.id) === String(sectionId)) || null;
 
@@ -279,10 +296,20 @@ function SF2AttendancePage() {
   // year, so show the school year next to the name in that case.
   const showSchoolYearInSectionLabel = !schoolYearId && schoolYears.length > 1;
 
-  const gradeLevelOptions = [
-    { value: "", label: isSectionsLoading ? "Loading..." : "All Grade Levels" },
-    ...gradeLevels.map((level) => ({ value: level, label: level })),
-  ];
+  // ADMIN has no "All Grade Levels" option any more - it always resolves to
+  // a real level (defaulted above, or reset above if it ever disappears),
+  // so picking a section is at most Grade Level -> Section instead of
+  // Grade Level -> School Year -> Section, same as TEACHER already gets
+  // for free from having one assigned section. TEACHER keeps "All Grade
+  // Levels", since that side already works.
+  const gradeLevelOptions = isSectionsLoading
+    ? [{ value: "", label: "Loading..." }]
+    : role === "admin"
+    ? gradeLevels.map((level) => ({ value: level, label: level }))
+    : [
+        { value: "", label: "All Grade Levels" },
+        ...gradeLevels.map((level) => ({ value: level, label: level })),
+      ];
   const schoolYearOptions = [
     { value: "", label: isSectionsLoading ? "Loading..." : "All School Years" },
     ...schoolYears.map((sy) => ({ value: sy.id, label: sy.name })),
