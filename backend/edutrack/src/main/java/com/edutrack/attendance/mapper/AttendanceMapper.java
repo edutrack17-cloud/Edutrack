@@ -8,7 +8,6 @@ import com.edutrack.shared.util.NameUtil;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-
 @Mapper(componentModel = "spring", imports = {NameUtil.class, GradeAndSectionUtil.class})
 public interface AttendanceMapper {
 
@@ -23,12 +22,17 @@ public interface AttendanceMapper {
         );
     }
 
+    default String getStudentRfid(Attendance attendance) {
+        return attendance.getStudentSectionAssignment()
+                .getStudent()
+                .getRfid();
+    }
+
     default String getStudentSection(Attendance attendance) {
         return attendance.getStudentSectionAssignment()
                 .getSection()
                 .getSectionName();
     }
-
 
     default GradeLevel getStudentGradeLevel(Attendance attendance) {
         return attendance.getStudentSectionAssignment()
@@ -37,6 +41,7 @@ public interface AttendanceMapper {
     }
 
     @Mapping(target = "studentName", expression = "java(getStudentName(attendance))")
+    @Mapping(target = "rfid", expression = "java(getStudentRfid(attendance))")
     @Mapping(target = "gradeAndSection", expression = "java(GradeAndSectionUtil." +
             "buildGradeAndSection(getStudentSection(attendance), getStudentGradeLevel(attendance)))")
     AttendanceResponse toAttendanceResponseDTO(Attendance attendance);

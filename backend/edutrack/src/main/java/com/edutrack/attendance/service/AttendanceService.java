@@ -113,12 +113,13 @@ public class AttendanceService {
 
     //READ
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'GUARD')")
-    public Page<AttendanceResponse> getAttendance(GradeLevel gradeLevel, Pageable pageable) {
+    public Page<AttendanceResponse> getAttendance(GradeLevel gradeLevel, AttendanceStatus attendanceStatus, Pageable pageable) {
 
         Specification<Attendance> spec = Specification
                 .where(AttendanceSpecification.schoolYearIsNotClosed())
                 .and(AttendanceSpecification.studentIsEnrolled())
-                .and(AttendanceSpecification.hasGradeLevel(gradeLevel));
+                .and(AttendanceSpecification.hasGradeLevel(gradeLevel))
+                .and(AttendanceSpecification.hasStatus(attendanceStatus));
 
         if (currentUserProvider.isTeacher()) {
             spec = spec.and(AttendanceSpecification.isAdvisedBy(
@@ -132,7 +133,8 @@ public class AttendanceService {
                 : PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
-                Sort.by(Sort.Direction.DESC, "attendanceId")
+                Sort.by(Sort.Direction.ASC, "studentSectionAssignment.student.lastName")
+                        .and(Sort.by(Sort.Direction.ASC, "studentSectionAssignment.student.firstName"))
         );
 
         return attendanceRepository.findAll(spec, sorted)

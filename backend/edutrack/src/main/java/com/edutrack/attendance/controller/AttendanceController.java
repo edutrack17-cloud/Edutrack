@@ -3,6 +3,7 @@ package com.edutrack.attendance.controller;
 import com.edutrack.attendance.dto.request.ManualAttendanceRequest;
 import com.edutrack.attendance.dto.request.TimeInAndOutAttendanceRequest;
 import com.edutrack.attendance.dto.response.AttendanceResponse;
+import com.edutrack.attendance.enums.AttendanceStatus;
 import com.edutrack.attendance.service.AttendanceService;
 import com.edutrack.section.enums.GradeLevel;
 import jakarta.validation.Valid;
@@ -37,8 +38,9 @@ public class AttendanceController {
     @GetMapping
     public ResponseEntity<Page<AttendanceResponse>> getAttendance(
             @RequestParam(required = false) GradeLevel gradeLevel,
+            @RequestParam(required = false) AttendanceStatus attendanceStatus,
             Pageable pageable) {
-        return ResponseEntity.ok(attendanceService.getAttendance(gradeLevel, pageable));
+        return ResponseEntity.ok(attendanceService.getAttendance(gradeLevel, attendanceStatus, pageable));
     }
 
     //MANUAL ATTENDANCE

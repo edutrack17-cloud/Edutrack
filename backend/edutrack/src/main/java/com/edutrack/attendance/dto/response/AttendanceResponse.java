@@ -6,10 +6,11 @@ import com.edutrack.section.enums.GradeLevel;
 import java.time.LocalDateTime;
 
 public record AttendanceResponse(
-   Long attendanceId,
-   String studentName,
-   String gradeAndSection,
-   LocalDateTime dateTimeIn,
-   LocalDateTime dateTimeOut,
-   AttendanceStatus attendanceStatus
+        Long attendanceId,
+        String studentName,
+        String rfid,
+        String gradeAndSection,
+        LocalDateTime dateTimeIn,
+        LocalDateTime dateTimeOut,
+        AttendanceStatus attendanceStatus
 ) {}

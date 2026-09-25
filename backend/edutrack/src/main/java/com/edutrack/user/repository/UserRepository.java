@@ -15,4 +15,5 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     Optional<User> findByUsername(String username);
     long countByUserRoleAndAccountStatus(UserRole userRole, AccountStatus accountStatus);
     Optional<User> findByContactNumber(String contactNumber);
+    boolean existsByContactNumber(String contactNumber);
 }

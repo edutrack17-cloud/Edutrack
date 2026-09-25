@@ -8,6 +8,6 @@ public class NameUtil {
         String middle = (middleName == null || middleName.isBlank())
                 ? ""
                 : " " + middleName;
-        return firstName + middle + " " + lastName;
+        return lastName + middle + " " + firstName;
     }
 }

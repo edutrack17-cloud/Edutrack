@@ -235,28 +235,57 @@ public class StudentService {
                 studentSectionAssignmentRepository.findAll(filters, pageable);
 
         // Within each page, put students whose section's school year is
-        // currently active first, then everyone else. This is done in memory
-        // rather than in the query because JpaSort / ORDER BY CASE on a
-        // nested association (section.schoolYear.schoolYearStatus) isn't
-        // portable across Hibernate versions; the page sizes here are small
-        // (default 10), so the in-memory sort cost is negligible.
+        // currently active first, then everyone else. Within each of those
+        // two groups, order alphabetically by last name, then first name.
+        // This is done in memory rather than in the query because
+        // JpaSort / ORDER BY CASE on a nested association
+        // (section.schoolYear.schoolYearStatus) isn't portable across
+        // Hibernate versions; the page sizes here are small (default 10),
+        // so the in-memory sort cost is negligible.
+        //
+        // Names are lowercased with Locale.ROOT before comparison so
+        // mixed-casing ("dela Cruz" vs "Dela Cruz") doesn't reorder rows
+        // by ASCII value, and so locale-specific casing rules (e.g.
+        // Turkish dotless-i) can't violate the comparator contract.
+        // Null student / null name fields collapse to "" so they sort
+        // first rather than NPE-ing mid-sort.
         //
         // NOTE: this only reorders within a single page. If you need a
-        // *global* "active-year students always on page 1" guarantee, that
-        // has to be done with a JpaSort.unsafe expression on the query, or
-        // by fetching all rows and paginating in memory. See the earlier
-        // discussion for trade-offs.
+        // *global* "active-year students always on page 1, alphabetized"
+        // guarantee, that has to be done with a JpaSort.unsafe expression
+        // on the query, or by fetching all rows and paginating in memory.
         List<StudentSectionAssignment> sorted = new ArrayList<>(page.getContent());
         sorted.sort(
-                Comparator.comparingInt(
-                        (StudentSectionAssignment a) ->
-                                a.getSection() != null
-                                        && a.getSection().getSchoolYear() != null
-                                        && a.getSection().getSchoolYear().getSchoolYearStatus()
-                                        == SchoolYearStatus.active
-                                        ? 0
-                                        : 1
-                )
+                Comparator
+                        .comparingInt(
+                                (StudentSectionAssignment a) ->
+                                        a.getSection() != null
+                                                && a.getSection().getSchoolYear() != null
+                                                && a.getSection().getSchoolYear().getSchoolYearStatus()
+                                                == SchoolYearStatus.active
+                                                ? 0
+                                                : 1
+                        )
+                        .thenComparing(
+                                a -> {
+                                    if (a.getStudent() == null
+                                            || a.getStudent().getLastName() == null) {
+                                        return "";
+                                    }
+                                    return a.getStudent().getLastName().toLowerCase(Locale.ROOT);
+                                },
+                                Comparator.naturalOrder()
+                        )
+                        .thenComparing(
+                                a -> {
+                                    if (a.getStudent() == null
+                                            || a.getStudent().getFirstName() == null) {
+                                        return "";
+                                    }
+                                    return a.getStudent().getFirstName().toLowerCase(Locale.ROOT);
+                                },
+                                Comparator.naturalOrder()
+                        )
         );
 
         return new PageImpl<>(

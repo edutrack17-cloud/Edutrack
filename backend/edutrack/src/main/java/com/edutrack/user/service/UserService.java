@@ -132,6 +132,15 @@ public class UserService {
             changed = true;
         }
 
+        if (request.contactNumber() != null && !request.contactNumber().isBlank()) {
+            if (!request.contactNumber().equals(userToUpdate.getContactNumber())
+                    && userRepository.existsByContactNumber(request.contactNumber())) {
+                throw new ContactNumberAlreadyExists(request.contactNumber());
+            }
+            userToUpdate.setContactNumber(request.contactNumber());
+            changed = true;
+        }
+
         if (request.password() != null && !request.password().isBlank()) {
             userToUpdate.setPassword(passwordEncoder.encode(request.password()));
             changed = true;
@@ -140,7 +149,6 @@ public class UserService {
         User savedUser = changed ? userRepository.save(userToUpdate) : userToUpdate;
         return userMapper.toResponseDTO(savedUser);
     }
-
     //DISABLE ACCOUNT
     @Transactional
     public UserResponse disableAccount(Long userId){
