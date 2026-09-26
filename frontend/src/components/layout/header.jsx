@@ -5,7 +5,6 @@ import { Menu, ChevronDown, User, KeyRound, LogOut } from "lucide-react";
 function Header({ title, fullname, role, onMenuClick, onLogout }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-  const isTeacher = role === "Teacher";
   const isGuard = role === "Guard";
 
   function toggleProfileMenu() {
@@ -70,7 +69,7 @@ function Header({ title, fullname, role, onMenuClick, onLogout }) {
             <div onClick={closeProfileMenu} className="fixed inset-0 z-10" />
 
             <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5">
-              {isTeacher && (
+              {!isGuard && (
                 <Link
                   to="/profile"
                   onClick={closeProfileMenu}

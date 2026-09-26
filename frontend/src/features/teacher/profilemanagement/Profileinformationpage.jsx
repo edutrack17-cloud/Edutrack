@@ -15,22 +15,30 @@ import { editUserSchema } from "../../admin/Usermanagement/UsermanagementSchema"
 import { getUser, updateUser } from "../../admin/Usermanagement/Usermanagementservice";
 import { useAuth } from "../../../Context/Authcontext";
 
-const EDITABLE_FIELDS = ["firstName", "middleName", "lastName", "username"];
+const EDITABLE_FIELDS = ["firstName", "middleName", "lastName", "username", "contactNumber"];
 
 const FIELD_LABELS = {
   firstName: "first name",
   middleName: "middle name",
   lastName: "last name",
   username: "username",
+  contactNumber: "contact number",
 };
 
-const EMPTY_FORM = { firstName: "", middleName: "", lastName: "", username: "" };
+const EMPTY_FORM = { firstName: "", middleName: "", lastName: "", username: "", contactNumber: "" };
+
+// Same digit-only-while-typing behavior as Createusermodal.jsx, so a contact
+// number can never hold letters/symbols or exceed 11 chars before Yup's
+// MOBILE_REGEX (in editUserSchema) even runs.
+function sanitizeDigits(value, maxDigits) {
+  return value.replace(/\D/g, "").slice(0, maxDigits);
+}
 
 // Same read-only treatment as Viewusermodal.jsx's InfoField.
 function InfoField({ label, value }) {
   return (
     <div>
-      <p className="mb-1 text-sm font-semibold text-gray-700">{label}</p>
+      <p className="mb-1 text-sm font-semibold text-primary">{label}</p>
       <p className="text-sm text-gray-500">{value || "—"}</p>
     </div>
   );
@@ -43,6 +51,7 @@ function toFormValues(profile) {
     middleName: profile.middleName ?? "",
     lastName: profile.lastName ?? "",
     username: profile.username ?? "",
+    contactNumber: profile.contactNumber ?? "",
   };
 }
 
@@ -182,6 +191,7 @@ function ProfileInformationPage() {
       firstName: savedValues.firstName,
       middleName: savedValues.middleName,
       lastName: savedValues.lastName,
+      contactNumber: savedValues.contactNumber,
       fullName: savedProfile?.fullName,
     };
     Object.keys(patch).forEach((key) => patch[key] === undefined && delete patch[key]);
@@ -198,6 +208,10 @@ function ProfileInformationPage() {
     } catch (error) {
       console.warn("Could not sync the cached user:", error);
     }
+  }
+
+  function handleContactNumberChange(event) {
+    formik.setFieldValue("contactNumber", sanitizeDigits(event.target.value, 11));
   }
 
   function handleReset() {
@@ -352,6 +366,24 @@ function ProfileInformationPage() {
                     touched={formik.touched.username}
                     disabled={isSaving}
                   />
+
+                  <div className="sm:col-span-2">
+                    <Input
+                      label="Contact Number"
+                      id="contactNumber"
+                      name="contactNumber"
+                      type="text"
+                      placeholder="09xxxxxxxxx"
+                      value={formik.values.contactNumber}
+                      onChange={handleContactNumberChange}
+                      onBlur={formik.handleBlur}
+                      error={formik.errors.contactNumber}
+                      touched={formik.touched.contactNumber}
+                      disabled={isSaving}
+                      maxLength={11}
+                      inputMode="numeric"
+                    />
+                  </div>
 
                   <InfoField label="Role" value={profile?.role} />
                   <InfoField label="Account Status" value={profile?.status} />

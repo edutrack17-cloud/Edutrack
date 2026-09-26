@@ -59,8 +59,8 @@ function AppRoutes() {
           <Route path="/promote-student" element={<PromoteStudentPage />} />
           <Route path="/change-password" element={<ChangePassword />} />
  
-          {/* Everything below connects to teacher role only. */}
-          <Route element={<ProtectedRoute allowedRoles={["teacher"]} />}>
+          {/* Everything below connects to teacher or admin - both can manage their own profile. */}
+          <Route element={<ProtectedRoute allowedRoles={["teacher", "admin"]} />}>
             <Route path="/profile" element={<ProfileInformation />} />
           </Route>
 
