@@ -19,6 +19,25 @@ function getErrorMessage(error, fallback) {
 }
 
 
+// BUG FIX: SectionSpecification.hasAdviserName (backend) splits `fullName`
+// on whitespace only ("\\s+") and requires every resulting token to
+// independently LIKE-match a name column - it never strips punctuation
+// first. The Teacher filter (Sectionlevelpage.jsx's selectedTeacherName)
+// passes a "LastName, First Middle" display name through `search`, and the
+// comma survives as part of the "LastName," token, which then never
+// matches a plain "LastName" column value - so picking a teacher from the
+// dropdown silently returned zero results even though typing the same
+// name as free text (no punctuation) worked fine. Stripping punctuation
+// once, here at the API boundary, fixes every current and future caller
+// of `search` - not just the Teacher filter - without touching the
+// backend.
+function sanitizeNameSearch(value) {
+  return value
+    .replace(/[.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // CONNECT: GET /api/section
 // UPDATE: backend now accepts a real schoolYearId param (SectionController
 // / SectionSpecification.hasSchoolYearId), so the School Year filter no
@@ -27,7 +46,7 @@ function getErrorMessage(error, fallback) {
 // straight through like gradeLevel/status below.
 export async function getSections({ search, sectionSearch, gradeLevel, status, schoolYearId, page = 0, size = 10, signal } = {}) {
   const params = {};
-  if (search) params.fullName = search;
+  if (search) params.fullName = sanitizeNameSearch(search);
   if (sectionSearch) params.sectionName = sectionSearch;
   if (gradeLevel) params.gradeLevel = gradeLevel;
   if (status) params.sectionStatus = status;

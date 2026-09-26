@@ -39,7 +39,7 @@ const STUDENT_FILTER_MENU_OPTIONS = [STUDENT_FILTER_ALL, ...STUDENT_FILTER_OPTIO
 const triggerClass =
   "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
 
-const wrapperClass = "relative h-9 w-full shrink-0 sm:w-50";
+const wrapperClass = "relative h-9 w-full shrink-0 sm:w-55";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -97,7 +97,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
       {isOpen && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-72 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
@@ -106,9 +106,9 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
-                  <span className="min-w-0 truncate">{option.label}</span>
+                  <span>{option.label}</span>
                   {isSelected && <Check size={14} className="shrink-0" />}
                 </button>
               </li>
