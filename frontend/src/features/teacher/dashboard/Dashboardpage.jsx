@@ -14,7 +14,12 @@ const LABEL_TO_PERIOD = { Daily: "daily", Week: "weekly", Month: "monthly", Year
 function DashboardPage() {
   const { role } = useAuth();
 
-  const [rangeLabel, setRangeLabel] = useState("Month");
+  // Matches dashboardservice.js's own `period = "daily"` default on both
+  // getAdminDashboard() and getTeacherDashboard() - was hardcoded to
+  // "Month" here, which silently overrode that default on every initial
+  // load (fetchDashboard() always passes an explicit period, so the
+  // service's default value never actually got a chance to apply).
+  const [rangeLabel, setRangeLabel] = useState("Daily");
 
   // Which of the teacher's sections (mySections) the dashboard is scoped to.
   const [selectedSectionId, setSelectedSectionId] = useState(null);

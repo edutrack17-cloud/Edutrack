@@ -149,6 +149,31 @@ function AttendanceChart({ data: attendanceOverview, range, onRangeChange, isLoa
 
   return (
     <div className="flex flex-col gap-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+      {/*
+        Recharts wraps the chart in a focusable <svg class="recharts-surface"
+        tabIndex="0"> (its built-in "accessibility layer", for keyboard
+        navigation). Clicking anywhere on the chart focuses that <svg>, and
+        the BROWSER (not Recharts, not this component's own styling) then
+        draws its default focus outline around the whole surface - that's
+        the black rectangle border that appears on click.
+
+        Rather than disabling the accessibility layer outright (which would
+        remove keyboard support entirely), this suppresses the outline only
+        for a mouse-driven focus (:focus but not :focus-visible) and keeps a
+        real, visible outline for keyboard users tabbing in (:focus-visible)
+        - scoped to just this component via .attendance-chart-surface so it
+        doesn't affect any other Recharts chart elsewhere in the app.
+      */}
+      <style>{`
+        .attendance-chart-surface .recharts-surface:focus {
+          outline: none;
+        }
+        .attendance-chart-surface .recharts-surface:focus-visible {
+          outline: 2px solid #01379A;
+          outline-offset: 2px;
+        }
+      `}</style>
+
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <h2 className="text-lg font-bold text-primary">Chart</h2>
         <p className="justify-self-center text-base font-semibold text-primary">{displayDate}</p>
@@ -275,7 +300,7 @@ function AttendanceChart({ data: attendanceOverview, range, onRangeChange, isLoa
           No attendance data for this period.
         </div>
       ) : (
-        <div className="h-72 w-full sm:h-80">
+        <div className="attendance-chart-surface h-72 w-full sm:h-80">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid stroke="#E5E7EB" vertical={false} />
