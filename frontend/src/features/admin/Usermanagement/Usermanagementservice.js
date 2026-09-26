@@ -14,29 +14,27 @@ function normalizeWhitespace(str) {
   return (str || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function splitFullName(fullName) {
-  const parts = (fullName || "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return { firstName: "", middleName: "", lastName: "" };
-  if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
-  return {
-    firstName: parts[0],
-    lastName: parts[parts.length - 1],
-    middleName: parts.slice(1, -1).join(" "),
-  };
-}
+// NOTE: splitFullName() has been removed. It used to parse the composed
+// `fullName` string back into firstName/middleName/lastName, which
+// silently ate the comma in "Last, First Middle" -> firstName came out
+// as "Account," (comma glued on), then got saved back to the DB, then
+// re-composed on the next read as "Guard, Account, Level" -> two commas,
+// and so on. Every save duplicated the comma. The UserResponse DTO now
+// carries the raw firstName/middleName/lastName fields directly, so
+// nothing needs to be parsed here anymore. If those DTO fields are ever
+// removed, this will break again - see UserResponse.java.
 
 // Guard accounts can show up now that getUsers() hits /api/user instead of /api/user/teachers
 const ROLE_LABELS = { admin: "Admin", teacher: "Teacher", guard: "Guard" };
 
 function mapTeacherResponse(user) {
-  const { firstName, middleName, lastName } = splitFullName(user.fullName);
   return {
     id: user.userId,
     username: user.username,
     fullName: user.fullName,
-    firstName,
-    middleName,
-    lastName,
+    firstName: user.firstName ?? "",
+    middleName: user.middleName ?? "",
+    lastName: user.lastName ?? "",
     contactNumber: user.contactNumber,
 
     role: ROLE_LABELS[user.userRole] ?? user.userRole,
@@ -161,9 +159,6 @@ export async function createUser(formData) {
 // CONNECTED: PATCH /api/user/update/{userId}
 export async function updateUser(userId, formData) {
   try {
-    // NOTE: UpdateUserRequest.java has a contactNumber field, but UserService.updateUser()
-    // on the backend never reads/applies it - sending it here won't actually persist a
-    // change until the backend adds that handling. Kept here so it's ready once it does.
     const payload = {
       username: formData.username,
       firstName: formData.firstName,
