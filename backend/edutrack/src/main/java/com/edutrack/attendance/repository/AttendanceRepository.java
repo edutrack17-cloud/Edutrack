@@ -24,7 +24,7 @@ public interface AttendanceRepository
         FROM Attendance a
         WHERE a.studentSectionAssignment.assignmentId IN :assignmentIds
         AND a.createdAt BETWEEN :periodStart AND :periodEnd
-        ORDER BY a.createdAt
+        ORDER BY a.studentSectionAssignment.assignmentId, a.createdAt
         """)
     List<Attendance> findForAssignmentsAndPeriod(
             @Param("assignmentIds") List<Long> assignmentIds,

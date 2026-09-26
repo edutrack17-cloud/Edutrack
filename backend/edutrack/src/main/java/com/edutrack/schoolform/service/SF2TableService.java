@@ -49,7 +49,7 @@ public class SF2TableService {
                 .orElseThrow(() -> new SectionNotFound(request.sectionId()));
 
         SchoolYear schoolYear = schoolYearRepository.findById(request.schoolYearId())
-                .orElseThrow(() -> new RuntimeException("School Year not found")); // Replace with a specific exception
+                .orElseThrow(() -> new RuntimeException("School Year not found"));
 
         LocalDate periodStart = request.period().atDay(1);
         LocalDate periodEnd = request.period().atEndOfMonth();
@@ -63,7 +63,8 @@ public class SF2TableService {
                 .map(StudentSectionAssignment::getAssignmentId)
                 .toList();
 
-        Map<Long, Map<LocalDate, AttendanceStatus>> attendanceByAssignment = loadAttendance(assignmentIds, periodStart, periodEnd);
+        Map<Long, Map<LocalDate, AttendanceStatus>> attendanceByAssignment =
+                loadAttendance(assignmentIds, periodStart, periodEnd);
 
         List<StudentAttendanceRow> studentRows = roster.stream()
                 .map(assignment -> {
@@ -92,7 +93,7 @@ public class SF2TableService {
 
         return new SF2TableResponse(
                 schoolYear.getSchoolYearName(),
-                section.getGradeLevel().name(), // Or a more user-friendly label
+                section.getGradeLevel().name(),
                 section.getSectionName(),
                 monthLabel,
                 schoolDays,
@@ -100,17 +101,24 @@ public class SF2TableService {
         );
     }
 
-    private Map<Long, Map<LocalDate, AttendanceStatus>> loadAttendance(List<Long> assignmentIds, LocalDate start, LocalDate end) {
+    private Map<Long, Map<LocalDate, AttendanceStatus>> loadAttendance(
+            List<Long> assignmentIds, LocalDate start, LocalDate end) {
         if (assignmentIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        List<Attendance> attendanceRecords = attendanceRepository.findForAssignmentsAndPeriod(assignmentIds, start, end);
+
+        List<Attendance> attendanceRecords =
+                attendanceRepository.findForAssignmentsAndPeriod(assignmentIds, start, end);
+
         Map<Long, Map<LocalDate, AttendanceStatus>> result = new HashMap<>();
         for (Attendance record : attendanceRecords) {
+            LocalDate date = record.getCreatedAt();
+            if (date == null) continue;
+
             result.computeIfAbsent(
                     record.getStudentSectionAssignment().getAssignmentId(),
                     k -> new HashMap<>()
-            ).put(record.getCreatedAt(), record.getAttendanceStatus());
+            ).put(date, record.getAttendanceStatus());
         }
         return result;
     }
@@ -134,13 +142,14 @@ public class SF2TableService {
         return switch (status) {
             case present -> "P";
             case absent -> "A";
-            case on_school -> null; // Or a different mark if needed
+            case on_school -> null; // student hasn't tapped out yet — no mark
         };
     }
 
     private String formatStudentName(StudentSectionAssignment assignment) {
         var student = assignment.getStudent();
         return student.getLastName() + ", " + student.getFirstName() +
-                (student.getMiddleName() != null && !student.getMiddleName().isBlank() ? " " + student.getMiddleName() : "");
+                (student.getMiddleName() != null && !student.getMiddleName().isBlank()
+                        ? " " + student.getMiddleName() : "");
     }
 }

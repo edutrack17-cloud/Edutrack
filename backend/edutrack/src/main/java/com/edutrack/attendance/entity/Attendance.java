@@ -27,7 +27,16 @@ public class Attendance {
     @Column(nullable = false)
     private AttendanceStatus attendanceStatus;
 
-    private LocalDate createdAt = LocalDate.now();
+    /**
+     * The calendar date this attendance record represents.
+     *
+     * FIX: Removed `= LocalDate.now()` default. Callers MUST set this
+     * explicitly to the intended school day. The old default caused records
+     * to silently collapse onto the insert date when callers forgot to set it,
+     * which is why SF2 report generation only showed one month of data.
+     */
+    @Column(name = "created_at", nullable = false)
+    private LocalDate createdAt;
 
     public long getAttendanceId() {
         return attendanceId;

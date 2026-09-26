@@ -99,6 +99,7 @@ public class AttendanceService {
         newAttendance.setStudentSectionAssignment(studentToTimeIn);
         newAttendance.setDateTimeIn(LocalDateTime.now());
         newAttendance.setAttendanceStatus(AttendanceStatus.on_school);
+        newAttendance.setCreatedAt(today); // FIX: explicit — entity no longer defaults to LocalDate.now()
 
         Attendance savedAttendance = attendanceRepository.save(newAttendance);
 
@@ -153,6 +154,7 @@ public class AttendanceService {
         manualAttendance.setAttendanceStatus(AttendanceStatus.present);
         manualAttendance.setDateTimeIn(manualAttendanceRequest.dateTimeIn());
         manualAttendance.setStudentSectionAssignment(studentToTimeIn);
+        manualAttendance.setCreatedAt(today); // FIX: explicit — entity no longer defaults to LocalDate.now()
 
         Specification<Attendance> filters = filterByAssignmentIdAndDateTime(
                 studentToTimeIn.getAssignmentId(), today);
@@ -336,6 +338,7 @@ public class AttendanceService {
                     Attendance absentAttendanceRecord = new Attendance();
                     absentAttendanceRecord.setAttendanceStatus(AttendanceStatus.absent);
                     absentAttendanceRecord.setStudentSectionAssignment(assignment);
+                    absentAttendanceRecord.setCreatedAt(today); // FIX: explicit — entity no longer defaults to LocalDate.now()
                     return absentAttendanceRecord;
                 })
                 .toList();
