@@ -15,6 +15,29 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Extracts the most useful error message from whatever the network
+ * layer threw. Handles three shapes that can reach us here:
+ *
+ *   1. Raw axios error:    { response: { data: { message: "..." } } }
+ *      -> produced by apiClient.js when it re-throws the original error.
+ *
+ *   2. Flattened Error:    { message: "..." }
+ *      -> produced if any layer (authService.js, an interceptor,
+ *         apiClient.js) does `throw new Error(response.data.message)`.
+ *
+ *   3. Anything else:      fall back to the generic string so the user
+ *      never sees a blank error box.
+ */
+function extractErrorMessage(error) {
+  return (
+    error?.response?.data?.message ||   // axios error (preferred)
+    error?.response?.data?.error ||     // some backends put it here
+    error?.message ||                   // flattened Error
+    "Login failed. Please check your username and password."
+  );
+}
+
 function LoginForm() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -37,7 +60,9 @@ function LoginForm() {
       const redirectPath = user.role === "guard" ? "/guard-attendance" : "/dashboard";
       navigate(redirectPath, { replace: true });
     } catch (error) {
-      formikHelpers.setStatus("Login failed. Please check your username and password.");
+      // Works whether the error survived as an axios error or got
+      // flattened into a plain Error by a lower layer.
+      formikHelpers.setStatus(extractErrorMessage(error));
       formikHelpers.setSubmitting(false);
     }
   }

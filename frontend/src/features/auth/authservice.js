@@ -18,19 +18,11 @@ const api = axios.create({
 });
 
 // Separate, interceptor-free instance used ONLY for POST /refresh.
-// /refresh is permitAll and ignores the access token entirely, and if
-// this call also went through `api`'s response interceptor, a failed
-// refresh could theoretically try to refresh itself. Keeping it fully
-// separate avoids that class of bug entirely.
 const refreshClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
 // --- Token storage -----------------------------------------------------
-// This is the one place that reads/writes accessToken + refreshToken.
-// AuthContext.jsx should go through these instead of touching
-// localStorage directly, so there's never a second source of truth for
-// the key names.
 
 export function getAccessToken() {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -60,12 +52,6 @@ api.interceptors.request.use((config) => {
 });
 
 // --- Refresh, with de-duplication ---------------------------------------
-// The backend invalidates the old refresh token the instant it's used,
-// so if two requests both 401 at nearly the same time and each fires
-// its own /refresh call, one of them is guaranteed to fail. This makes
-// sure only ONE /refresh call is ever in flight - everyone else who
-// hits a 401 while that's happening just awaits the same promise and
-// reuses its result.
 let refreshPromise = null;
 
 export async function refreshAccessToken() {
@@ -79,14 +65,10 @@ export async function refreshAccessToken() {
       const response = await refreshClient.post("/refresh", { refreshToken });
       const { accessToken, refreshToken: newRefreshToken } = response.data;
 
-      // Overwrite immediately - the refresh token we just sent is dead
-      // the moment this response comes back.
       setTokens({ accessToken, refreshToken: newRefreshToken });
 
       return accessToken;
     })().finally(() => {
-      // Clear it whether it succeeded or failed, so the NEXT 401 (e.g.
-      // after the user logs back in) can trigger a fresh attempt.
       refreshPromise = null;
     });
   }
@@ -96,41 +78,50 @@ export async function refreshAccessToken() {
 // Catches a 401 on any request made through `api`, refreshes once, and
 // retries the original request with the new access token.
 //
-// Every failure mode on /refresh (expired, already-used, account
-// disabled) comes back as the same generic 401 - there's nothing to
-// branch on, so "refresh failed" always just means "send them to
-// login."
+// FIXES:
+//   1. Skip refresh entirely when there's no refresh token stored. On
+//      the login page (or any unauthenticated context) there's nothing
+//      to refresh, and trying anyway would go into the catch branch,
+//      which calls window.location.href = "/login" - and since we're
+//      ALREADY on /login, that reloads the page, which fires the same
+//      prefetching request that 401'd, which redirects again... a reload
+//      loop that wipes any form error state.
+//   2. Don't redirect if we're already on /login. Same reason, belt and
+//      suspenders: even if a 401 slips past the hasRefreshToken check,
+//      the redirect-to-self was the loop trigger.
+//   3. /login still short-circuits the refresh attempt (its 401s are
+//      "bad credentials", not "token expired"), so LoginForm's catch
+//      block receives the error and can render the server message.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
 
-    // /login is unauthenticated - no access token is attached to it, so a
-    // 401 from it always means "wrong username/password," never "token
-    // expired." Skip the refresh-and-redirect flow for it and let
-    // LoginForm's own catch block handle the error directly. Otherwise a
-    // failed login attempt tries to refresh (which fails, since there's
-    // no valid session yet), which clears storage and forces a full-page
-    // redirect to /login - wiping out whatever the user had just typed.
     const isLoginRequest = originalRequest?.url?.includes("/login");
+    const hasRefreshToken = !!getRefreshToken();
 
-    if (status === 401 && originalRequest && !originalRequest._retry && !isLoginRequest) {
-      originalRequest._retry = true; // never retry more than once per request
+    if (
+      status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isLoginRequest &&
+      hasRefreshToken
+    ) {
+      originalRequest._retry = true;
 
       try {
         const newAccessToken = await refreshAccessToken();
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed (or there was no refresh token to try) - the
-        // session is over. Clear everything and bounce to login.
-        // Full page redirect (not a router navigate) on purpose: this
-        // code runs outside the React tree, so this is the reliable way
-        // to reset AuthContext, route guards, etc. all at once.
         clearTokens();
         localStorage.removeItem("user");
-        window.location.href = "/login";
+
+        // Only redirect if we're not already on /login - see Fix #2 above.
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
         return Promise.reject(refreshError);
       }
     }
@@ -140,33 +131,6 @@ api.interceptors.response.use(
 );
 
 // --- Forgot password (OTP-based) -----------------------------------------
-// Fully unauthenticated flow, so it runs on its own axios instance - no
-// Authorization header ever gets attached (there's no session yet), and
-// it deliberately skips `api`'s 401-refresh interceptor. A wrong/expired
-// OTP naturally comes back as an error, and that should just surface as
-// a form error, not kick off a refresh attempt and redirect-to-login.
-//
-// Matches PasswordResetController.java (api/auth/forgot-password):
-//   POST /forgot-password/request  { username }                    -> 202, no body
-//   POST /forgot-password/verify   { username, code, newPassword } -> 204, no body
-// Only 2 steps, not 3 - /verify checks the OTP AND sets the new password
-// in the same call (PasswordResetService.completeReset). There is no
-// resetToken on the backend - don't try to carry one between steps.
-//
-// Also: lookup is by username only (userRepository.findByUsername) -
-// there's no email path, so don't offer "or email" in the UI copy.
-//
-// Who can use this: all roles, including admin - since there's normally
-// only one admin account, "contact another administrator" isn't a real
-// fallback for them. The old admin-exclusion banner in ForgotPasswordForm
-// has been removed to match.
-//
-// NOT YET DONE ON BACKEND: PasswordResetService still silently ignores
-// admin in requestReset() and throws OtpInvalidException for admin in
-// completeReset() - both role checks need to be removed there before this
-// actually works end-to-end for admin. Until backend ships that, admin
-// users will see this UI act like it works but requestReset()/completeReset()
-// will still no-op / reject them server-side. Flag this to backend.
 const forgotPasswordClient = axios.create({
   baseURL: API_BASE_URL,
 });
@@ -176,20 +140,12 @@ const FORGOT_PASSWORD_ENDPOINTS = {
   verify: "/forgot-password/verify",
 };
 
-// Step 1: the user submits their username, backend sends an OTP via SMS to
-// the contact number on file. Always resolves normally (202) whether or
-// not the username exists / has a phone on file / is an admin or
-// disabled account - backend intentionally never reveals which, so
-// don't try to branch UI behavior on the response here.
 export async function requestPasswordResetOtp(username) {
   await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.request, {
     username,
   });
 }
 
-// Step 2: the user submits the OTP they received together with their new
-// password, in one call. Success (204) means the code was valid and the
-// password is already changed - there's nothing further to submit.
 export async function resetPasswordWithOtp(username, code, newPassword) {
   await forgotPasswordClient.post(FORGOT_PASSWORD_ENDPOINTS.verify, {
     username,
@@ -199,21 +155,6 @@ export async function resetPasswordWithOtp(username, code, newPassword) {
 }
 
 export async function loginUser(credentials) {
-  // POST http://localhost:8080/api/auth/login
-  //
-  // NOTE: backend now returns the same shape as /refresh:
-  //   { accessToken, refreshToken, userId, username, userRole }
-  // (previously just { token, userId, username, userRole }). Confirm
-  // this with backend before shipping - if the field is still called
-  // `token`, the destructure below silently gives you `undefined`.
-  //
-  // TODO (backend): /login does not currently return the user's name at
-  // all - only userId/username/userRole. Header/Sidebar need a display
-  // name, so ask backend to add either `fullName` or
-  // `firstName`/`middleName`/`lastName` to this response (same fields
-  // GET /api/user/teachers already returns - see mapTeacherResponse()
-  // in Usermanagementservice.js). Until that ships, fullName below
-  // falls back to username so nothing breaks.
   const response = await api.post("/login", credentials);
   const { accessToken, refreshToken, userId, username, userRole, fullName, firstName, middleName, lastName } =
     response.data;
@@ -223,7 +164,6 @@ export async function loginUser(credentials) {
   const resolvedFullName =
     fullName || [firstName, middleName, lastName].filter(Boolean).join(" ") || username;
 
-  // AuthContext.login() expects role lowercase ("admin" | "teacher" | "guard").
   return {
     user: {
       id: userId,
@@ -234,30 +174,10 @@ export async function loginUser(credentials) {
   };
 }
 
-// Called from AuthContext.logout() so the server-side token actually
-// gets revoked (TokenRevocationService), not just cleared locally.
-//
-// NOTE (still open on backend, not this change): /logout only
-// blacklists the access token's jti - it does NOT touch the refresh
-// token. Clearing localStorage here is what actually stops THIS
-// browser from getting new access tokens; a copied/leaked refresh
-// token elsewhere would still work until it naturally expires.
 export async function logoutUser() {
   await api.post("/logout");
 }
 
-// Used by Changepassword.jsx.
-//
-// PATCH /api/auth/change-password
-// Header: Authorization: Bearer <token>   (already attached above)
-// Body:   { currentPassword: string, newPassword: string }
-// Success: 200/204, no body required
-// Errors:  401 if currentPassword is wrong, 400 for validation
-//
-// HEADS UP (backend): this endpoint isn't in AuthController.java - only
-// login / refresh / logout exist there. PATCH /api/auth/change-password
-// taking { currentPassword, newPassword } needs to be added before this
-// works. Not something I can add from the frontend - flag for backend dev.
 export async function changePassword({ currentPassword, newPassword }) {
   const response = await api.patch("/change-password", {
     currentPassword,

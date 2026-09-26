@@ -7,19 +7,6 @@ const RATE_LIMIT_CAPACITY = 50;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REFILL_MS = RATE_LIMIT_WINDOW_MS / RATE_LIMIT_CAPACITY; // 1200ms
 
-// Persisted so a reload or a Vite HMR re-eval of this module doesn't reset
-// the client's idea of its own budget back to a full 50 - the server's
-// bucket (RateLimitService's per-user ConcurrentHashMap) has no idea a
-// reload happened and keeps counting from wherever it actually was.
-//
-// Sharing the key via localStorage also means a second tab on the same
-// login reads/writes the same numbers instead of starting fresh - but
-// that's a soft improvement, not a hard guarantee: localStorage has no
-// cross-tab read-modify-write lock, so two tabs writing within the same
-// instant can still stomp each other's count (lost update). This closes
-// the common case (reload, HMR, opening a second tab later); genuinely
-// simultaneous multi-tab drain still relies on the 429 resync below,
-// same as before.
 const RATE_LIMIT_STORAGE_KEY = "apiClient:rateLimitBucket";
 
 function loadPersistedBucket() {
@@ -32,8 +19,6 @@ function loadPersistedBucket() {
     }
     return parsed;
   } catch {
-    // Private/incognito mode, storage disabled or full, or a corrupt
-    // value - fall back to an in-memory-only bucket for this tab.
     return null;
   }
 }
@@ -45,8 +30,7 @@ function persistBucket() {
       JSON.stringify({ availableTokens, lastRefillAt })
     );
   } catch {
-    // Same fallback as above - the bucket still works for this tab, it
-    // just won't survive a reload or sync across tabs.
+    // in-memory fallback
   }
 }
 
@@ -80,22 +64,6 @@ function processThrottleQueue() {
   }
 }
 
-// Awaited by the request interceptor below before every WRITE call, no
-// matter which service file's axios instance is making it - this is what
-// makes the bucket actually shared instead of just co-located in one
-// file. Under the limit, resolves immediately; over it, queues (in call
-// order, across every domain that shares this module) and resolves as
-// tokens refill.
-//
-// Reads (GET/HEAD/OPTIONS) are explicitly NOT charged against this bucket
-// - see the request interceptor below. Two reasons:
-//   1. Reads are cheap and idempotent; charging them means a single page
-//      transition that fires a dozen GETs drains the client's budget and
-//      queues every subsequent read (and write) behind a 1.2s refill.
-//   2. It mirrors the backend RateLimitFilter, which also skips
-//      GET/HEAD/OPTIONS as of the same fix. The client bucket's only job
-//      now is to pace state-changing requests, which is exactly what the
-//      server-side bucket is doing.
 function acquireRequestSlot() {
   refillTokens();
   if (availableTokens > 0 && throttleQueue.length === 0) {
@@ -112,44 +80,22 @@ function acquireRequestSlot() {
 }
 
 /**
- * Builds a fully-wired axios instance: shared rate-limit throttle, 
- * Authorization header attachment, 401 -> refresh-once-and-retry -> logout,
- * and 429 -> resync-and-retry-once. This is the shape every *Service.js
- * file used to hand-roll on its own (sectionApi, studentApi, userApi,
- * schoolYearApi, activityLogApi, guardAttendanceApi, attendanceApi) -
- * nearly byte-for-byte identical in seven separate places, which is how
- * one of them (enrollmentService.js) ended up with the updated rate-limit
- * numbers while the rest didn't, and how six of them never got the
- * refresh-token retry that Attendanceservice.js has.
- *
- * Every instance returned by this function shares ONE token bucket (see
- * above) - matching the backend's real per-user bucket, which is shared
- * across every endpoint via RateLimitFilter.resolveKey()'s "user:" +
- * userId key. Opening several of these domains at once in the same tab
- * (or another tab/device under the same login) can still surface a real
- * 429 sometimes, since this is a client-side approximation running a
- * fraction of a request-cycle ahead of the server's own bucket - that's
- * expected, and the 429 handling below is exactly the safety net for it.
- *
- * Concurrent 401s across every instance/domain are already safe against
- * the backend's single-use, revoke-on-rotate refresh token - not because
- * of anything in this file, but because authService.js's own
- * refreshAccessToken() keeps a single module-level refreshPromise and
- * hands the SAME in-flight promise to every caller. Since every instance
- * this function returns imports that one function, they all get that
- * dedup for free with no extra locking needed here.
- *
- * @param {object} [options]
- * @param {string} [options.baseURL] - defaults to the shared API root.
- *   Pass something like `${API_BASE_URL}/auth` for a service that needs
- *   its own sub-path (authService.js does this itself, separately - it
- *   can't depend on this file, since this file depends on it for
- *   refreshAccessToken/clearTokens).
- * @param {(error) => boolean} [options.isAuthBypass] - return true to
- *   treat a given 401 as NOT a real auth failure (e.g. Activitylogservice's
- *   AuthorizationDeniedException, which the backend also maps to 401), so
- *   it's rejected as a normal error instead of triggering a refresh/logout.
+ * Public/unauth endpoints. A 401 from any of these means "the request
+ * itself was rejected" (bad credentials, bad OTP, ...), NOT "the access
+ * token expired." Refreshing makes no sense here - and previously the
+ * attempt to refresh on a login 401 always failed, which triggered
+ * clearTokens() + window.location.href = "/login", which reloaded the
+ * page and wiped LoginForm's error status before it could render.
  */
+function isPublicAuthEndpoint(url) {
+  if (!url) return false;
+  return (
+    url.includes("/auth/login") ||
+    url.includes("/auth/refresh") ||
+    url.includes("/auth/forgot-password")
+  );
+}
+
 export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
   const instance = axios.create({
     baseURL,
@@ -157,16 +103,6 @@ export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
   });
 
   instance.interceptors.request.use(async (config) => {
-    // Reads are NOT charged against the shared bucket. This mirrors the
-    // backend RateLimitFilter (which skips GET/HEAD/OPTIONS as of the
-    // same fix). Before this guard, navigating between pages that fire
-    // bursts of GETs drained the client budget at ~0.83 req/sec refill,
-    // so the third or fourth page visited would stall for hundreds of
-    // ms on every request while waiting for a token.
-    //
-    // Only state-changing methods (POST/PATCH/PUT/DELETE) consume a
-    // slot, which is what keeps rapid double-submits and other write
-    // bursts under control.
     const method = (config.method || "get").toLowerCase();
     const isRead = method === "get" || method === "head" || method === "options";
 
@@ -185,6 +121,7 @@ export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
     (response) => response,
     async (error) => {
       const status = error.response?.status;
+      const url = error.config?.url;
 
       // Some 401s aren't really auth failures (e.g. GlobalExceptionHandler
       // mapping a failed @PreAuthorize check to 401 instead of 403) - let
@@ -194,43 +131,64 @@ export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
         return Promise.reject(error);
       }
 
-      if (status === 401 && !error.config?._authRetried) {
+      // ---- FIX: don't try to refresh a login/forgot-password request ----
+      // A 401 from /auth/login means "wrong username/password" (or
+      // "account disabled", etc.), never "expired access token". Trying
+      // to refresh here always fails (there's no valid session yet),
+      // which then does window.location.href = "/login" - reloading the
+      // page and wiping LoginForm's error status before the user can
+      // read it.
+      if (status === 401 && isPublicAuthEndpoint(url)) {
+        return Promise.reject(error);
+      }
+
+      // ---- FIX: don't try to refresh if there's no refresh token ----
+      // If there's no stored refresh token, we're either not logged in,
+      // or the session was already cleared. There's nothing to refresh,
+      // so skip straight to rejecting. Combined with the redirect guard
+      // below, this kills the login-page reload loop.
+      const hasRefreshToken = !!localStorage.getItem("refreshToken");
+
+      if (
+        status === 401 &&
+        hasRefreshToken &&
+        !error.config?._authRetried
+      ) {
         error.config._authRetried = true;
         try {
-          // authService.js dedupes concurrent calls to this internally
-          // (module-level refreshPromise) - if another request already
-          // kicked off a refresh this instant, this just awaits that
-          // same promise instead of rotating the refresh token twice.
           await refreshAccessToken();
-          // Retrying through instance() re-runs the request interceptor
-          // above, which re-reads the (now refreshed) accessToken from
-          // localStorage - no need to patch the header manually here.
+          // Retry through instance() re-runs the request interceptor,
+          // which re-reads the refreshed accessToken from localStorage.
           return instance(error.config);
         } catch {
           clearTokens();
           localStorage.removeItem("user");
-          window.location.href = "/login";
+
+          // ---- FIX: don't redirect if we're already on /login ----
+          // Before this, the redirect would reload the page, which fired
+          // any prefetching requests (e.g. the dashboard), which 401'd,
+          // which redirected again -> reload loop that never let the
+          // login page show its error state.
+          if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+            window.location.href = "/login";
+          }
           return Promise.reject(error);
         }
       }
 
+      // Already tried refreshing once for this request and still got a
+      // 401 - session's actually over.
       if (status === 401 && error.config?._authRetried) {
-        // Already tried refreshing once for this request and still got a
-        // 401 - session's actually over.
         clearTokens();
         localStorage.removeItem("user");
-        window.location.href = "/login";
+
+        if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
         return Promise.reject(error);
       }
 
-      // Our SHARED bucket should keep every domain in this tab under the
-      // backend's limit on its own now, so reaching a real 429 means
-      // something else is also spending from this user's backend bucket
-      // right now (another tab, another device, or a burst of parallel
-      // writes that all queued past acquireRequestSlot() before the
-      // first one's response came back). Resync the shared bucket to
-      // empty and retry this one request once after a full refill
-      // interval.
+      // 429 handling - unchanged.
       if (status === 429 && !error.config?._rateLimitRetried) {
         availableTokens = 0;
         lastRefillAt = Date.now();
@@ -240,6 +198,8 @@ export function createApiClient({ baseURL = API_BASE_URL, isAuthBypass } = {}) {
         return instance(error.config);
       }
 
+      // Pass the ORIGINAL axios error through unchanged so callers can
+      // read error.response.data.message.
       return Promise.reject(error);
     }
   );

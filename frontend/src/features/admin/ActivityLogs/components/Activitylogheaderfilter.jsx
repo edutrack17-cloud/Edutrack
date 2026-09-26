@@ -1,19 +1,35 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
+// ---------------------------------------------------------------------------
+// IMPORTANT: each option's `value` MUST be the literal string that
+// ActivityLogService.createLogRecord(...) writes into activity_logs.log_header.
+// The `label` is only what the admin sees in the dropdown.
+//
+// Keep this list in sync with the backend. Every call site of
+// activityLogService.createLogRecord("HEADER", ...) in the Java code should
+// have a matching entry here. To see what's actually in the DB right now:
+//
+//   SELECT log_header, COUNT(*) FROM activity_logs GROUP BY log_header;
+//
+// Currently the only header with real rows is "STUDENTS BULK ENROLLED".
+// The rest are listed so they're selectable once their flows start logging.
+// ---------------------------------------------------------------------------
 export const STUDENT_FILTER_OPTIONS = [
-  { value: "STUDENT ENROLLED", label: "Student Enrolled", textClass: "text-success", selectedBgClass: "bg-success/10" },
-  { value: "STUDENT INFORMATION UPDATED", label: "Student Information Updated", textClass: "text-primary", selectedBgClass: "bg-primary/10" },
-  { value: "STUDENT PROMOTED", label: "Student Promoted", textClass: "text-success", selectedBgClass: "bg-success/10" },
-  { value: "STUDENT DROPPED", label: "Student Dropped", textClass: "text-secondary", selectedBgClass: "bg-secondary/10" },
-  { value: "STUDENT TRANSFERRED OUT", label: "Student Transferred Out", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
-  { value: "STUDENT GRADUATED", label: "Student Graduated", textClass: "text-success", selectedBgClass: "bg-success/10" },
-  { value: "STUDENT SECTION TRANSFER", label: "Student Section Transfer", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
+  { value: "STUDENT ENROLLED",            label: "Student Enrolled",            textClass: "text-success",  selectedBgClass: "bg-success/10" },
+  { value: "STUDENT RE-ENROLLED",         label: "Student Re-enrolled",         textClass: "text-success",  selectedBgClass: "bg-success/10" },
+  { value: "STUDENTS BULK ENROLLED",      label: "Students Bulk Enrolled",      textClass: "text-success",  selectedBgClass: "bg-success/10" },
+  { value: "STUDENT INFORMATION UPDATED", label: "Student Information Updated", textClass: "text-primary",  selectedBgClass: "bg-primary/10" },
+  { value: "STUDENT PROMOTED",            label: "Student Promoted",            textClass: "text-success",  selectedBgClass: "bg-success/10" },
+  { value: "STUDENT DROPPED",             label: "Student Dropped",             textClass: "text-secondary", selectedBgClass: "bg-secondary/10" },
+  { value: "STUDENT TRANSFERRED OUT",     label: "Student Transferred Out",     textClass: "text-warning",  selectedBgClass: "bg-warning/10" },
+  { value: "STUDENT GRADUATED",           label: "Student Graduated",           textClass: "text-success",  selectedBgClass: "bg-success/10" },
+  { value: "STUDENT SECTION TRANSFER",    label: "Student Section Transfer",    textClass: "text-warning",  selectedBgClass: "bg-warning/10" },
 ];
 
 export const ATTENDANCE_FILTER_OPTIONS = [
-  { value: "MANUAL ATTENDANCE", label: "Manual Attendance", textClass: "text-primary", selectedBgClass: "bg-primary/10" },
-  { value: "MANUAL TIMEOUT", label: "Manual Timeout", textClass: "text-primary", selectedBgClass: "bg-primary/10" },
+  { value: "MANUAL ATTENDANCE",         label: "Manual Attendance",         textClass: "text-primary", selectedBgClass: "bg-primary/10" },
+  { value: "MANUAL TIMEOUT",            label: "Manual Timeout",            textClass: "text-primary", selectedBgClass: "bg-primary/10" },
   { value: "MARKED STUDENTS AS ABSENT", label: "Marked Students as Absent", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
 ];
 

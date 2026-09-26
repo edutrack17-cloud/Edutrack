@@ -348,6 +348,26 @@ function EnrollmentPage() {
     }
   }
 
+  // --------------------------------------------------------------------
+  // FIX: Section dropdown cascade
+  // --------------------------------------------------------------------
+  // The Section dropdown in <StudentFilters> used to render `sections`
+  // as-is, which is every active section across every grade level
+  // (admin: GET /api/section/dropdown; teacher: their advised sections).
+  // Now it renders only the sections whose gradeLevel matches the
+  // currently selected Level filter. When no Level is selected (""),
+  // the full list is shown - which is the same as before.
+  //
+  // handleLevelChange() above already clears the selected `section` when
+  // the level changes, so a stale selection can't survive the swap.
+  //
+  // This is done in the page (not inside StudentFilters) so the same
+  // unfiltered `sections` array is still available to the Add Student
+  // modal, which needs the full list for its own grade-level picker.
+  const filteredSections = level
+    ? sections.filter((s) => s.gradeLevel === level)
+    : sections;
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
@@ -360,7 +380,7 @@ function EnrollmentPage() {
             onSectionChange={handleSectionChange}
             onStatusChange={handleStatusChange}
             gradeLevels={gradeLevels}
-            sections={sections}
+            sections={filteredSections}
             schoolYear={schoolYear}
             schoolYearOptions={schoolYearOptions}
             onSchoolYearChange={handleSchoolYearChange}
