@@ -30,7 +30,7 @@ public class UserSpecification {
                 return criteriaBuilder.conjunction();
             }
 
-            String[] nameParts = searchEntry.trim()
+            String[] searchParts = searchEntry.trim()
                     .toLowerCase()
                     .split("\\s+");
 
@@ -43,23 +43,27 @@ public class UserSpecification {
             Expression<String> lastName =
                     criteriaBuilder.lower(root.get("lastName"));
 
-            List<Predicate> namePredicates = new ArrayList<>();
+            Expression<String> username =
+                    criteriaBuilder.lower(root.get("username"));
 
-            for (String namePart : nameParts) {
+            List<Predicate> searchPredicates = new ArrayList<>();
 
-                String pattern = "%" + namePart + "%";
+            for (String part : searchParts) {
+
+                String pattern = "%" + part + "%";
 
                 Predicate partMatches = criteriaBuilder.or(
                         criteriaBuilder.like(firstName, pattern),
                         criteriaBuilder.like(middleName, pattern),
-                        criteriaBuilder.like(lastName, pattern)
+                        criteriaBuilder.like(lastName, pattern),
+                        criteriaBuilder.like(username, pattern)
                 );
 
-                namePredicates.add(partMatches);
+                searchPredicates.add(partMatches);
             }
 
             return criteriaBuilder.and(
-                    namePredicates.toArray(new Predicate[0])
+                    searchPredicates.toArray(new Predicate[0])
             );
         };
     }
