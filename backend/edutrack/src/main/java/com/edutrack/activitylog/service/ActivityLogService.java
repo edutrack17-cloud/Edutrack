@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
@@ -71,4 +72,10 @@ public class ActivityLogService {
         return activityLogRepository.findAll(filters, pageable)
                 .map(activityLogMapper::toActivityLogResponse);
     }
+
+    //DROPDOWN
+    public List<String> getLogHeaders(){
+        return activityLogRepository.findDistinctLogHeaders();
+    }
+
 }

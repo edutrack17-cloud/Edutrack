@@ -38,6 +38,7 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.function.Supplier;
 
 @Service
 @Transactional(readOnly = true)
@@ -491,107 +492,93 @@ public class StudentService {
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse dropStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
-        Student studentToDrop = getByStudentId(studentId);
-        StudentSectionAssignment sectionOfStudent = studentSection(studentId);
-
-        if (studentToDrop.getStudentStatus().equals(StudentStatus.dropped)){
-            throw new StudentAlreadyDropped();
-        }
-
-        //UPDATE STUDENT ENTITY
-        studentToDrop.setStudentStatus(StudentStatus.dropped);
-
-        //UPDATE STUDENT SECTION ASSIGNMENT ENTITY
-        StudentSectionAssignment assignmentToUpdate = getByAssignmentStudentId(studentId);
-        assignmentToUpdate.setLeftAt(updateStudentStatusRequest.leftAt());
-        assignmentToUpdate.setUpdatedAt(now);
-        assignmentToUpdate.setExitType(ExitType.dropped);
-
-        if (updateStudentStatusRequest.remarks() != null &&
-                !updateStudentStatusRequest.remarks().isBlank()){
-            assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
-        }
-
-        activityLogService.createLogRecord(
+        return transitionStudentStatus(
+                studentId,
+                updateStudentStatusRequest,
+                StudentStatus.dropped,
+                ExitType.dropped,
+                StudentAlreadyDropped::new,
                 "STUDENT DROPPED",
-                "marked " +
-                        NameUtil.buildFullName(studentToDrop.getFirstName(), studentToDrop.getMiddleName(), studentToDrop.getLastName()) +
-                        " as dropped"
-
+                "marked",
+                true
         );
-        return studentMapper.toStudentEditResponseDTO(studentToDrop, sectionOfStudent);
     }
 
     //TRANSFER OUT STUDENT
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse transferOutStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
-        Student studentToTransfer = getByStudentId(studentId);
-        StudentSectionAssignment sectionOfStudent = studentSection(studentId);
-
-        if (studentToTransfer.getStudentStatus().equals(StudentStatus.transferred_out)){
-            throw new StudentAlreadyTransferredOut();
-        }
-
-        //UPDATE STUDENT ENTITY
-        studentToTransfer.setStudentStatus(StudentStatus.transferred_out);
-
-        //UPDATE STUDENT SECTION ASSIGNMENT ENTITY
-        StudentSectionAssignment assignmentToUpdate = getByAssignmentStudentId(studentId);
-        assignmentToUpdate.setLeftAt(updateStudentStatusRequest.leftAt());
-        assignmentToUpdate.setUpdatedAt(now);
-        assignmentToUpdate.setExitType(ExitType.transferred_out);
-
-        if (updateStudentStatusRequest.remarks() != null &&
-                !updateStudentStatusRequest.remarks().isBlank()){
-            assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
-        }
-
-        activityLogService.createLogRecord(
+        return transitionStudentStatus(
+                studentId,
+                updateStudentStatusRequest,
+                StudentStatus.transferred_out,
+                ExitType.transferred_out,
+                StudentAlreadyTransferredOut::new,
                 "STUDENT TRANSFERRED OUT",
-                "marked " +
-                        NameUtil.buildFullName(studentToTransfer.getFirstName(), studentToTransfer.getMiddleName(), studentToTransfer.getLastName()) +
-                        " as transferred out"
-
+                "marked",
+                true
         );
-
-        return studentMapper.toStudentEditResponseDTO(studentToTransfer, sectionOfStudent);
     }
 
     //GRADUATED
     @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
     @Transactional
     public StudentEditResponse graduateStudent(Long studentId, UpdateStudentStatusRequest updateStudentStatusRequest){
-        Student studentToGraduate = getByStudentId(studentId);
-        StudentSectionAssignment sectionOfStudent = studentSection(studentId);
-
-        if (studentToGraduate.getStudentStatus() == StudentStatus.graduated){
-            throw new StudentAlreadyGraduated();
-        }
-
-        //UPDATE STUDENT ENTITY
-        studentToGraduate.setStudentStatus(StudentStatus.graduated);
-
-        //UPDATE STUDENT SECTION ASSIGNMENT
-        StudentSectionAssignment assignmentToUpdate = getByAssignmentStudentId(studentId);
-        assignmentToUpdate.setExitType(ExitType.graduated);
-        assignmentToUpdate.setLeftAt(updateStudentStatusRequest.leftAt());
-        assignmentToUpdate.setUpdatedAt(now);
-
-        if (updateStudentStatusRequest.remarks() != null &&
-                !updateStudentStatusRequest.remarks().isBlank()){
-            assignmentToUpdate.setRemarks(updateStudentStatusRequest.remarks());
-        }
-
-        activityLogService.createLogRecord(
+        return transitionStudentStatus(
+                studentId,
+                updateStudentStatusRequest,
+                StudentStatus.graduated,
+                ExitType.graduated,
+                StudentAlreadyGraduated::new,
                 "STUDENT GRADUATED",
-                "marked " +
-                        NameUtil.buildFullName(studentToGraduate.getFirstName(), studentToGraduate.getMiddleName(), studentToGraduate.getLastName()) +
-                        " as graduated"
-
+                "marked",
+                true
         );
+    }
 
-        return studentMapper.toStudentEditResponseDTO(studentToGraduate, sectionOfStudent);
+    //BULK DROP
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#bulkRequest.studentIds()))")
+    @Transactional
+    public List<StudentEditResponse> bulkDropStudents(BulkUpdateStudentStatusRequest bulkRequest){
+        return bulkTransitionStatus(
+                bulkRequest,
+                StudentStatus.dropped,
+                ExitType.dropped,
+                StudentAlreadyDropped::new,
+                "STUDENTS BULK DROPPED",
+                "marked",
+                "as dropped"
+        );
+    }
+
+    //BULK TRANSFER OUT
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#bulkRequest.studentIds()))")
+    @Transactional
+    public List<StudentEditResponse> bulkTransferOutStudents(BulkUpdateStudentStatusRequest bulkRequest){
+        return bulkTransitionStatus(
+                bulkRequest,
+                StudentStatus.transferred_out,
+                ExitType.transferred_out,
+                StudentAlreadyTransferredOut::new,
+                "STUDENTS BULK TRANSFERRED OUT",
+                "marked",
+                "as transferred out"
+        );
+    }
+
+    //BULK GRADUATE
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#bulkRequest.studentIds()))")
+    @Transactional
+    public List<StudentEditResponse> bulkGraduateStudents(BulkUpdateStudentStatusRequest bulkRequest){
+        return bulkTransitionStatus(
+                bulkRequest,
+                StudentStatus.graduated,
+                ExitType.graduated,
+                StudentAlreadyGraduated::new,
+                "STUDENTS BULK GRADUATED",
+                "marked",
+                "as graduated"
+        );
     }
 
     //SECTION TRANSFER
@@ -647,5 +634,127 @@ public class StudentService {
     }
 
 
+    // ============================================================
+    // SHARED HELPERS FOR SINGLE + BULK STATUS TRANSITIONS
+    // ============================================================
 
+    /**
+     * Shared core for drop / transfer-out / graduate, single or bulk.
+     *
+     * Applies the new student status, closes the current section assignment
+     * with the given exit type, stamps remarks if provided, and (optionally)
+     * logs the action for this single student.
+     *
+     * @param studentId           the student being transitioned
+     * @param request             remarks + leftAt
+     * @param newStatus           target StudentStatus
+     * @param exitType            matching ExitType to stamp on the closed assignment
+     * @param alreadyInStatusError supplier for the "already in this status" exception
+     * @param logHeader           activity log header, e.g. "STUDENT DROPPED"
+     * @param logVerb             past-tense verb, e.g. "marked"
+     * @param logIndividually     when false, caller is responsible for the aggregate log
+     */
+    private StudentEditResponse transitionStudentStatus(
+            Long studentId,
+            UpdateStudentStatusRequest request,
+            StudentStatus newStatus,
+            ExitType exitType,
+            Supplier<? extends RuntimeException> alreadyInStatusError,
+            String logHeader,
+            String logVerb,
+            boolean logIndividually
+    ) {
+        Student student = getByStudentId(studentId);
+
+        if (student.getStudentStatus() == newStatus) {
+            throw alreadyInStatusError.get();
+        }
+
+        StudentSectionAssignment sectionOfStudent = studentSection(studentId);
+
+        // UPDATE STUDENT ENTITY
+        student.setStudentStatus(newStatus);
+
+        // UPDATE CURRENT SECTION ASSIGNMENT
+        StudentSectionAssignment assignment = getByAssignmentStudentId(studentId);
+        assignment.setLeftAt(request.leftAt());
+        assignment.setUpdatedAt(now);
+        assignment.setExitType(exitType);
+
+        if (hasText(request.remarks())) {
+            assignment.setRemarks(request.remarks());
+        }
+
+        if (logIndividually) {
+            activityLogService.createLogRecord(
+                    logHeader,
+                    logVerb + " " +
+                            NameUtil.buildFullName(
+                                    student.getFirstName(),
+                                    student.getMiddleName(),
+                                    student.getLastName())
+            );
+        }
+
+        return studentMapper.toStudentEditResponseDTO(student, sectionOfStudent);
+    }
+
+    /**
+     * Shared core for the bulk drop / transfer-out / graduate endpoints.
+     *
+     * Validates that every student ID exists before any writes happen,
+     * then reuses transitionStudentStatus per student — passing each
+     * student's own remarks (so students in the same bulk call can carry
+     * different reasons). Emits ONE aggregated activity log entry.
+     */
+    private List<StudentEditResponse> bulkTransitionStatus(
+            BulkUpdateStudentStatusRequest bulkRequest,
+            StudentStatus newStatus,
+            ExitType exitType,
+            Supplier<? extends RuntimeException> alreadyInStatusError,
+            String logHeader,
+            String logVerb,
+            String logSuffix
+    ) {
+        // Fail fast: every student ID must resolve to a real student before
+        // we mutate anything. This also pins the order of responses and log
+        // entries to the order the client sent them in.
+        List<Student> students = bulkRequest.students().stream()
+                .map(entry -> getByStudentId(entry.studentId()))
+                .toList();
+
+        List<StudentEditResponse> responses = new ArrayList<>();
+        List<String> affectedNames = new ArrayList<>();
+
+        for (int i = 0; i < students.size(); i++) {
+            Student student = students.get(i);
+            BulkUpdateStudentStatusRequest.StudentEntry entry = bulkRequest.students().get(i);
+
+            // Build a per-student request so each student's own remarks are
+            // applied. leftAt remains shared across the batch.
+            UpdateStudentStatusRequest perStudentRequest =
+                    new UpdateStudentStatusRequest(entry.remarks(), bulkRequest.leftAt());
+
+            StudentEditResponse response = transitionStudentStatus(
+                    student.getStudentId(),
+                    perStudentRequest,
+                    newStatus,
+                    exitType,
+                    alreadyInStatusError,
+                    logHeader,
+                    logVerb,
+                    false // suppress per-student log; we log once below
+            );
+            responses.add(response);
+            affectedNames.add(response.fullName());
+        }
+
+        activityLogService.createLogRecord(
+                logHeader,
+                logVerb + " " + affectedNames.size() + " student(s) " + logSuffix + ": "
+                        + String.join(", ", affectedNames)
+        );
+
+        return responses;
+    }
 }

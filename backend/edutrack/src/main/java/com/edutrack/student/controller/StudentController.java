@@ -116,11 +116,38 @@ public class StudentController {
     }
 
     //BULK PROMOTE
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#promotionRequest.studentIds()))")
     @PatchMapping("/grade-level/promote")
     public ResponseEntity<List<StudentResponse>> promoteStudents(@RequestBody BulkPromotionRequest promotionRequest){
         List<StudentResponse> promotedStudents = studentService.promoteStudents(promotionRequest);
         return ResponseEntity.ok(promotedStudents);
+    }
+
+    //BULK DROP
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#bulkRequest.studentIds()))")
+    @PatchMapping("/student-status/drop/bulk")
+    public ResponseEntity<List<StudentEditResponse>> bulkDropStudents(
+            @Valid @RequestBody BulkUpdateStudentStatusRequest bulkRequest){
+        List<StudentEditResponse> droppedStudents = studentService.bulkDropStudents(bulkRequest);
+        return ResponseEntity.ok(droppedStudents);
+    }
+
+    //BULK TRANSFER OUT
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#bulkRequest.studentIds()))")
+    @PatchMapping("/student-status/transfer-out/bulk")
+    public ResponseEntity<List<StudentEditResponse>> bulkTransferOutStudents(
+            @Valid @RequestBody BulkUpdateStudentStatusRequest bulkRequest){
+        List<StudentEditResponse> transferredOutStudents = studentService.bulkTransferOutStudents(bulkRequest);
+        return ResponseEntity.ok(transferredOutStudents);
+    }
+
+    //BULK GRADUATE
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfAllStudents(#bulkRequest.studentIds()))")
+    @PatchMapping("/student-status/graduate/bulk")
+    public ResponseEntity<List<StudentEditResponse>> bulkGraduateStudents(
+            @Valid @RequestBody BulkUpdateStudentStatusRequest bulkRequest){
+        List<StudentEditResponse> graduatedStudents = studentService.bulkGraduateStudents(bulkRequest);
+        return ResponseEntity.ok(graduatedStudents);
     }
 
     //SECTION TRANSFER

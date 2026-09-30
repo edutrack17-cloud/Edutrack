@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("api/activity-log")
 public class ActivityLogController {
@@ -24,5 +26,21 @@ public class ActivityLogController {
     @GetMapping
     public ResponseEntity<Page<ActivityLogResponse>> getActivityLogs(Pageable pageable, @RequestParam(required = false) String logHeader){
         return ResponseEntity.ok(activityLogService.getLogs(pageable, logHeader));
+    }
+
+    /**
+     * Distinct log headers, for populating the filter dropdown.
+     *
+     * Separate from GET /api/activity-log so the dropdown can be loaded once
+     * on page mount without dragging along a page of log rows.
+     *
+     * Same ADMIN-only guard as the list endpoint — if a GUARD or TEACHER
+     * ever needs to see the activity log, relax both endpoints together,
+     * not just this one.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/headers")
+    public ResponseEntity<List<String>> getLogHeaders(){
+        return ResponseEntity.ok(activityLogService.getLogHeaders());
     }
 }
