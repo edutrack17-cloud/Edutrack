@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useFormik } from "formik";
-import { X } from "lucide-react";
 import RfidFormModal from "./RfidFormModal";
 import StudentForm from "./StudentForm";
 import enrollSchema from "../enrollmentSchema";
@@ -103,10 +102,6 @@ function EnrollStudentModal({
 
   if (!isOpen) return null;
 
-  function handleClear() {
-    formik.resetForm();
-  }
-
   async function handleRfidConfirm(uid) {
     // FIX: the "Please tap or add the student's RFID card" error kept
     // showing right after a successful tap. Cause: setFieldTouched()
@@ -129,18 +124,14 @@ function EnrollStudentModal({
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg bg-white shadow-xl">
-        <div className="flex shrink-0 items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-xl bg-white shadow-xl">
+        <div className="flex shrink-0 items-center border-b border-gray-200 px-6 py-3">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             Enroll New Student
           </h2>
-          <button onClick={onClose} className="text-gray-500 transition-colors hover:text-gray-700">
-            <X size={22} />
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <StudentForm
             formik={formik}
             sections={sections}
@@ -151,21 +142,21 @@ function EnrollStudentModal({
           )}
         </div>
 
-        <div className="flex shrink-0 gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
+        <div className="flex shrink-0 gap-3 border-t border-gray-200 px-6 py-3">
           <button
             type="button"
             onClick={formik.handleSubmit}
             disabled={formik.isSubmitting}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-2.5 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {formik.isSubmitting ? "Adding..." : "Add"}
           </button>
           <button
             type="button"
-            onClick={handleClear}
-            className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600"
+            onClick={onClose}
+            className="flex-1 cursor-pointer rounded-lg bg-secondary py-2.5 text-base font-semibold text-white transition-colors hover:bg-red-700"
           >
-            Clear
+            Cancel
           </button>
         </div>
       </div>

@@ -54,15 +54,11 @@ function mapLogEntry(entry) {
 // - path is singular "activity-log" to match @RequestMapping("api/activity-log")
 //   on ActivityLogController - NOT "activity-logs".
 // - `logHeader` (not `search`) is the only filter param the backend accepts.
-//   ActivityLogSpecification.hasHeader() builds a SQL LIKE predicate
-//   (criteriaBuilder.like(...), not .equal()) against it - NOT a true exact
-//   match. It behaves like one today only because every value fed in comes
-//   from Activitylogheaderfilter.jsx's dropdown options, which are plain
-//   literals with no `%`/`_` wildcard characters. Still meant to be fed
-//   exact values, not arbitrary free text - just don't assume the backend
-//   would safely handle a value containing `%` or `_` literally, since
-//   those would be interpreted as SQL wildcards unless/until the backend
-//   switches this to .equal().
+//   ActivityLogSpecification.hasHeader() now does a trimmed, case-insensitive
+//   EXACT match (lower(log_header) = lower(trim(value))), and blank/missing
+//   means "no filter". Still send only values that came from
+//   GET /activity-log/headers (see getActivityLogHeaders below) so the
+//   dropdown can never drift from what has actually been logged.
 // - `sort=createdAt,desc` is passed explicitly because Pageable has no
 //   default ordering - without it, "newest first" isn't guaranteed.
 // - Requires an ADMIN-role session (@PreAuthorize("hasRole('ADMIN')") on the
@@ -80,6 +76,30 @@ export async function getActivityLogs({ logHeader, page = 0, size = 10, signal }
   } catch (error) {
     if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
     throw new Error(getErrorMessage(error, "Failed to load activity logs."));
+  }
+}
+
+// GET /api/activity-log/headers -> sorted array of every distinct logHeader
+// currently in the DB, used to populate the filter dropdown. ADMIN-only,
+// same guard as the list endpoint. The backend query is DISTINCT on the raw
+// (case-sensitive) column while the filter is case-insensitive, so the same
+// header stored with two different casings would appear twice - we dedupe
+// case-insensitively here so the dropdown never shows two entries that
+// return identical rows.
+export async function getActivityLogHeaders({ signal } = {}) {
+  try {
+    const { data } = await activityLogApi.get("/activity-log/headers", { signal });
+    const seen = new Set();
+    return (Array.isArray(data) ? data : []).filter((header) => {
+      if (typeof header !== "string" || !header.trim()) return false;
+      const key = header.trim().toUpperCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  } catch (error) {
+    if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
+    throw new Error(getErrorMessage(error, "Failed to load activity filters."));
   }
 }
 

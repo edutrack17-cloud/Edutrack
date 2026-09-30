@@ -1,6 +1,13 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+// True if a className string already sets a Tailwind font size
+// (text-xs / text-sm / text-base / text-lg / text-xl ...). Used below so the
+// default size only applies when the caller did NOT pick one - otherwise
+// "text-sm" and e.g. "text-base" would both be on the element and the winner
+// would depend on Tailwind's stylesheet order, not on the order written here.
+const HAS_TEXT_SIZE = /(^|\s)text-(xs|sm|base|lg|xl|2xl|3xl|\[[^\]]+\])(\s|$)/;
+
 function Input({
   label,
   icon,
@@ -23,12 +30,17 @@ function Input({
   const inputType =
     type === "password" && showPassword ? "text" : type;
 
+  // Other pages (login, User Management, ...) pass nothing here, so they keep
+  // the same 14px they had before. Enrollment passes its own size.
+  const inputSizeClass = HAS_TEXT_SIZE.test(inputClassName) ? "" : "text-sm";
+  const labelSizeClass = HAS_TEXT_SIZE.test(labelClassName) ? "" : "text-sm";
+
   return (
     <div>
       {label && (
         <label
           htmlFor={id}
-          className={`mb-1 block text-sm font-semibold ${labelClassName}`}
+          className={`mb-1 block font-semibold ${labelSizeClass} ${labelClassName}`}
         >
           {label}
         </label>
@@ -47,7 +59,7 @@ function Input({
           onChange={onChange}
           onBlur={onBlur}
           placeholder={placeholder}
-          className={`flex-1 bg-transparent outline-none text-sm text-gray-700 placeholder:text-gray-500 ${inputClassName}`}
+          className={`flex-1 bg-transparent outline-none text-gray-700 placeholder:text-gray-500 ${inputSizeClass} ${inputClassName}`}
           {...rest}
         />
 

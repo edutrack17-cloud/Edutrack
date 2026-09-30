@@ -13,16 +13,18 @@ import EditStudentModal from "./EditStudentModal";
 import ConfirmStatusModal from "./ConfirmStatusModal";
 import StatusDetailsModal from "./Statusdetailsmodal";
 import TransferSectionModal from "../components/Transfersectionmodal";
+import BulkStatusModal from "./Bulkstatusmodal";
 import {
   updateStudent,
   dropStudent,
   transferOutStudent,
   graduateStudent,
   transferStudentSection,
+  bulkUpdateStudentStatus,
 } from "../enrollmentService";
 
 const menuButtonClass =
-  "flex w-full items-center gap-3 px-4 py-2 text-sm font-medium transition";
+  "flex w-full items-center gap-3 px-4 py-2.5 text-base font-medium transition";
 
 const actionColorClass = {
   view: "text-gray-700 hover:bg-gray/10",
@@ -58,7 +60,43 @@ export function formatGradeLevel(gradeLevel) {
   return gradeLevel.replace("_", " ");
 }
 
-function ActionMenu({ menuRef, top, left, studentStatus, role, onView, onEdit, onTransferSection, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
+// Grade 6 is the last level (GradeLevel.java: Grade_4 / Grade_5 / Grade_6),
+// so only Grade 6 students can graduate - a Grade 4/5 student moves up via
+// Promote Student instead. The backend's graduateStudent() doesn't check the
+// grade level, so this UI rule is the only thing enforcing it.
+const GRADUATING_GRADE_LEVEL = "Grade_6";
+
+export function canGraduateStudent(student) {
+  return student?.section?.gradeLevel === GRADUATING_GRADE_LEVEL;
+}
+
+// Same checkbox treatment as PromoteStudentTable. Only enrolled students can
+// be selected - the same rule the row kebab menu applies to Dropped /
+// Transferred Out / Graduate.
+function SelectCheckbox({ student, isSelected, onToggle }) {
+  const canSelect = student.studentStatus === "enrolled";
+  const label = isSelected ? `Deselect ${student.fullName}` : `Select ${student.fullName}`;
+
+  return (
+    <label
+      className={`inline-flex items-center justify-center rounded-md p-1.5 transition sm:p-1 ${
+        canSelect ? "cursor-pointer hover:bg-gray-100" : "cursor-not-allowed"
+      }`}
+      title={canSelect ? label : "Only enrolled students can be selected"}
+    >
+      <input
+        type="checkbox"
+        checked={isSelected}
+        onChange={() => onToggle?.(student.studentId)}
+        disabled={!canSelect}
+        aria-label={label}
+        className="h-5 w-5 cursor-pointer rounded border-2 border-gray-400 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+      />
+    </label>
+  );
+}
+
+function ActionMenu({ menuRef, top, left, studentStatus, gradeLevel, role, onView, onEdit, onTransferSection, onMarkDropped, onMarkTransferred, onMarkGraduated }) {
   // The backend's dropStudent()/transferOutStudent()/graduateStudent()
   // each only guard against re-applying the SAME status (e.g.
   // StudentAlreadyGraduated) - there's no check preventing an invalid
@@ -89,13 +127,14 @@ function ActionMenu({ menuRef, top, left, studentStatus, role, onView, onEdit, o
   // Out), just not this one. Same role !== "teacher" convention
   // ViewStudentModal already uses for canViewHistory, so this reads
   // consistently with that gate.
-  const canGraduate = isEnrolled && role !== "teacher";
+  // Also Grade 6 only - see GRADUATING_GRADE_LEVEL above.
+  const canGraduate = isEnrolled && role !== "teacher" && gradeLevel === GRADUATING_GRADE_LEVEL;
 
   return (
     <div
       ref={menuRef}
       style={{ top, left }}
-      className="fixed z-50 w-48 rounded-xl border border-gray-200 bg-white py-2 text-left shadow-xl"
+      className="fixed z-50 w-52 rounded-md border border-gray-200 bg-white py-1 text-left shadow-lg"
     >
       <button onClick={onView} className={`${menuButtonClass} ${actionColorClass.view}`}>
         <Eye size={16} />
@@ -146,12 +185,21 @@ function ActionMenu({ menuRef, top, left, studentStatus, role, onView, onEdit, o
 // GET /api/student - this component no longer owns mock data or does
 // client-side search/level/section/status filtering, since those
 // filters are applied server-side via enrollmentService.getStudents().
-function StudentTable({ students = [], sections = [], onChanged, onRefreshSections, showToast, role }) {
+function StudentTable({
+  students = [],
+  sections = [],
+  onChanged,
+  onRefreshSections,
+  showToast,
+  role,
+  selectedIds = [],
+  onToggleSelect,
+  onClearSelection,
+}) {
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const desktopMenuRef = useRef(null);
-  const mobileMenuRef = useRef(null);
 
   const [viewingStudent, setViewingStudent] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -164,13 +212,54 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
   // open, else null. remarks/leftAt are only present when this came from
   // detailsRequest above (i.e. the Dropped/Transferred Out flow).
   const [statusChangeRequest, setStatusChangeRequest] = useState(null);
+  // True while the single-student status request (drop / transfer out /
+  // graduate) is in flight, so ConfirmStatusModal can lock its buttons and
+  // a double-click can't fire the same request twice.
+  const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Matches Sectiontable.jsx's density (px-3/4 py-2, truncate) so the two
-  // tables read as the same component family instead of two different
-  // scales of padding.
-  const thClass = "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
-  const tdClass = "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
+  // ---- Bulk status change (Dropped / Transferred Out / Graduated) ----
+  // bulkStatus is the target status while BulkStatusModal is open, else null.
+  // bulkError is shown INSIDE that modal (the request is all-or-nothing, so on
+  // failure the modal stays open and nothing on screen changes).
+  const [bulkStatus, setBulkStatus] = useState(null);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+  const [bulkError, setBulkError] = useState("");
+
+  // Only enrolled rows can be selected (see SelectCheckbox), and the parent
+  // prunes selectedIds whenever the list changes, but filter defensively anyway.
+  // "Select All" itself lives in EnrollmentPage's toolbar, not in this table's header.
+  const selectedStudents = students.filter(
+    (s) => s.studentStatus === "enrolled" && selectedIds.includes(s.studentId)
+  );
+
+  // Graduate stays admin-only in the UI, same rule as the single-row menu.
+  const canBulkGraduate = role !== "teacher";
+
+  // Bulk Graduate is only allowed when EVERY selected student is in Grade 6.
+  const nonGraduatingCount = selectedStudents.filter((s) => !canGraduateStudent(s)).length;
+  const canGraduateSelection = nonGraduatingCount === 0;
+
+  // Graduate only shows up when at least one selected student is in Grade 6.
+  // If NONE are (the usual case when dropping Grade 4/5 students), the button
+  // and its explanation would just be noise, so both are hidden - same rule the
+  // single-row menu uses. When the selection is MIXED, the button stays but is
+  // disabled, with a hint telling the user how many to deselect.
+  const graduatingCount = selectedStudents.length - nonGraduatingCount;
+  const showGraduateButton = canBulkGraduate && graduatingCount > 0;
+  const showGraduateHint = showGraduateButton && !canGraduateSelection;
+
+  const bulkButtonClass =
+    "flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium transition-colors";
+
+  // 16px table text (text-base) at every breakpoint - this was PromoteStudentTable's
+  // text-xs -> sm:text-sm scale, so the two tables now differ on purpose. The <colgroup> widths below
+  // are tuned so the 12-digit LRN and "Transferred Out" still fit at
+  // min-w-275 without being cut off by `truncate`.
+  const thClass =
+    "truncate px-3 py-2.5 text-center text-base font-semibold text-white sm:px-4";
+  const tdClass =
+    "truncate px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4";
 
   function toggleMenu(id, event) {
     if (openMenu === id) {
@@ -181,7 +270,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
 
     setMenuPosition({
       top: buttonRect.bottom + 8,
-      left: Math.max(8, buttonRect.right - 192),
+      left: Math.max(8, buttonRect.right - 208),
     });
 
     setOpenMenu(id);
@@ -193,12 +282,10 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
     function handleClickOutside(event) {
       if (event.target.closest("[data-kebab-trigger]")) return;
 
-      const clickedInsideDesktopMenu =
+      const clickedInsideMenu =
         desktopMenuRef.current && desktopMenuRef.current.contains(event.target);
-      const clickedInsideMobileMenu =
-        mobileMenuRef.current && mobileMenuRef.current.contains(event.target);
 
-      if (!clickedInsideDesktopMenu && !clickedInsideMobileMenu) {
+      if (!clickedInsideMenu) {
         setOpenMenu(null);
       }
     }
@@ -230,6 +317,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
 
   function handleRequestStatusChange(student, newStatus) {
     setOpenMenu(null);
+    if (newStatus === "graduated" && !canGraduateStudent(student)) return;
     setStatusChangeRequest({ student, newStatus });
   }
 
@@ -252,10 +340,14 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
   }
 
   async function handleConfirmStatusChange() {
-    if (!statusChangeRequest) return;
+    // isStatusSubmitting guard: ignore a second click while the first
+    // request is still running.
+    if (!statusChangeRequest || isStatusSubmitting) return;
     const { student, newStatus, remarks, leftAt } = statusChangeRequest;
 
+    let succeeded = false;
     try {
+      setIsStatusSubmitting(true);
       setErrorMessage("");
       if (newStatus === "dropped") {
         await dropStudent(student.studentId, remarks, leftAt);
@@ -264,14 +356,20 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
       } else if (newStatus === "graduated") {
         await graduateStudent(student.studentId);
       }
+      succeeded = true;
       showToast?.(`${student.fullName} marked as ${getStudentStatusLabel(newStatus)}.`, "success");
-      await onChanged?.(); // re-fetch the list from the parent
     } catch (error) {
       setErrorMessage(error.message);
       showToast?.(error.message, "error");
     } finally {
+      setIsStatusSubmitting(false);
       setStatusChangeRequest(null);
     }
+
+    // Re-fetch OUTSIDE the try above: the status change already went through
+    // at this point, so a failed refresh must not show an error toast right
+    // after the success toast. (loadStudents() handles its own errors.)
+    if (succeeded) await onChanged?.();
   }
 
   function handleRequestTransfer(student) {
@@ -296,6 +394,53 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
     }
   }
 
+  function handleOpenBulk(newStatus) {
+    if (newStatus === "graduated" && !canGraduateSelection) return;
+    setBulkError("");
+    setBulkStatus(newStatus);
+  }
+
+  function handleCloseBulk() {
+    if (isBulkSubmitting) return;
+    setBulkStatus(null);
+    setBulkError("");
+  }
+
+  // PATCH /api/student/student-status/{drop|transfer-out|graduate}/bulk via
+  // bulkUpdateStudentStatus(). The backend is all-or-nothing: on ANY failure
+  // nothing was changed, so we keep the modal open, show the message inline,
+  // and touch neither the list nor the selection - the user can remove the
+  // offending student (e.g. "already dropped") and retry.
+  async function handleBulkConfirm({ entries, leftAt }) {
+    if (!bulkStatus) return;
+    const targetStatus = bulkStatus;
+
+    setIsBulkSubmitting(true);
+    setBulkError("");
+
+    try {
+      await bulkUpdateStudentStatus(targetStatus, entries, leftAt);
+    } catch (error) {
+      setBulkError(error.message);
+      setIsBulkSubmitting(false);
+      return;
+    }
+
+    setIsBulkSubmitting(false);
+    setBulkStatus(null);
+
+    const count = entries.length;
+    showToast?.(
+      `${count} student${count === 1 ? "" : "s"} marked as ${getStudentStatusLabel(targetStatus)}.`,
+      "success"
+    );
+
+    // Deselect only the students that were actually submitted (the modal lets
+    // the user remove rows first), then reload from the server.
+    onClearSelection?.(entries.map((entry) => entry.studentId));
+    await onChanged?.();
+  }
+
   async function handleEditSubmit(studentId, values) {
     try {
       await updateStudent(studentId, values);
@@ -313,21 +458,80 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
 
   return (
     <>
-      {errorMessage && <p className="mb-3 text-sm text-danger">{errorMessage}</p>}
+      {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
 
-      <div className="hidden w-full overflow-x-auto rounded-xl bg-white shadow-md sm:block">
-        <table className="w-full min-w-225 table-fixed border-collapse">
+      {selectedStudents.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl bg-white px-4 py-3 shadow-md">
+          {/* Count. On sm+ a thin divider separates it from the actions so it
+              reads as a label, not as a fourth button. */}
+          <span className="w-full text-base font-semibold text-gray-700 sm:w-auto sm:border-r sm:border-gray-200 sm:pr-4">
+            {selectedStudents.length} selected
+          </span>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => handleOpenBulk("dropped")}
+              className={`${bulkButtonClass} text-danger hover:bg-danger/10`}
+            >
+              <UserX size={16} />
+              Dropped
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleOpenBulk("transferred_out")}
+              className={`${bulkButtonClass} text-warning hover:bg-warning/10`}
+            >
+              <Shuffle size={16} />
+              Transferred Out
+            </button>
+
+            {showGraduateButton && (
+              <button
+                type="button"
+                onClick={() => handleOpenBulk("graduated")}
+                disabled={!canGraduateSelection}
+                title={
+                  canGraduateSelection
+                    ? undefined
+                    : `Deselect the ${nonGraduatingCount} student${nonGraduatingCount === 1 ? "" : "s"} not in Grade 6 to enable Graduate`
+                }
+                className={`${bulkButtonClass} text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white`}
+              >
+                <GraduationCap size={16} />
+                Graduate
+              </button>
+            )}
+          </div>
+
+          {/* The button's title tooltip never shows on touch screens (or on a
+              disabled button in some browsers), so say why Graduate is
+              disabled right here instead. */}
+          {showGraduateHint && (
+            <p className="w-full text-sm text-gray-500 sm:w-auto">
+              Deselect the {nonGraduatingCount} student{nonGraduatingCount === 1 ? "" : "s"} not in
+              Grade 6 to enable Graduate.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
+        <table className="w-full min-w-275 table-fixed border-collapse">
           <colgroup>
+            <col className="w-[5%]" />
+            <col className="w-[14%]" />
             <col className="w-[13%]" />
-            <col className="w-[13%]" />
-            <col className="w-[22%]" />
-            <col className="w-[12%]" />
-            <col className="w-[15%]" />
-            <col className="w-[12%]" />
-            <col className="w-[13%]" />
+            <col className="w-[20%]" />
+            <col className="w-[10%]" />
+            <col className="w-[11%]" />
+            <col className="w-[16%]" />
+            <col className="w-[11%]" />
           </colgroup>
           <thead className="bg-primary">
             <tr>
+              <th className={thClass}></th>
               <th className={thClass}>LRN</th>
               <th className={thClass}>RFID UID</th>
               <th className={thClass}>Name</th>
@@ -341,31 +545,42 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
           <tbody>
             {students.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray">
+                <td colSpan={8} className="px-6 py-6 text-center text-base text-gray">
                   No students found.
                 </td>
               </tr>
             )}
 
             {students.map((student) => (
-              <tr key={student.studentId} className="border-b border-gray-200 transition hover:bg-gray-50">
+              <tr key={student.studentId} className="border-b border-gray-200 odd:bg-white even:bg-primary/10">
+                <td className="px-3 py-2 text-center sm:px-4 sm:py-2">
+                  <SelectCheckbox
+                    student={student}
+                    isSelected={selectedIds.includes(student.studentId)}
+                    onToggle={onToggleSelect}
+                  />
+                </td>
                 <td className={tdClass}>{student.lrn}</td>
                 <td className={tdClass}>{student.rfid}</td>
-                <td className={tdClass}>{student.fullName}</td>
+                <td className={tdClass} title={student.fullName}>
+                  {student.fullName}
+                </td>
                 <td className={tdClass}>{formatGradeLevel(student.section?.gradeLevel)}</td>
-                <td className={tdClass}>{student.section?.sectionName ?? "—"}</td>
+                <td className={tdClass} title={student.section?.sectionName || undefined}>
+                  {student.section?.sectionName ?? "—"}
+                </td>
                 <td className={tdClass}>
-                  <span className={`text-sm font-semibold ${getStudentStatusColorClass(student.studentStatus)}`}>
+                  <span className={`font-semibold ${getStudentStatusColorClass(student.studentStatus)}`}>
                     {getStudentStatusLabel(student.studentStatus)}
                   </span>
                 </td>
 
-                <td className="relative px-3 py-1.5 text-center sm:px-4 sm:py-2">
+                <td className="relative px-3 py-2 text-center sm:px-4 sm:py-2">
                   <button
                     type="button"
                     data-kebab-trigger
                     onClick={(event) => toggleMenu(student.studentId, event)}
-                    className="rounded-lg p-2 transition hover:bg-gray-100"
+                    className="rounded-lg p-1 transition hover:bg-gray-100"
                   >
                     <MoreHorizontal size={20} />
                   </button>
@@ -376,6 +591,7 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
                       top={menuPosition.top}
                       left={menuPosition.left}
                       studentStatus={student.studentStatus}
+                      gradeLevel={student.section?.gradeLevel}
                       role={role}
                       onView={() => handleView(student)}
                       onEdit={() => handleEdit(student)}
@@ -390,65 +606,6 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* ---- Mobile card list ---- */}
-      <div className="flex flex-col gap-3 sm:hidden">
-        {students.length === 0 && (
-          <p className="py-6 text-center text-sm text-gray">No students found.</p>
-        )}
-
-        {students.map((student) => (
-          <div key={student.studentId} className="relative rounded-xl border border-gray-200 bg-white p-4 shadow-md">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-primary">{student.fullName}</p>
-                <p className="text-xs text-gray">
-                  {formatGradeLevel(student.section?.gradeLevel)} - {student.section?.sectionName ?? "—"}
-                </p>
-              </div>
-
-              <button
-                data-kebab-trigger
-                onClick={(event) => toggleMenu(student.studentId, event)}
-                className="shrink-0 rounded-lg p-2 transition hover:bg-gray-100"
-              >
-                <MoreHorizontal size={20} />
-              </button>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-x-2 gap-y-2 text-xs">
-              <div>
-                <p className="text-gray">LRN</p>
-                <p className="text-gray-700">{student.lrn}</p>
-              </div>
-              <div>
-                <p className="text-gray">RFID UID</p>
-                <p className="text-gray-700">{student.rfid}</p>
-              </div>
-            </div>
-
-            <span className={`mt-3 inline-block text-sm font-semibold ${getStudentStatusColorClass(student.studentStatus)}`}>
-              {getStudentStatusLabel(student.studentStatus)}
-            </span>
-
-            {openMenu === student.studentId && (
-              <ActionMenu
-                menuRef={mobileMenuRef}
-                top={menuPosition.top}
-                left={menuPosition.left}
-                studentStatus={student.studentStatus}
-                role={role}
-                onView={() => handleView(student)}
-                onEdit={() => handleEdit(student)}
-                onTransferSection={() => handleRequestTransfer(student)}
-                onMarkDropped={() => handleRequestStatusWithDetails(student, "dropped")}
-                onMarkTransferred={() => handleRequestStatusWithDetails(student, "transferred_out")}
-                onMarkGraduated={() => handleRequestStatusChange(student, "graduated")}
-              />
-            )}
-          </div>
-        ))}
       </div>
 
       {/* ---- Modals ---- */}
@@ -494,11 +651,24 @@ function StudentTable({ students = [], sections = [], onChanged, onRefreshSectio
         isOpen={statusChangeRequest !== null}
         onClose={() => setStatusChangeRequest(null)}
         onConfirm={handleConfirmStatusChange}
+        isSubmitting={isStatusSubmitting}
         studentName={statusChangeRequest?.student.fullName ?? ""}
         newStatus={statusChangeRequest ? getStudentStatusLabel(statusChangeRequest.newStatus) : ""}
         statusColorClass={
           statusChangeRequest ? getStudentStatusColorClass(statusChangeRequest.newStatus) : ""
         }
+      />
+
+      <BulkStatusModal
+        isOpen={bulkStatus !== null}
+        onClose={handleCloseBulk}
+        onSubmit={handleBulkConfirm}
+        students={selectedStudents}
+        newStatus={bulkStatus}
+        statusLabel={bulkStatus ? getStudentStatusLabel(bulkStatus) : ""}
+        statusColorClass={bulkStatus ? getStudentStatusColorClass(bulkStatus) : ""}
+        isSubmitting={isBulkSubmitting}
+        error={bulkError}
       />
     </>
   );

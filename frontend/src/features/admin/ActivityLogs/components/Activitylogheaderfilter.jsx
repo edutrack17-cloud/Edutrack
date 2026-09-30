@@ -1,40 +1,37 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { getLogVisual } from "./Activitylogtable";
 
-// ---------------------------------------------------------------------------
-// IMPORTANT: each option's `value` MUST be the literal string that
-// ActivityLogService.createLogRecord(...) writes into activity_logs.log_header.
-// The `label` is only what the admin sees in the dropdown.
-//
-// Keep this list in sync with the backend. Every call site of
-// activityLogService.createLogRecord("HEADER", ...) in the Java code should
-// have a matching entry here. To see what's actually in the DB right now:
-//
-//   SELECT log_header, COUNT(*) FROM activity_logs GROUP BY log_header;
-//
-// Currently the only header with real rows is "STUDENTS BULK ENROLLED".
-// The rest are listed so they're selectable once their flows start logging.
-// ---------------------------------------------------------------------------
-export const STUDENT_FILTER_OPTIONS = [
-  { value: "STUDENT ENROLLED",            label: "Student Enrolled",            textClass: "text-success",  selectedBgClass: "bg-success/10" },
-  { value: "STUDENT RE-ENROLLED",         label: "Student Re-enrolled",         textClass: "text-success",  selectedBgClass: "bg-success/10" },
-  { value: "STUDENTS BULK ENROLLED",      label: "Students Bulk Enrolled",      textClass: "text-success",  selectedBgClass: "bg-success/10" },
-  { value: "STUDENT INFORMATION UPDATED", label: "Student Information Updated", textClass: "text-primary",  selectedBgClass: "bg-primary/10" },
-  { value: "STUDENT PROMOTED",            label: "Student Promoted",            textClass: "text-success",  selectedBgClass: "bg-success/10" },
-  { value: "STUDENT DROPPED",             label: "Student Dropped",             textClass: "text-secondary", selectedBgClass: "bg-secondary/10" },
-  { value: "STUDENT TRANSFERRED OUT",     label: "Student Transferred Out",     textClass: "text-warning",  selectedBgClass: "bg-warning/10" },
-  { value: "STUDENT GRADUATED",           label: "Student Graduated",           textClass: "text-success",  selectedBgClass: "bg-success/10" },
-  { value: "STUDENT SECTION TRANSFER",    label: "Student Section Transfer",    textClass: "text-warning",  selectedBgClass: "bg-warning/10" },
-];
+// Options now come from GET /api/activity-log/headers (fetched by the page
+// and passed in as `headers`), so the dropdown always matches what has
+// actually been logged - nothing is hard-coded here anymore. The header
+// string is sent back to the backend exactly as received.
 
-export const ATTENDANCE_FILTER_OPTIONS = [
-  { value: "MANUAL ATTENDANCE",         label: "Manual Attendance",         textClass: "text-primary", selectedBgClass: "bg-primary/10" },
-  { value: "MANUAL TIMEOUT",            label: "Manual Timeout",            textClass: "text-primary", selectedBgClass: "bg-primary/10" },
-  { value: "MARKED STUDENTS AS ABSENT", label: "Marked Students as Absent", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
-];
+const SELECTED_BG_BY_TEXT_CLASS = {
+  "text-success": "bg-success/10",
+  "text-primary": "bg-primary/10",
+  "text-secondary": "bg-secondary/10",
+  "text-warning": "bg-warning/10",
+};
 
-const STUDENT_FILTER_ALL = { value: "", label: "All Student Activities", textClass: "text-gray-700" };
-const STUDENT_FILTER_MENU_OPTIONS = [STUDENT_FILTER_ALL, ...STUDENT_FILTER_OPTIONS];
+// "STUDENTS BULK DROPPED" -> "Students Bulk Dropped"
+function toTitleCase(header) {
+  return header
+    .toLowerCase()
+    .replace(/(^|[\s-])([a-z])/g, (_, sep, char) => sep + char.toUpperCase());
+}
+
+function buildOption(header) {
+  const { colorClass } = getLogVisual(header);
+  return {
+    value: header,
+    label: toTitleCase(header),
+    textClass: colorClass,
+    selectedBgClass: SELECTED_BG_BY_TEXT_CLASS[colorClass],
+  };
+}
+
+const ALL_OPTION = { value: "", label: "All Activities", textClass: "text-gray-700" };
 
 const triggerClass =
   "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
@@ -120,15 +117,18 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
   );
 }
 
-function Activitylogheaderfilter({ value, onChange }) {
+function Activitylogheaderfilter({ value, onChange, headers = [], isLoading = false }) {
+  const options = useMemo(() => [ALL_OPTION, ...headers.map(buildOption)], [headers]);
+
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <FilterDropdown
-        options={STUDENT_FILTER_MENU_OPTIONS}
+        options={options}
         value={value}
         onChange={onChange}
-        ariaLabel="Filter by student activity"
+        ariaLabel="Filter by activity"
       />
+      {isLoading && <span className="text-xs text-gray-400">Loading filters...</span>}
     </div>
   );
 }

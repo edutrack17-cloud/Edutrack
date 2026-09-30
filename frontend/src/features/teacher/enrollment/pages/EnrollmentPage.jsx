@@ -68,6 +68,10 @@ function EnrollmentPage() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  // Bulk-action selection (drop / transfer out / graduate). Holds studentIds
+  // only; StudentTable derives the full rows from its own `students` prop.
+  const [selectedIds, setSelectedIds] = useState([]);
+
   // FIX: sections used to only be fetched once on mount (see the
   // loadSections() effect below), so a section an admin adds/archives
   // while a teacher already has this page open (e.g. in a background
@@ -265,6 +269,52 @@ function EnrollmentPage() {
     setCurrentPage(1);
   }
 
+  // Keep the selection in sync with what is actually on screen: whenever the
+  // list changes (page, filter, search, or a reload after a status change),
+  // drop any selected id that is no longer in the list OR is no longer
+  // "enrolled". This is what clears the selection on page/filter changes and
+  // after a successful bulk action, and it guarantees a bulk request can
+  // never contain a student the user can't currently see. Returning `prev`
+  // when nothing changed avoids a pointless re-render.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter((id) =>
+        students.some((s) => s.studentId === id && s.studentStatus === "enrolled")
+      );
+      return next.length === prev.length ? prev : next;
+    });
+  }, [students]);
+
+  function handleToggleSelect(studentId) {
+    setSelectedIds((prev) =>
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
+  }
+
+  // Toolbar "Select All" / "Deselect All": acts on every ENROLLED row on the
+  // current page (same rule StudentTable's row checkboxes use). It is per page on
+  // purpose - the selection is pruned whenever the list changes, and the bulk
+  // endpoints are all-or-nothing, so a selection can't quietly span pages.
+  const selectableIds = students
+    .filter((s) => s.studentStatus === "enrolled")
+    .map((s) => s.studentId);
+  const allSelectableSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
+
+  function handleToggleSelectAll() {
+    setSelectedIds((prev) =>
+      allSelectableSelected
+        ? prev.filter((id) => !selectableIds.includes(id))
+        : [...new Set([...prev, ...selectableIds])]
+    );
+  }
+
+  // No argument = clear everything; with ids = clear just those.
+  function handleClearSelection(ids) {
+    setSelectedIds((prev) => (ids ? prev.filter((id) => !ids.includes(id)) : []));
+  }
+
   function handlePageChange(newPage) {
     setCurrentPage(newPage);
   }
@@ -368,10 +418,15 @@ function EnrollmentPage() {
     ? sections.filter((s) => s.gradeLevel === level)
     : sections;
 
+  // Layout copied from PromoteStudentPage: one white rounded container with
+  // gap-6, a toolbar row (filters + Select All on the left, search + primary
+  // button on the right), then the table and the pagination bar as direct
+  // children. The Add Student button takes the slot "Promote Selected" has
+  // on that page.
   return (
-    <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
-      <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <>
+      <div className="flex flex-col gap-4 rounded-lg bg-white p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
           <StudentFilters
             level={level}
             section={section}
@@ -384,22 +439,25 @@ function EnrollmentPage() {
             schoolYear={schoolYear}
             schoolYearOptions={schoolYearOptions}
             onSchoolYearChange={handleSchoolYearChange}
+            canBulkSelect={!isLoading && selectableIds.length > 0}
+            allSelected={allSelectableSelected}
+            onToggleSelectAll={handleToggleSelectAll}
+            selectAllTitle={
+              selectableIds.length === 0
+                ? "No enrolled students on this page"
+                : "Selects every enrolled student on this page"
+            }
           />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <SearchInput
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
+            <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} />
 
-            {/* Same markup/classes as Section Level's "Add Section" button,
-                so the two primary add-actions look identical. */}
             <button
               type="button"
               onClick={handleAddStudent}
-              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-36"
+              className="flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
             >
-              <Plus size={15} strokeWidth={2.5} />
+              <Plus size={16} strokeWidth={2.5} />
               Add Student
             </button>
           </div>
@@ -409,25 +467,23 @@ function EnrollmentPage() {
         {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
 
         {isLoading ? (
-          <p className="py-6 text-center text-sm text-gray-500">Loading students...</p>
+          <p className="py-6 text-center text-base text-gray-500">Loading students...</p>
         ) : (
-          <div className="flex flex-col gap-3">
-            <StudentTable
-              students={students}
-              sections={sections}
-              onChanged={loadStudents}
-              onRefreshSections={loadSections}
-              showToast={showToast}
-              role={role}
-              schoolYear={schoolYear}
-            />
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-            />
-          </div>
+          <StudentTable
+            students={students}
+            sections={sections}
+            onChanged={loadStudents}
+            onRefreshSections={loadSections}
+            showToast={showToast}
+            role={role}
+            schoolYear={schoolYear}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
+            onClearSelection={handleClearSelection}
+          />
         )}
+
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
       </div>
 
       <EnrollStudentModal
@@ -439,7 +495,7 @@ function EnrollmentPage() {
       />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-    </div>
+    </>
   );
 }
 

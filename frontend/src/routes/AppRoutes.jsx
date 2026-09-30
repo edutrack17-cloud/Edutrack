@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
 import ProtectedRoute from "./Protectedroute";
 import { useAuth } from "../Context/Authcontext";
@@ -18,6 +18,32 @@ import ActivityLogsPage from "../features/admin/ActivityLogs/Activitylogspage";
 import GuardAttendancePage from "../features/guard/attendance/Guardattendancepage";
 
 
+
+// /change-password renders the Change Password modal on top of an empty
+// page, so the header title ("Change Password") stays visible behind it.
+// Closing it goes back to where the user came from, or /dashboard if the
+// URL was opened directly (no history to go back to).
+function ChangePasswordRoute() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  function handleClose() {
+    if (location.key !== "default") {
+      navigate(-1);
+    } else {
+      navigate("/dashboard", { replace: true });
+    }
+  }
+
+  return (
+    <>
+      {/* White panel behind the modal, same look as the enrollment page's
+          table container. */}
+      <div className="min-h-[calc(100vh-13rem)] rounded-lg bg-white shadow-md" />
+      <ChangePassword isOpen onClose={handleClose} />
+    </>
+  );
+}
 
 function RootRedirect() {
   const { isAuthenticated, isInitializing, role } = useAuth();
@@ -57,7 +83,7 @@ function AppRoutes() {
           <Route path="/sf2-attendance" element={<SF2AttendancePage />} />
           <Route path="/enrollment" element={<EnrollmentPage />} />
           <Route path="/promote-student" element={<PromoteStudentPage />} />
-          <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/change-password" element={<ChangePasswordRoute />} />
  
           {/* Everything below connects to teacher or admin - both can manage their own profile. */}
           <Route element={<ProtectedRoute allowedRoles={["teacher", "admin"]} />}>
@@ -73,6 +99,10 @@ function AppRoutes() {
           </Route>
         </Route>
       </Route>
+
+      {/* Unknown URLs go back to "/", where RootRedirect sends the user
+          to the right landing page. */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

@@ -110,24 +110,24 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
 
   return (
     <div className="font-primary fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
-      <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-4 py-3 sm:px-6 sm:py-4">
+      <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-xl">
+        <div className="flex items-center border-b border-gray-200 px-6 py-4">
           <div className="w-6" />
-          <h2 className="flex-1 text-center text-base font-bold text-primary sm:text-lg md:text-xl">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             RFID FORM
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-gray-500 transition-colors hover:text-gray-700"
+            className="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-100"
           >
             <X size={22} />
           </button>
         </div>
 
-        <div className="flex flex-col gap-4 px-4 pb-6 pt-4 sm:px-6 sm:pb-7 sm:pt-5">
-          <h3 className="text-sm font-bold tracking-wide text-primary uppercase">
+        <div className="flex flex-col gap-4 px-6 py-5">
+          <h3 className="text-lg font-semibold text-primary">
             RFID Information
           </h3>
 
@@ -143,20 +143,20 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
             }`}
           >
             {uid ? <Check size={40} /> : <Rss size={40} className="animate-pulse" />}
-            <span className="text-sm font-semibold">
+            <span className="text-base font-semibold">
               {uid ? "Card Detected" : "Tap RFID card on the Scanner"}
             </span>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
+            <label className="mb-1 block text-sm font-semibold text-gray-700">
               RFID UID
             </label>
             {/* Plain display, not an <input> - there's nothing here to
                 click into, focus, or type on. The only way this value
                 changes is useRfidScanner() catching a real tap. */}
             <div
-              className={`w-full select-none rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+              className={`w-full select-none rounded-lg border px-3 py-2 text-base transition-colors ${
                 uid
                   ? "border-success bg-success/5 font-semibold text-success"
                   : "border-gray-300 bg-gray-50 text-gray-500"
@@ -164,7 +164,7 @@ function RfidFormModal({ isOpen, onClose, onConfirm }) {
             >
               {uid || "Waiting for tap..."}
             </div>
-            <p className="mt-1.5 text-xs text-gray-500">
+            <p className="mt-1.5 text-sm text-gray-500">
               The card is added automatically once it's detected.
             </p>
           </div>

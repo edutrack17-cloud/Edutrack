@@ -23,7 +23,7 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
   }
 
   return (
-    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:gap-6 sm:text-sm">
+    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-base font-semibold text-white sm:gap-6">
       <button
         type="button"
         onClick={goToPrevious}
@@ -31,7 +31,7 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
         aria-label="Previous page"
         className="flex items-center justify-center rounded-md border border-gray-200 bg-white p-1 text-primary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-100 disabled:bg-white disabled:text-primary disabled:hover:bg-white"
       >
-        <ChevronLeft size={15} strokeWidth={2.5} />
+        <ChevronLeft size={16} strokeWidth={2.5} />
       </button>
 
       <span>
@@ -45,7 +45,7 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
         aria-label="Next page"
         className="flex items-center justify-center rounded-md border border-gray-200 bg-white p-1 text-primary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-primary disabled:hover:bg-white"
       >
-        <ChevronRight size={15} strokeWidth={2.5} />
+        <ChevronRight size={16} strokeWidth={2.5} />
       </button>
     </div>
   );

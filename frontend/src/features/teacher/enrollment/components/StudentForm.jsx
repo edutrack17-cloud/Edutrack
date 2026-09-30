@@ -146,21 +146,22 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
 
 
   const selectClass = (hasError, hasValue) =>
-    `w-full py-2.5 pl-3 pr-9 rounded-lg border ${
+    `w-full py-2 pl-3 pr-9 rounded-lg border ${
       hasError ? "border-danger" : "border-gray-300"
-    } bg-white text-sm ${hasValue ? "text-gray-700" : "text-gray-500"} appearance-none transition-colors cursor-pointer focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-50`;
+    } bg-white text-base ${hasValue ? "text-gray-700" : "text-gray-500"} appearance-none transition-colors cursor-pointer focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-50`;
 
   const fieldLabelClass = "mb-1 block text-sm font-semibold text-gray-700";
-  const inputLabelClass = "text-gray-700";
-  const errorTextClass = "mt-1 text-xs text-danger";
+  const inputLabelClass = "text-sm text-gray-700";
+  const inputTextClass = "text-base";
+  const errorTextClass = "mt-1 text-sm text-danger";
 
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-5">
       <div>
-        <h3 className="mb-4 text-sm font-bold tracking-wide text-primary uppercase">
+        <h3 className="mb-3 text-lg font-semibold text-primary">
           Enrollment Information
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
           <div>
             <label className={fieldLabelClass}>Level</label>
             <div className="relative">
@@ -229,7 +230,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             error={formik.errors.lrn}
             touched={formik.touched.lrn}
             placeholder="123456789012"
-            labelClassName={inputLabelClass}
+            labelClassName={inputLabelClass} inputClassName={inputTextClass}
             maxLength={12}
             inputMode="numeric"
           />
@@ -240,7 +241,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
               type="button"
               onClick={onRfidClick}
               aria-label={formik.values.rfid ? `RFID UID ${formik.values.rfid}` : "Add student RFID"}
-              className={`flex w-full items-center rounded-lg border px-2 py-2.5 text-sm text-gray-500 transition-colors hover:border-primary ${
+              className={`flex w-full items-center rounded-lg border px-2 py-2 text-base text-gray-500 transition-colors hover:border-primary ${
                 formik.values.rfid ? "justify-start gap-2" : "justify-center"
               } ${formik.touched.rfid && formik.errors.rfid ? "border-danger" : "border-gray-300"}`}
             >
@@ -282,10 +283,10 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
       </div>
 
       <div>
-        <h3 className="mb-4 mt-2 text-sm font-bold tracking-wide text-primary uppercase">
+        <h3 className="mb-3 text-lg font-semibold text-primary">
           Student Information
         </h3>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
           {/* Full-width: First Name gets its own row (sm:col-span-2) so
               Middle Name and Last Name land together as a pair right
               below it, instead of First+Middle pairing off and leaving
@@ -302,7 +303,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
               error={formik.errors.firstName}
               touched={formik.touched.firstName}
               placeholder="Juan"
-              labelClassName={inputLabelClass}
+              labelClassName={inputLabelClass} inputClassName={inputTextClass}
             />
           </div>
           <Input
@@ -316,7 +317,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             error={formik.errors.middleName}
             touched={formik.touched.middleName}
             placeholder="C"
-            labelClassName={inputLabelClass}
+            labelClassName={inputLabelClass} inputClassName={inputTextClass}
           />
           <Input
             label="Last Name"
@@ -329,7 +330,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             error={formik.errors.lastName}
             touched={formik.touched.lastName}
             placeholder="Dela Cruz"
-            labelClassName={inputLabelClass}
+            labelClassName={inputLabelClass} inputClassName={inputTextClass}
           />
 
           {/* No col-start hack needed here anymore: First Name now fills
@@ -371,17 +372,17 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             error={formik.errors.birthDate}
             touched={formik.touched.birthDate}
             labelClassName={inputLabelClass}
-            inputClassName="[&::-webkit-calendar-picker-indicator]:opacity-40"
+            inputClassName={`${inputTextClass} [&::-webkit-calendar-picker-indicator]:opacity-40`}
             max={maxBirthdate}
           />
         </div>
       </div>
 
       <div>
-        <h3 className="mb-4 mt-2 text-sm font-bold tracking-wide text-primary uppercase">
+        <h3 className="mb-3 text-lg font-semibold text-primary">
           Parent / Guardian Information
         </h3>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
           <Input
             label="Guardian Name"
             id="guardian"
@@ -393,7 +394,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             error={formik.errors.guardian}
             touched={formik.touched.guardian}
             placeholder="Juan Dela Cruz"
-            labelClassName={inputLabelClass}
+            labelClassName={inputLabelClass} inputClassName={inputTextClass}
           />
           <Input
             label="Guardian Mobile Number"
@@ -406,7 +407,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             error={formik.errors.guardianPhoneNumber}
             touched={formik.touched.guardianPhoneNumber}
             placeholder="09xxxxxxxxx"
-            labelClassName={inputLabelClass}
+            labelClassName={inputLabelClass} inputClassName={inputTextClass}
             maxLength={11}
             inputMode="numeric"
           />

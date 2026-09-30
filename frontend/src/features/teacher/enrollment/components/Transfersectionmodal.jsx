@@ -16,7 +16,7 @@
 // an export named 'default'".
 
 import React, { useEffect, useState } from "react";
-import { X, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { getSections } from "../enrollmentService";
 
 function TransferSectionModal({
@@ -138,22 +138,14 @@ function TransferSectionModal({
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center border-b border-gray-200 px-6 py-4">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             Transfer Section
           </h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="text-gray-500 transition-colors hover:text-gray-700"
-          >
-            <X size={22} />
-          </button>
         </div>
 
-        <div className="flex flex-col gap-4 px-4 py-6 sm:px-6">
+        <div className="flex flex-col gap-4 px-6 py-5">
           <p className="text-sm text-gray-600">
             Move <span className="font-semibold text-gray-800">{student.fullName}</span> from{" "}
             <span className="font-semibold text-gray-800">
@@ -172,7 +164,7 @@ function TransferSectionModal({
                 onChange={(e) => setSectionId(e.target.value)}
                 onBlur={() => setTouched(true)}
                 disabled={isSubmitting || eligibleSections.length === 0}
-                className={`w-full appearance-none rounded-lg border py-2.5 pl-3 pr-9 text-sm outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60 ${
+                className={`w-full appearance-none rounded-lg border py-2 pl-3 pr-10 text-base outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-60 ${
                   touched && !isValid ? "border-danger" : "border-gray-300"
                 } ${sectionId ? "text-gray-700" : "text-gray-500"}`}
               >
@@ -190,19 +182,19 @@ function TransferSectionModal({
                 className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
               />
             </div>
-            {targetsError && <p className="mt-1 text-xs text-danger">{targetsError}</p>}
+            {targetsError && <p className="mt-1 text-sm text-danger">{targetsError}</p>}
             {touched && !isValid && (
-              <p className="mt-1 text-xs text-danger">Please select a section to transfer to.</p>
+              <p className="mt-1 text-sm text-danger">Please select a section to transfer to.</p>
             )}
           </div>
         </div>
 
-        <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
+        <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
           <button
             type="button"
             onClick={handleConfirm}
             disabled={isSubmitting || eligibleSections.length === 0}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "Transferring..." : "Transfer"}
           </button>
@@ -210,7 +202,7 @@ function TransferSectionModal({
             type="button"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>

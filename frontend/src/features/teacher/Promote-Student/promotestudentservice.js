@@ -323,12 +323,25 @@ export async function promoteStudents(studentIds, targetSectionId) {
 // above. The interceptor's own single 429 resync-and-retry (for
 // cross-tab/cross-device contention on the same account) is the
 // remaining safety net, same as every other call through studentApi.
+// Today's date as YYYY-MM-DD in the USER'S local timezone. The old default,
+// new Date().toISOString().split("T")[0], is UTC - in the Philippines (UTC+8)
+// that returns YESTERDAY's date between 12:00 AM and 8:00 AM local, so a
+// graduation done early in the morning got stamped with the wrong leftAt.
+// Same helper as getLocalDateISO() in enrollmentService.js, duplicated here
+// on purpose so this feature doesn't import across feature folders.
+function getLocalDateISO(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 async function graduateOneStudent(studentId, remarks, leftAt) {
   const { data } = await studentApi.patch(`/student/${studentId}/student-status/graduate`, { remarks, leftAt });
   return data;
 }
 
-export async function graduateStudents(studentIds, remarks = "", leftAt = new Date().toISOString().split("T")[0]) {
+export async function graduateStudents(studentIds, remarks = "", leftAt = getLocalDateISO()) {
   const results = { succeeded: [], failed: [] };
 
   for (const studentId of studentIds) {

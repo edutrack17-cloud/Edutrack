@@ -5,9 +5,8 @@ import React from "react";
 // (not just section actions) instead of hardcoding one entry per exact
 // header string. Checked in order, first match wins.
 //
-// Colors kept in sync (manually) with ACTIVITY_LOG_FILTERS in
-// Activitylogheaderfilter.jsx, so a filter's dropdown color matches the
-// color its logs render with in the feed below.
+// Activitylogheaderfilter.jsx imports getLogVisual from here, so a filter's
+// dropdown color always matches the color its logs render with in the feed.
 const ACTION_STYLES = [
   { match: "archived", label: "Archived", colorClass: "text-secondary" },
   { match: "dropped", label: "Dropped", colorClass: "text-secondary" },
@@ -26,7 +25,7 @@ const ACTION_STYLES = [
   { match: "started", label: "Started", colorClass: "text-primary" },
 ];
 
-function getLogVisual(logHeader) {
+export function getLogVisual(logHeader) {
   const normalized = (logHeader || "").toLowerCase();
   const match = ACTION_STYLES.find((entry) => normalized.includes(entry.match));
   return match || { label: logHeader || "Activity", colorClass: "text-gray-700" };

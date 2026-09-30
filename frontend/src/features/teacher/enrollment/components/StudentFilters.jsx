@@ -4,23 +4,23 @@ import { ALL_SCHOOL_YEARS } from "../enrollmentService";
 
 
 const STATUS_OPTIONS = [
-  { value: "", label: "All Status", textClass: "text-gray-700", hoverClass: "", selectedBgClass: "bg-gray-100" },
-  { value: "enrolled", label: "Enrolled", textClass: "text-success", hoverClass: "", selectedBgClass: "bg-success/10" },
-  { value: "dropped", label: "Dropped", textClass: "text-danger", hoverClass: "", selectedBgClass: "bg-danger/10" },
-  { value: "transferred_out", label: "Transferred", textClass: "text-warning", hoverClass: "", selectedBgClass: "bg-warning/10" },
-  { value: "graduated", label: "Graduated", textClass: "text-primary", hoverClass: "", selectedBgClass: "bg-primary/10" },
+  { value: "", label: "All Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
+  { value: "enrolled", label: "Enrolled", textClass: "text-success", selectedBgClass: "bg-success/10" },
+  { value: "dropped", label: "Dropped", textClass: "text-danger", selectedBgClass: "bg-danger/10" },
+  { value: "transferred_out", label: "Transferred", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
+  { value: "graduated", label: "Graduated", textClass: "text-primary", selectedBgClass: "bg-primary/10" },
 ];
 
 const LEVEL_ALL = { value: "", label: "All Grade Levels", textClass: "text-gray-700" };
 const SECTION_ALL = { value: "", label: "All Sections", textClass: "text-gray-700" };
 
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+  "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 text-left text-sm font-medium outline-none cursor-pointer transition-colors focus-visible:border-primary";
+const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39";
 
 // Same width family as the Level/Section dropdowns, a touch wider for year
 // labels like "2049-2050".
-const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-[8.5rem] md:w-[8.5rem]";
+const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -81,7 +81,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
       {isOpen && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
@@ -91,10 +91,10 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   {option.label}
-                  {isSelected && <Check size={14} />}
+                  {isSelected && <Check size={16} />}
                 </button>
               </li>
             );
@@ -117,6 +117,12 @@ function StudentFilters({
   schoolYear = "",
   schoolYearOptions = [],
   onSchoolYearChange,
+  // "Select All" lives here (same spot/style as PromoteStudentFilters).
+  // The button only renders when the page passes onToggleSelectAll.
+  canBulkSelect = true,
+  allSelected = false,
+  onToggleSelectAll,
+  selectAllTitle,
 }) {
   const levelOptions = [
     LEVEL_ALL,
@@ -162,13 +168,13 @@ function StudentFilters({
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-2">
       <FilterDropdown
         options={levelOptions}
         value={level}
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
-        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-32 md:w-36"
+        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39"
       />
 
       <FilterDropdown
@@ -176,7 +182,7 @@ function StudentFilters({
         value={section}
         onChange={onSectionChange}
         ariaLabel="Filter by section"
-        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-32 md:w-36"
+        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39"
       />
 
       <FilterDropdown
@@ -194,6 +200,18 @@ function StudentFilters({
           ariaLabel="Filter by school year"
           wrapperClassName={schoolYearWidthClass}
         />
+      )}
+
+      {onToggleSelectAll && (
+        <button
+          type="button"
+          onClick={onToggleSelectAll}
+          disabled={!canBulkSelect}
+          title={selectAllTitle}
+          className="h-10 w-32 cursor-pointer whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
+        >
+          {allSelected ? "Deselect All" : "Select All"}
+        </button>
       )}
     </div>
   );

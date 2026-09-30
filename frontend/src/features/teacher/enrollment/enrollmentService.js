@@ -448,6 +448,10 @@ export async function updateStudent(studentId, values) {
 }
 
 // CONNECTED: PATCH /api/student/{studentId}/student-status/drop
+// leftAt defaults to today in the user's LOCAL timezone (getLocalDateISO below) -
+// NOT UTC, which returns yesterday's date between 12:00 AM and 8:00 AM in the PH.
+// Always sent: the backend doesn't default a null leftAt, and a null one leaves the
+// student's section assignment open even though their status changed.
 // Body is UpdateStudentStatusRequest: { remarks, leftAt }. Neither field
 // is validated as required on the backend (see UpdateStudentStatusRequest.java
 // - no @NotNull/@NotBlank), so this defaults leftAt to today and leaves
@@ -455,7 +459,7 @@ export async function updateStudent(studentId, values) {
 // either from the user. If you want the admin to actually type a reason,
 // ConfirmStatusModal needs a text field added and its value threaded
 // through here instead of this default.
-export async function dropStudent(studentId, remarks = "", leftAt = new Date().toISOString().split("T")[0]) {
+export async function dropStudent(studentId, remarks = "", leftAt = getLocalDateISO()) {
   try {
     const { data } = await studentApi.patch(`/student/${studentId}/student-status/drop`, { remarks, leftAt });
     return data;
@@ -469,7 +473,7 @@ export async function dropStudent(studentId, remarks = "", leftAt = new Date().t
 // leaving the school entirely - NOT the same as moving sections while
 // still enrolled (that's transferStudent() below, matching
 // TransferSectionRequest/StudentController.transferStudent()).
-export async function transferOutStudent(studentId, remarks = "", leftAt = new Date().toISOString().split("T")[0]) {
+export async function transferOutStudent(studentId, remarks = "", leftAt = getLocalDateISO()) {
   try {
     const { data } = await studentApi.patch(`/student/${studentId}/student-status/transfer-out`, { remarks, leftAt });
     return data;
@@ -480,12 +484,77 @@ export async function transferOutStudent(studentId, remarks = "", leftAt = new D
 
 // CONNECTED: PATCH /api/student/{studentId}/student-status/graduate
 // Same body shape/defaults as dropStudent() above.
-export async function graduateStudent(studentId, remarks = "", leftAt = new Date().toISOString().split("T")[0]) {
+export async function graduateStudent(studentId, remarks = "", leftAt = getLocalDateISO()) {
   try {
     const { data } = await studentApi.patch(`/student/${studentId}/student-status/graduate`, { remarks, leftAt });
     return data;
   } catch (error) {
     throw new Error(getErrorMessage(error, "Failed to graduate student"));
+  }
+}
+
+// Today's date as YYYY-MM-DD in the USER'S local timezone. Used instead of
+// new Date().toISOString().split("T")[0], which is UTC - in the Philippines
+// (UTC+8) that returns YESTERDAY's date between 12:00 AM and 8:00 AM local.
+export function getLocalDateISO(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// CONNECTED: PATCH /api/student/student-status/{drop|transfer-out|graduate}/bulk
+// One function serves all three bulk endpoints - they share the same
+// request/response shape (see the bulk status integration guide).
+//
+// Body: { students: [{ studentId, remarks? }], leftAt }
+//   - remarks is PER STUDENT (optional; blank/omitted = no remark).
+//   - leftAt is batch-wide. Always sent: the backend does not default it, and
+//     a null leftAt would leave each student's section assignment open.
+//   - There is NO top-level remarks and NO flat studentIds array anymore.
+//
+// Returns StudentEditResponse[] in the same order the students were sent.
+//
+// ALL-OR-NOTHING: if any student fails (bad id, already in that status,
+// teacher not their adviser) the backend rolls back the whole batch, so the
+// caller must NOT update any row optimistically on failure.
+const BULK_STATUS_PATHS = {
+  dropped: "drop",
+  transferred_out: "transfer-out",
+  graduated: "graduate",
+};
+
+export async function bulkUpdateStudentStatus(newStatus, entries, leftAt = getLocalDateISO()) {
+  const path = BULK_STATUS_PATHS[newStatus];
+  if (!path) throw new Error("Unsupported status change");
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error("Please select at least one student");
+  }
+
+  const body = {
+    students: entries.map(({ studentId, remarks }) => {
+      const entry = { studentId };
+      const trimmed = typeof remarks === "string" ? remarks.trim() : "";
+      if (trimmed) entry.remarks = trimmed;
+      return entry;
+    }),
+    leftAt,
+  };
+
+  try {
+    const { data } = await studentApi.patch(`/student/student-status/${path}/bulk`, body);
+    return data;
+  } catch (error) {
+    const status = error?.response?.status;
+    if (status === 403) {
+      throw new Error("You can only bulk-act on students in your advisory section");
+    }
+    if (status === 404) {
+      throw new Error("One of the selected students could not be found");
+    }
+    // 400 -> "Invalid request"; 409 (already in that status) -> backend's own
+    // message, verbatim, e.g. "Student is already dropped".
+    throw new Error(getErrorMessage(error, status === 400 ? "Invalid request" : "Failed to update students"));
   }
 }
 

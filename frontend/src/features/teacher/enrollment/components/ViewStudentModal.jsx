@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { X, GraduationCap, UserX, Shuffle, ArrowUpCircle, Repeat, Clock } from "lucide-react";
+import { GraduationCap, UserX, Shuffle, ArrowUpCircle, Repeat, Clock } from "lucide-react";
 import { getStudentHistory } from "../enrollmentService";
 
 const ADMISSION_TYPE_LABELS = {
@@ -41,11 +41,11 @@ function formatHistoryDate(value) {
   });
 }
 
-function InfoField({ label, value }) {
+function InfoField({ label, value, className = "" }) {
   return (
-    <div>
-      <p className="mb-1 text-sm font-semibold text-gray-700">{label}</p>
-      <p className="text-sm text-gray-500">{value || "—"}</p>
+    <div className={className}>
+      <p className="mb-0.5 text-sm font-semibold text-gray-500">{label}</p>
+      <p className="text-base text-gray-700">{value || "—"}</p>
     </div>
   );
 }
@@ -73,7 +73,7 @@ function InfoField({ label, value }) {
 // exitType on those old assignment rows) is a backend/data job.
 function HistoryTimeline({ entries, studentStatus }) {
   if (entries.length === 0) {
-    return <p className="py-6 text-center text-sm text-gray-500">No section history yet.</p>;
+    return <p className="py-6 text-center text-base text-gray-500">No section history yet.</p>;
   }
 
   return (
@@ -106,20 +106,20 @@ function HistoryTimeline({ entries, studentStatus }) {
 
             <div className="flex-1 pb-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-semibold text-gray-800">
+                <p className="text-base font-semibold text-gray-800">
                   {entry.sectionName} · {formatGradeLevel(entry.gradeLevel)}
                 </p>
                 {isCurrent ? (
-                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">
+                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-sm font-semibold text-success">
                     Current
                   </span>
                 ) : (
-                  <span className={`rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold ${meta?.colorClass ?? "text-gray-600"}`}>
+                  <span className={`rounded-full bg-gray-100 px-2 py-0.5 text-sm font-semibold ${meta?.colorClass ?? "text-gray-600"}`}>
                     {meta?.label ?? entry.exitType ?? studentStatus}
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <p className="mt-0.5 text-sm text-gray-500">
                 Assigned {formatHistoryDate(entry.assignedAt)}
                 {" · "}
                 {isCurrent
@@ -138,7 +138,7 @@ function HistoryTimeline({ entries, studentStatus }) {
                   than looking like the History tab never had a Remarks
                   field in the first place. */}
               {!isCurrent && (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-sm text-gray-500">
                   <span className="font-semibold text-gray-600">Remarks:</span>{" "}
                   <span className="italic">{entry.remarks || "No remarks recorded"}</span>
                 </p>
@@ -227,7 +227,7 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
   const canViewHistory = role !== "teacher" || student.studentStatus !== "graduated";
 
   const tabClass = (tab) =>
-    `flex-1 cursor-pointer border-b-2 py-2.5 text-center text-sm font-semibold transition-colors ${
+    `flex-1 cursor-pointer border-b-2 py-2.5 text-center text-base font-semibold transition-colors ${
       activeTab === tab
         ? "border-primary text-primary"
         : "border-transparent text-gray-500 hover:text-gray-700"
@@ -235,18 +235,14 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="flex shrink-0 items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+        <div className="flex shrink-0 items-center border-b border-gray-200 px-6 py-3">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             Student Information
           </h2>
-          <button onClick={onClose} className="text-gray-500 transition-colors hover:text-gray-700">
-            <X size={22} />
-          </button>
         </div>
 
-        <div className="flex shrink-0 border-b border-gray-200 px-4 sm:px-6">
+        <div className="flex shrink-0 border-b border-gray-200 px-6">
           <button type="button" onClick={() => setActiveTab("details")} className={tabClass("details")}>
             Details
           </button>
@@ -257,14 +253,14 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {activeTab === "details" ? (
-            <div className="flex flex-col gap-7">
+            <div className="flex flex-col gap-5">
               <div>
-                <h3 className="mb-4 text-sm font-bold tracking-wide text-primary uppercase">
+                <h3 className="mb-3 text-lg font-semibold text-primary">
                   Enrollment Information
                 </h3>
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
                   <InfoField label="Level" value={formatGradeLevel(student.section?.gradeLevel)} />
                   <InfoField label="Section" value={student.section?.sectionName} />
                   <InfoField label="LRN" value={student.lrn} />
@@ -274,13 +270,13 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
               </div>
 
               <div>
-                <h3 className="mb-4 mt-2 text-sm font-bold tracking-wide text-primary uppercase">
+                <h3 className="mb-3 text-lg font-semibold text-primary">
                   Student Information
                 </h3>
                 {/* StudentResponse only exposes a single combined "fullName",
                     not separate first/middle/last, so that's all we can show
                     here until the backend exposes them individually. */}
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
                   <InfoField label="Name" value={student.fullName} />
                   <InfoField label="Sex" value={student.sex} />
                   <InfoField label="Birthdate" value={student.birthDate} />
@@ -288,10 +284,10 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
               </div>
 
               <div>
-                <h3 className="mb-4 mt-2 text-sm font-bold tracking-wide text-primary uppercase">
+                <h3 className="mb-3 text-lg font-semibold text-primary">
                   Parent / Guardian Information
                 </h3>
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
                   <InfoField label="Guardian Name" value={student.guardian} />
                   <InfoField label="Guardian Mobile Number" value={student.guardianPhoneNumber} />
                 </div>
@@ -300,7 +296,7 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
           ) : (
             <>
               {isLoadingHistory && (
-                <p className="py-6 text-center text-sm text-gray-500">Loading history...</p>
+                <p className="py-6 text-center text-base text-gray-500">Loading history...</p>
               )}
 
               {!isLoadingHistory && historyError && (
@@ -309,7 +305,7 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
                   <button
                     type="button"
                     onClick={() => setHistoryRetryCount((count) => count + 1)}
-                    className="text-sm font-semibold text-primary hover:underline"
+                    className="text-base font-semibold text-primary hover:underline"
                   >
                     Try again
                   </button>
@@ -336,11 +332,11 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
           )}
         </div>
 
-        <div className="shrink-0 border-t border-gray-200 px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-t border-gray-200 px-6 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="w-full cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            className="w-full cursor-pointer rounded-lg bg-primary py-2.5 text-base font-semibold text-white transition-colors hover:bg-sky-700"
           >
             Close
           </button>

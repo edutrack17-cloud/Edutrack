@@ -400,21 +400,23 @@ function ProfileInformationPage() {
             </div>
 
             <div className="flex shrink-0 gap-3 border-t border-gray-200 px-4 py-3 sm:px-8">
+              {/* Both stay disabled until something is actually edited, so
+                  there's nothing to click when there's nothing to save or undo. */}
               <button
                 type="submit"
-                disabled={isSaving}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSaving || !hasChanges}
+                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Save changes
+                Save Changes
               </button>
 
               <button
                 type="button"
                 onClick={handleReset}
-                disabled={isSaving}
-                className="flex-1 rounded-lg bg-gray-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSaving || !hasChanges}
+                className="flex-1 cursor-pointer rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Discard changes
+                Discard Changes
               </button>
             </div>
           </form>
@@ -427,7 +429,7 @@ function ProfileInformationPage() {
         onConfirm={handleConfirmSave}
         title="Save profile changes?"
         message={confirmMessage}
-        confirmLabel="Save changes"
+        confirmLabel="Save Changes"
         isSubmitting={isSaving}
       />
 

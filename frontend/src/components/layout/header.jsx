@@ -37,7 +37,7 @@ function Header({ title, fullname, role, onMenuClick, onLogout }) {
           </button>
         )}
 
-        <h1 className="truncate text-xl font-bold font-primary text-primary sm:text-3xl">
+        <h1 className="truncate text-2xl font-bold font-primary text-primary sm:text-3xl sm:leading-9">
           {title}
         </h1>
       </div>
@@ -47,7 +47,7 @@ function Header({ title, fullname, role, onMenuClick, onLogout }) {
           <p className="whitespace-nowrap text-sm font-semibold text-primary font-primary sm:text-base">
             {fullname}
           </p>
-          <p className="text-xs text-gray font-primary sm:text-sm">
+          <p className="text-sm text-gray font-primary">
             {role}
           </p>
         </div>
