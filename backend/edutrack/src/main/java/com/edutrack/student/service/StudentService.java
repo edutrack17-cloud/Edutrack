@@ -179,7 +179,13 @@ public class StudentService {
     }
 
     //GET STUDENT HISTORY
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.isAdviserOfStudent(#studentId))")
+    // CHANGED: service-level guard now matches the controller-level guard
+    // (hasAdvisedStudent, not isAdviserOfStudent). isAdviserOfStudent only
+    // returns true while the student's current assignment has leftAt IS NULL,
+    // so a teacher who used to advise a dropped/transferred/graduated student
+    // was getting a 403 on this endpoint even though the controller allowed it.
+    // History is exactly the case where "ever advised" is the correct rule.
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('TEACHER') and @studentAccessService.hasAdvisedStudent(#studentId))")
     public List<StudentSectionAssignmentHistoryResponse> getStudentHistory(Long studentId){
         getByStudentId(studentId); // throws StudentNotFound if it doesn't exist
 

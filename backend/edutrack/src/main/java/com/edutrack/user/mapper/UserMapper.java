@@ -16,7 +16,8 @@ public interface UserMapper {
     @Mapping(target = "userId", ignore = true)
     @Mapping(target = "accountStatus", ignore = true)
     @Mapping(target = "userRole", ignore = true)
+    @Mapping(target = "activityLogs", ignore = true)
+    @Mapping(target = "sections", ignore = true)
     User toEntity(AdminCreateUserRequest clientRequest);
-
 
 }

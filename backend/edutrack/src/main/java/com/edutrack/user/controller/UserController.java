@@ -62,7 +62,8 @@ public class UserController {
     //UPDATE
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PatchMapping("update/{userId}")
-    public ResponseEntity<UserResponse> updateUser(@PathVariable Long userId, @RequestBody UpdateUserRequest request){
+    public ResponseEntity<UserResponse> updateUser(@PathVariable Long userId,
+                                                   @Valid @RequestBody UpdateUserRequest request){
         UserResponse updatedUser = userService.updateUser(userId, request);
         return ResponseEntity.ok(updatedUser);
     }

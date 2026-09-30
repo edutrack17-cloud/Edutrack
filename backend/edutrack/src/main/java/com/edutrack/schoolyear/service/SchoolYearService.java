@@ -222,6 +222,10 @@ public class SchoolYearService {
             throw new SchoolYearAlreadyArchived();
         }
 
+        if (schoolYearToArchive.getSchoolYearStatus() == SchoolYearStatus.active){
+            throw new ArchiveNotAllowed();
+        }
+
         validateTransition(
                 schoolYearToArchive.getSchoolYearStatus(),
                 SchoolYearStatus.archived

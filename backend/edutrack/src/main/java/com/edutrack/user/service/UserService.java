@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+
 @Transactional(readOnly = true)
 @Service
 public class UserService {
@@ -59,6 +60,11 @@ public class UserService {
     public UserResponse createTeacher(AdminCreateUserRequest request){
         if (userRepository.existsByUsername(request.username())){
             throw new UsernameAlreadyExists(request.username());
+        }
+
+        // Defensive check (in case validation is bypassed)
+        if (!request.password().equals(request.confirmPassword())) {
+            throw new PasswordMismatchException();
         }
 
         User userToBeSaved = userMapper.toEntity(request);
@@ -142,6 +148,10 @@ public class UserService {
         }
 
         if (request.password() != null && !request.password().isBlank()) {
+            // Defensive check (in case validation is bypassed)
+            if (!request.password().equals(request.confirmPassword())) {
+                throw new PasswordMismatchException();
+            }
             userToUpdate.setPassword(passwordEncoder.encode(request.password()));
             changed = true;
         }
@@ -149,6 +159,7 @@ public class UserService {
         User savedUser = changed ? userRepository.save(userToUpdate) : userToUpdate;
         return userMapper.toResponseDTO(savedUser);
     }
+
     //DISABLE ACCOUNT
     @Transactional
     public UserResponse disableAccount(Long userId){

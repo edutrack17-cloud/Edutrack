@@ -14,14 +14,26 @@ public record BulkUpdateStudentStatusRequest(
 
         LocalDate leftAt
 ) {
-    /**
-     * One entry per student in the bulk request. remarks is optional at the
-     * individual level — a blank/null value means "no remark for this student",
-     * which is exactly how the single-status endpoint behaves today.
-     */
     public record StudentEntry(
             @NotNull
             Long studentId,
             String remarks
     ) {}
+
+    /**
+     * Convenience accessor used by the @PreAuthorize SpEL on the bulk
+     * endpoints: #bulkRequest.studentIds() must resolve to a List<Long> so
+     * StudentAccessService.isAdviserOfAllStudents(...) can be reused as-is.
+     *
+     * Without this method, the SpEL fails to evaluate for a TEACHER account
+     * (admin short-circuits the || and never hits it), and the request
+     * surfaces as a 500 instead of 200/403.
+     */
+    public List<Long> studentIds() {
+        return students == null
+                ? List.of()
+                : students.stream()
+                .map(StudentEntry::studentId)
+                .toList();
+    }
 }
