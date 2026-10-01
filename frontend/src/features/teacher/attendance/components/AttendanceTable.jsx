@@ -1,16 +1,16 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { MoreHorizontal, Loader2, Eye } from "lucide-react";
+import React, { useState } from "react";
+import { Loader2, Eye, LogIn, LogOut } from "lucide-react";
 import { getRowActionState } from "../Attendanceservice";
 import AttendanceStatus from "./AttendanceStatus";
 import ViewAttendanceModal from "./Viewattendancemdodal";
 
+// Compact padding + text-sm so all 7 columns (including Status and the
+// Action icons) fit inside the card at 100% browser zoom without a
+// horizontal scrollbar. Narrower screens still scroll (see min-w below).
 const thClass =
-  "truncate px-3 py-2 text-center text-base font-semibold text-white sm:px-4";
+  "truncate px-2 py-2 text-center text-sm font-semibold text-white";
 const tdClass =
-  "truncate px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4";
-
-const MENU_WIDTH = 160;
+  "truncate px-2 py-2 text-center text-sm font-normal text-gray-700";
 
 function formatDisplayTime(hhmm) {
   if (!hhmm) return "";
@@ -20,70 +20,40 @@ function formatDisplayTime(hhmm) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function ActionKebab({
+// One icon button in the Action column. Always rendered (even when it
+// can't be used yet) so the staff can SEE both manual actions at a
+// glance - enabled ones are colored and clickable, the rest are greyed
+// out with a tooltip explaining why.
+function ActionIconButton({ icon: Icon, label, onClick, disabled, enabledClass, disabledTitle }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={disabled ? disabledTitle : label}
+      className={`flex items-center justify-center rounded-md p-1.5 transition ${
+        disabled
+          ? "cursor-not-allowed text-gray-300"
+          : `cursor-pointer ${enabledClass}`
+      }`}
+    >
+      <Icon size={20} />
+    </button>
+  );
+}
+
+// Replaces the old ActionKebab (the "..." menu). Instead of hiding
+// "Present" / "Time out" / "View" behind a dropdown, Manual Time In and
+// Manual Time Out are now two icons sitting directly in the row.
+function ActionButtons({
   record,
   role,
   isPending,
   onPresentClick,
   onTimeOutClick,
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef(null);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (
-        buttonRef.current?.contains(event.target) ||
-        menuRef.current?.contains(event.target)
-      ) {
-        return;
-      }
-      setIsOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!isOpen) return;
-
-    function updatePosition() {
-      const rect = buttonRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const menuHeight = menuRef.current?.offsetHeight ?? 140;
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      const spaceBelow = viewportHeight - rect.bottom;
-      const shouldFlipUp = spaceBelow < menuHeight + 8 && rect.top > menuHeight + 8;
-
-      const top = shouldFlipUp
-        ? Math.max(8, rect.top - menuHeight - 4)
-        : Math.min(rect.bottom + 4, viewportHeight - menuHeight - 8);
-
-      const left = Math.min(
-        Math.max(8, rect.right - MENU_WIDTH),
-        viewportWidth - MENU_WIDTH - 8
-      );
-
-      setMenuPos({ top, left });
-    }
-
-    updatePosition();
-    const raf = requestAnimationFrame(updatePosition);
-
-    window.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [isOpen]);
 
   if (isPending) {
     return (
@@ -95,84 +65,61 @@ function ActionKebab({
 
   const state = getRowActionState(record.todayAttendance);
 
-  if (state === "needs-present") {
-    // Blank on purpose - On School rows get no Action label/menu until
-    // the student taps the classroom scanner.
-    return null;
-  }
-
   // GUARD only ever taps the gate scanner (see recordTap's role ===
   // "guard" branch in Rfidattendancepage.jsx) - markPresentManual/
-  // manualTimeOut (what these two buttons call) are manual overrides
-  // for the SAME admin/teacher-scoped attendance actions as the
-  // classroom scanner tap, so a guard has no legitimate reason to use
-  // them and would just hit a 403 if they tried. "done" rows still
-  // show View below - that's read-only, so every role keeps it.
-  if (role === "guard" && (state === "needs-status" || state === "needs-timeout")) {
-    return null;
-  }
+  // manualTimeOut (what the two manual icons call) are admin/teacher
+  // actions, so a guard doesn't get them at all and would just hit a
+  // 403 if they tried. Guards still get View on finished rows since
+  // that's read-only.
+  const canUseManualActions = role !== "guard";
 
-  function handleSelect(action) {
-    setIsOpen(false);
-    if (action === "present") onPresentClick(record);
-    if (action === "timeout") onTimeOutClick(record);
-  }
+  const canTimeIn = state === "needs-status";
+  const canTimeOut = state === "needs-timeout";
+  const isDone = state === "done";
+
+  const timeInDisabledTitle = isDone || canTimeOut
+    ? "Already timed in"
+    : "Student must tap the classroom scanner first";
+  const timeOutDisabledTitle = isDone
+    ? "Already timed out"
+    : state === "needs-present"
+      ? "Student must tap the classroom scanner first"
+      : "Time in first";
 
   return (
     <>
-      <button
-        type="button"
-        ref={buttonRef}
-        onClick={() => setIsOpen((prev) => !prev)}
-        aria-label="Attendance actions"
-        className="cursor-pointer rounded-md p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-primary"
-      >
-        <MoreHorizontal size={18} />
-      </button>
-
-      {isOpen &&
-        createPortal(
-          <div
-            ref={menuRef}
-            style={{ position: "fixed", top: menuPos.top, left: menuPos.left }}
-            className="font-primary z-50 w-40 rounded-lg border border-gray-200 bg-white py-1 text-left shadow-lg"
-          >
-            {state === "needs-status" && (
-              <button
-                type="button"
-                onClick={() => handleSelect("present")}
-                className="block w-full cursor-pointer px-3 py-2 text-left text-base font-semibold text-success transition hover:bg-gray-100"
-              >
-                Present
-              </button>
-            )}
-
-            {state === "needs-timeout" && (
-              <button
-                type="button"
-                onClick={() => handleSelect("timeout")}
-                className="block w-full cursor-pointer px-3 py-2 text-left text-base font-semibold text-danger transition hover:bg-gray-100"
-              >
-                Time out
-              </button>
-            )}
-
-            {state === "done" && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  setIsViewOpen(true);
-                }}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-base font-semibold text-gray-600 transition hover:bg-gray-100"
-              >
-                <Eye size={14} />
-                View
-              </button>
-            )}
-          </div>,
-          document.body
+      <div className="flex items-center justify-center gap-1">
+        {canUseManualActions && (
+          <>
+            <ActionIconButton
+              icon={LogIn}
+              label="Manual Time In"
+              onClick={() => onPresentClick(record)}
+              disabled={!canTimeIn}
+              enabledClass="text-success hover:bg-success/10"
+              disabledTitle={timeInDisabledTitle}
+            />
+            <ActionIconButton
+              icon={LogOut}
+              label="Manual Time Out"
+              onClick={() => onTimeOutClick(record)}
+              disabled={!canTimeOut}
+              enabledClass="text-danger hover:bg-danger/10"
+              disabledTitle={timeOutDisabledTitle}
+            />
+          </>
         )}
+
+        {isDone && (
+          <ActionIconButton
+            icon={Eye}
+            label="View attendance record"
+            onClick={() => setIsViewOpen(true)}
+            disabled={false}
+            enabledClass="text-gray-500 hover:bg-gray-100 hover:text-primary"
+          />
+        )}
+      </div>
 
       <ViewAttendanceModal
         isOpen={isViewOpen}
@@ -209,15 +156,18 @@ function AttendanceTable({
 
   return (
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
-      <table className="w-full min-w-250 table-fixed border-collapse">
+      <table className="w-full min-w-4xl table-fixed border-collapse">
+        {/* Widths tuned for a ~980px card: LRN/RFID kept just wide enough
+            for their digits, Name gets the most room, Action has space
+            for up to three icon buttons. */}
         <colgroup>
-          <col className="w-[15%]" />
-          <col className="w-[14%]" />
+          <col className="w-[13%]" />
+          <col className="w-[11%]" />
           <col className="w-[22%]" />
-          <col className="w-[10%]" />
-          <col className="w-[14%]" />
-          <col className="w-[17%]" />
-          <col className="w-[8%]" />
+          <col className="w-[9%]" />
+          <col className="w-[12%]" />
+          <col className="w-[18%]" />
+          <col className="w-[15%]" />
         </colgroup>
 
         <thead className="bg-primary">
@@ -247,7 +197,7 @@ function AttendanceTable({
               <td className={tdClass} title={record.name}>{record.name}</td>
               <td className={tdClass}>{record.gradeLevel}</td>
               <td
-                className="whitespace-normal break-normal px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4"
+                className="whitespace-normal break-normal px-2 py-2 text-center text-sm font-normal text-gray-700"
                 title={record.section}
               >
                 {record.section}
@@ -257,7 +207,7 @@ function AttendanceTable({
                   <div className="flex flex-col items-center gap-0.5">
                     <AttendanceStatus status={record.todayAttendance.status} />
                     {(record.todayAttendance.timeIn || record.todayAttendance.timeOut) && (
-                      <span className="text-sm font-normal">
+                      <span className="text-xs font-normal">
                         {record.todayAttendance.timeIn && (
                           <span className="text-success">{formatDisplayTime(record.todayAttendance.timeIn)}</span>
                         )}
@@ -276,7 +226,7 @@ function AttendanceTable({
               </td>
               <td className={tdClass}>
                 <div className="flex justify-center">
-                  <ActionKebab
+                  <ActionButtons
                     record={record}
                     role={role}
                     isPending={pendingAssignmentId === record.assignmentId}

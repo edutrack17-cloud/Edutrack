@@ -490,6 +490,7 @@ function SF2AttendancePage() {
             value={schoolYearId}
             onChange={handleSchoolYearChange}
             ariaLabel="Filter by school year"
+            widthClass="relative col-span-2 w-full min-w-0 sm:col-span-1 lg:w-44 lg:shrink-0"
             disabled={isSectionsLoading}
           />
 

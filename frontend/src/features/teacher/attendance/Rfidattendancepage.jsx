@@ -897,13 +897,13 @@ function RFIDAttendancePage() {
 
               {lastScan.action === "already-present" && (
                 <p className="mt-6 text-sm font-semibold text-success">
-                  {role === "guard" ? "Already tapped in today" : "Already marked present today"}
+                  {role === "guard" ? "Already tapped in today" : "Already marked Present today"}
                 </p>
               )}
 
               {lastScan.action === "already-absent" && (
                 <p className="mt-6 text-sm font-semibold text-danger">
-                  Already marked absent today
+                  Already marked Absent today
                 </p>
               )}
 
