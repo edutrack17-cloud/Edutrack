@@ -88,7 +88,7 @@ function PromoteStudentTable({ students, selectedIds, onToggleSelect, canBulkSel
                       onChange={() => onToggleSelect(student.studentId)}
                       disabled={!canBulkSelect}
                       aria-label={isSelected ? `Deselect ${student.fullName}` : `Select ${student.fullName}`}
-                      className="h-5 w-5 cursor-pointer rounded border-2 border-gray-400 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      className="h-5 w-5 cursor-pointer rounded border border-gray-300 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
                     />
                   </label>
                 </td>

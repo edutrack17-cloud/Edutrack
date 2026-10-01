@@ -1,12 +1,11 @@
 import React from "react";
-import { X } from "lucide-react";
 
 // Same InfoField treatment as ViewStudentModal.jsx, so both "view" modals read as one component family
 function InfoField({ label, value }) {
   return (
     <div>
-      <p className="mb-1 text-sm font-semibold text-gray-700">{label}</p>
-      <p className="text-sm text-gray-500">{value || "—"}</p>
+      <p className="mb-0.5 text-sm font-semibold text-gray-500">{label}</p>
+      <p className="text-base text-gray-700">{value || "—"}</p>
     </div>
   );
 }
@@ -33,24 +32,20 @@ function Viewusermodal({ isOpen, onClose, user }) {
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+        <div className="flex shrink-0 items-center border-b border-gray-200 px-6 py-3">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             User Information
           </h2>
-          <button onClick={onClose} className="text-gray-500 transition-colors hover:text-gray-700">
-            <X size={22} />
-          </button>
         </div>
 
-        <div className="flex flex-col gap-7 px-4 py-6 sm:px-6">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <div>
-            <h3 className="mb-4 text-sm font-bold tracking-wide text-primary uppercase">
+            <h3 className="mb-3 text-lg font-semibold text-primary">
               Account Information
             </h3>
             {/* Assigned Section (Teacher only) pairs with Status for a clean 2-per-row layout */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
               <div className="sm:col-span-2">
                 <InfoField label="Full Name" value={fullName} />
               </div>
@@ -63,11 +58,11 @@ function Viewusermodal({ isOpen, onClose, user }) {
           </div>
         </div>
 
-        <div className="border-t border-gray-200 px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-t border-gray-200 px-6 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="w-full cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            className="w-full cursor-pointer rounded-lg bg-primary py-2.5 text-base font-semibold text-white transition-colors hover:bg-sky-700"
           >
             Close
           </button>

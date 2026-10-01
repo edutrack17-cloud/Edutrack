@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useFormik } from "formik";
-import { X, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { createUserSchema } from "../UsermanagementSchema";
 
 // Same pattern as StudentForm's guardianPhoneNumber handling - strips
@@ -13,6 +13,7 @@ function sanitizeDigits(value, maxDigits) {
 const EMPTY_FORM = {
   username: "",
   password: "",
+  confirmPassword: "",
   firstName: "",
   middleName: "",
   lastName: "",
@@ -21,6 +22,7 @@ const EMPTY_FORM = {
 
 function Createusermodal({ isOpen, onClose, onSubmit }) {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const formik = useFormik({
     initialValues: EMPTY_FORM,
@@ -39,8 +41,9 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
 
   if (!isOpen) return null;
 
-  function handleClear() {
+  function handleCancel() {
     formik.resetForm();
+    onClose();
   }
 
   function handleContactNumberChange(event) {
@@ -48,71 +51,91 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
   }
 
   const inputClass = (hasError) =>
-    `w-full rounded-lg border px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-primary ${
+    `w-full rounded-lg border px-3 py-2 text-base text-gray-700 outline-none focus:border-primary ${
       hasError ? "border-danger" : "border-gray-300"
     }`;
   const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
-  const errorClass = "mt-1 text-xs text-danger";
+  const errorClass = "mt-1 text-sm text-danger";
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-xl bg-white shadow-xl">
+        <div className="flex shrink-0 items-center border-b border-gray-200 px-6 py-3">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             Create User
           </h2>
-          <button onClick={onClose} className="text-gray-500 transition-colors hover:text-gray-700">
-            <X size={22} />
-          </button>
         </div>
 
-        <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
-          <h3 className="text-sm font-bold tracking-wide text-primary uppercase">
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+          <h3 className="text-lg font-semibold text-primary">
             User Information
           </h3>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>Username</label>
+          <div className="w-full">
+            <label className={labelClass}>Username</label>
+            <input
+              name="username"
+              value={formik.values.username}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="william.henry"
+              className={inputClass(formik.touched.username && formik.errors.username)}
+            />
+            {formik.touched.username && formik.errors.username && (
+              <p className={errorClass}>{formik.errors.username}</p>
+            )}
+          </div>
+
+          <div className="w-full">
+            <label className={labelClass}>Password</label>
+            <div className="relative">
               <input
-                name="username"
-                value={formik.values.username}
+                type={showPassword ? "text" : "password"}
+                name="password"
+                value={formik.values.password}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                placeholder="william.henry"
-                className={inputClass(formik.touched.username && formik.errors.username)}
+                placeholder="••••••••"
+                className={`${inputClass(formik.touched.password && formik.errors.password)} pr-9`}
               />
-              {formik.touched.username && formik.errors.username && (
-                <p className={errorClass}>{formik.errors.username}</p>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
+            {formik.touched.password && formik.errors.password && (
+              <p className={errorClass}>{formik.errors.password}</p>
+            )}
+          </div>
 
-            <div>
-              <label className={labelClass}>Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  value={formik.values.password}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  placeholder="••••••••"
-                  className={`${inputClass(formik.touched.password && formik.errors.password)} pr-9`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              {formik.touched.password && formik.errors.password && (
-                <p className={errorClass}>{formik.errors.password}</p>
-              )}
+          <div className="w-full">
+            <label className={labelClass}>Confirm Password</label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                name="confirmPassword"
+                value={formik.values.confirmPassword}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                placeholder="••••••••"
+                className={`${inputClass(formik.touched.confirmPassword && formik.errors.confirmPassword)} pr-9`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
+            {formik.touched.confirmPassword && formik.errors.confirmPassword && (
+              <p className={errorClass}>{formik.errors.confirmPassword}</p>
+            )}
           </div>
 
           <div className="w-full">
@@ -130,36 +153,34 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>Middle Name</label>
-              <input
-                name="middleName"
-                value={formik.values.middleName}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                placeholder="Henry"
-                className={inputClass(formik.touched.middleName && formik.errors.middleName)}
-              />
-              {formik.touched.middleName && formik.errors.middleName && (
-                <p className={errorClass}>{formik.errors.middleName}</p>
-              )}
-            </div>
+          <div className="w-full">
+            <label className={labelClass}>Middle Name</label>
+            <input
+              name="middleName"
+              value={formik.values.middleName}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="Henry"
+              className={inputClass(formik.touched.middleName && formik.errors.middleName)}
+            />
+            {formik.touched.middleName && formik.errors.middleName && (
+              <p className={errorClass}>{formik.errors.middleName}</p>
+            )}
+          </div>
 
-            <div>
-              <label className={labelClass}>Last Name</label>
-              <input
-                name="lastName"
-                value={formik.values.lastName}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                placeholder="Dela Cruz"
-                className={inputClass(formik.touched.lastName && formik.errors.lastName)}
-              />
-              {formik.touched.lastName && formik.errors.lastName && (
-                <p className={errorClass}>{formik.errors.lastName}</p>
-              )}
-            </div>
+          <div className="w-full">
+            <label className={labelClass}>Last Name</label>
+            <input
+              name="lastName"
+              value={formik.values.lastName}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              placeholder="Dela Cruz"
+              className={inputClass(formik.touched.lastName && formik.errors.lastName)}
+            />
+            {formik.touched.lastName && formik.errors.lastName && (
+              <p className={errorClass}>{formik.errors.lastName}</p>
+            )}
           </div>
 
           <div className="w-full">
@@ -180,21 +201,21 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
           </div>
         </div>
 
-        <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
+        <div className="flex shrink-0 gap-3 border-t border-gray-200 px-6 py-3">
           <button
             type="button"
             onClick={formik.handleSubmit}
             disabled={formik.isSubmitting}
-            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-2.5 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Add
           </button>
           <button
             type="button"
-            onClick={handleClear}
-            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+            onClick={handleCancel}
+            className="flex-1 cursor-pointer rounded-lg bg-secondary py-2.5 text-base font-semibold text-white transition-colors hover:bg-red-700"
           >
-            Clear
+            Cancel
           </button>
         </div>
       </div>

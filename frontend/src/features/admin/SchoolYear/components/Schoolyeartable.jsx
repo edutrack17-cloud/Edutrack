@@ -65,12 +65,13 @@ const STATUS_ACTIONS = {
 // "Mark Active" from ever showing up as a dead-end disabled option -
 // it's either a real, clickable action or it isn't shown at all.
 //   Planning -> Archive always; -> Active only when nothing else is Active
-//   Active   -> Closed or Archive
+//   Active   -> Closed only (backend rejects archiving an Active year -
+//               ArchiveNotAllowed - so it must be Closed first)
 //   Closed   -> Archive only
 //   Archived -> nothing here (would need a dedicated restore action)
 const ALLOWED_TRANSITIONS = {
   planning: ["archived"],
-  active: ["closed", "archived"],
+  active: ["closed"],
   closed: ["archived"],
   archived: [],
 };

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   MoreHorizontal,
   Eye,
@@ -22,6 +23,10 @@ import {
   transferStudentSection,
   bulkUpdateStudentStatus,
 } from "../enrollmentService";
+
+const MENU_WIDTH = 208; // px, matches the menu's w-52
+const MENU_GAP = 4; // px between the kebab button and the menu
+const VIEWPORT_PADDING = 8; // px, keeps the menu off the screen edges
 
 const menuButtonClass =
   "flex w-full items-center gap-3 px-4 py-2.5 text-base font-medium transition";
@@ -73,16 +78,23 @@ export function canGraduateStudent(student) {
 // Same checkbox treatment as PromoteStudentTable. Only enrolled students can
 // be selected - the same rule the row kebab menu applies to Dropped /
 // Transferred Out / Graduate.
-function SelectCheckbox({ student, isSelected, onToggle }) {
-  const canSelect = student.studentStatus === "enrolled";
+// canSelectRows is false until a Grade Level AND a Section are picked (see
+// EnrollmentPage's hasActiveFilter) - the checkbox then shows the same faded
+// disabled look as Promote Student's.
+function SelectCheckbox({ student, isSelected, onToggle, canSelectRows = true }) {
+  const isEnrolled = student.studentStatus === "enrolled";
+  const canSelect = isEnrolled && canSelectRows;
   const label = isSelected ? `Deselect ${student.fullName}` : `Select ${student.fullName}`;
+  const disabledTitle = !isEnrolled
+    ? "Only enrolled students can be selected"
+    : "Select a Grade Level and Section first to enable selection";
 
   return (
     <label
       className={`inline-flex items-center justify-center rounded-md p-1.5 transition sm:p-1 ${
         canSelect ? "cursor-pointer hover:bg-gray-100" : "cursor-not-allowed"
       }`}
-      title={canSelect ? label : "Only enrolled students can be selected"}
+      title={canSelect ? label : disabledTitle}
     >
       <input
         type="checkbox"
@@ -90,7 +102,7 @@ function SelectCheckbox({ student, isSelected, onToggle }) {
         onChange={() => onToggle?.(student.studentId)}
         disabled={!canSelect}
         aria-label={label}
-        className="h-5 w-5 cursor-pointer rounded border-2 border-gray-400 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+        className="h-5 w-5 cursor-pointer rounded border border-gray-300 accent-primary disabled:cursor-not-allowed disabled:opacity-40"
       />
     </label>
   );
@@ -122,13 +134,11 @@ function ActionMenu({ menuRef, top, left, studentStatus, gradeLevel, role, onVie
   // and shouldn't be editable from here anymore.
   const canEdit = isEnrolled;
 
-  // Graduate is admin-only in the UI - a teacher should still see every
-  // other action here (View/Edit/Transfer Section/Dropped/Transferred
-  // Out), just not this one. Same role !== "teacher" convention
-  // ViewStudentModal already uses for canViewHistory, so this reads
-  // consistently with that gate.
-  // Also Grade 6 only - see GRADUATING_GRADE_LEVEL above.
-  const canGraduate = isEnrolled && role !== "teacher" && gradeLevel === GRADUATING_GRADE_LEVEL;
+  // Graduate is available to both ADMIN and TEACHER now. The backend already
+  // scopes a teacher to students they advise (isAdviserOfStudent), so no
+  // role check is needed here.
+  // Grade 6 only - see GRADUATING_GRADE_LEVEL above.
+  const canGraduate = isEnrolled && gradeLevel === GRADUATING_GRADE_LEVEL;
 
   return (
     <div
@@ -169,8 +179,8 @@ function ActionMenu({ menuRef, top, left, studentStatus, gradeLevel, role, onVie
 
       {/* Graduate is also reachable in bulk from the Promote Student
           screen, but exposed per-row here too since the backend has a
-          dedicated single-student endpoint for it. Admin-only in the
-          UI - see canGraduate above. */}
+          dedicated single-student endpoint for it. Shown for ADMIN and
+          TEACHER - see canGraduate above. */}
       {canGraduate && (
         <button onClick={onMarkGraduated} className={`${menuButtonClass} ${actionColorClass.graduated}`}>
           <GraduationCap size={16} />
@@ -193,10 +203,12 @@ function StudentTable({
   showToast,
   role,
   selectedIds = [],
+  canSelectRows = true,
   onToggleSelect,
   onClearSelection,
 }) {
   const [openMenu, setOpenMenu] = useState(null);
+  const [anchor, setAnchor] = useState(null); // viewport rect (top/bottom/right) of the clicked kebab button
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const desktopMenuRef = useRef(null);
@@ -233,9 +245,6 @@ function StudentTable({
     (s) => s.studentStatus === "enrolled" && selectedIds.includes(s.studentId)
   );
 
-  // Graduate stays admin-only in the UI, same rule as the single-row menu.
-  const canBulkGraduate = role !== "teacher";
-
   // Bulk Graduate is only allowed when EVERY selected student is in Grade 6.
   const nonGraduatingCount = selectedStudents.filter((s) => !canGraduateStudent(s)).length;
   const canGraduateSelection = nonGraduatingCount === 0;
@@ -246,7 +255,7 @@ function StudentTable({
   // single-row menu uses. When the selection is MIXED, the button stays but is
   // disabled, with a hint telling the user how many to deselect.
   const graduatingCount = selectedStudents.length - nonGraduatingCount;
-  const showGraduateButton = canBulkGraduate && graduatingCount > 0;
+  const showGraduateButton = graduatingCount > 0;
   const showGraduateHint = showGraduateButton && !canGraduateSelection;
 
   const bulkButtonClass =
@@ -266,15 +275,47 @@ function StudentTable({
       setOpenMenu(null);
       return;
     }
-    const buttonRect = event.currentTarget.getBoundingClientRect();
-
-    setMenuPosition({
-      top: buttonRect.bottom + 8,
-      left: Math.max(8, buttonRect.right - 208),
-    });
-
+    const { top, bottom, right } = event.currentTarget.getBoundingClientRect();
+    setAnchor({ top, bottom, right });
     setOpenMenu(id);
   }
+
+  // Runs after the menu renders but before the browser paints, so the real menu
+  // height is known and there's no flicker. position: fixed -> viewport coordinates.
+  // Opens below the kebab; flips above it when there's no room left at the bottom.
+  useLayoutEffect(() => {
+    if (openMenu === null || !anchor || !desktopMenuRef.current) return;
+
+    const menuHeight = desktopMenuRef.current.offsetHeight;
+    const fitsBelow =
+      anchor.bottom + MENU_GAP + menuHeight + VIEWPORT_PADDING <= window.innerHeight;
+    const top = fitsBelow
+      ? anchor.bottom + MENU_GAP
+      : Math.max(VIEWPORT_PADDING, anchor.top - MENU_GAP - menuHeight);
+    const left = Math.min(
+      Math.max(VIEWPORT_PADDING, anchor.right - MENU_WIDTH),
+      window.innerWidth - MENU_WIDTH - VIEWPORT_PADDING
+    );
+
+    setMenuPosition({ top, left });
+  }, [openMenu, anchor]);
+
+  // The menu is position: fixed, so it would stay behind while the page moves.
+  // Close it on scroll/resize (same as Usermanagementtable).
+  useEffect(() => {
+    if (openMenu === null) return;
+
+    function closeMenu() {
+      setOpenMenu(null);
+    }
+
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
+    return () => {
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("resize", closeMenu);
+    };
+  }, [openMenu]);
 
   useEffect(() => {
     if (openMenu === null) return;
@@ -552,12 +593,13 @@ function StudentTable({
             )}
 
             {students.map((student) => (
-              <tr key={student.studentId} className="border-b border-gray-200 odd:bg-white even:bg-primary/10">
+              <tr key={student.studentId} className="odd:bg-white even:bg-primary/10">
                 <td className="px-3 py-2 text-center sm:px-4 sm:py-2">
                   <SelectCheckbox
                     student={student}
                     isSelected={selectedIds.includes(student.studentId)}
                     onToggle={onToggleSelect}
+                    canSelectRows={canSelectRows}
                   />
                 </td>
                 <td className={tdClass}>{student.lrn}</td>
@@ -585,22 +627,24 @@ function StudentTable({
                     <MoreHorizontal size={20} />
                   </button>
 
-                  {openMenu === student.studentId && (
-                    <ActionMenu
-                      menuRef={desktopMenuRef}
-                      top={menuPosition.top}
-                      left={menuPosition.left}
-                      studentStatus={student.studentStatus}
-                      gradeLevel={student.section?.gradeLevel}
-                      role={role}
-                      onView={() => handleView(student)}
-                      onEdit={() => handleEdit(student)}
-                      onTransferSection={() => handleRequestTransfer(student)}
-                      onMarkDropped={() => handleRequestStatusWithDetails(student, "dropped")}
-                      onMarkTransferred={() => handleRequestStatusWithDetails(student, "transferred_out")}
-                      onMarkGraduated={() => handleRequestStatusChange(student, "graduated")}
-                    />
-                  )}
+                  {openMenu === student.studentId &&
+                    createPortal(
+                      <ActionMenu
+                        menuRef={desktopMenuRef}
+                        top={menuPosition.top}
+                        left={menuPosition.left}
+                        studentStatus={student.studentStatus}
+                        gradeLevel={student.section?.gradeLevel}
+                        role={role}
+                        onView={() => handleView(student)}
+                        onEdit={() => handleEdit(student)}
+                        onTransferSection={() => handleRequestTransfer(student)}
+                        onMarkDropped={() => handleRequestStatusWithDetails(student, "dropped")}
+                        onMarkTransferred={() => handleRequestStatusWithDetails(student, "transferred_out")}
+                        onMarkGraduated={() => handleRequestStatusChange(student, "graduated")}
+                      />,
+                      document.body
+                    )}
                 </td>
               </tr>
             ))}

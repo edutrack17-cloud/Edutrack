@@ -84,7 +84,12 @@ function writePersistedFilter(key, value) {
 // the same status/time immediately from what was already on screen, and
 // the live fetch then confirms or corrects it - the table no longer has
 // to sit blank while waiting on the network.
-const TODAY_ATTENDANCE_CACHE_KEY = "rfid-attendance:today-attendance";
+// FIX: the cache is now keyed by studentId (not rfid) and is only used as a
+// FALLBACK when GET /api/attendance fails. It used to be keyed by rfid and
+// always overlaid onto the roster, so after an RFID was replaced/reassigned
+// the new owner of that rfid inherited the previous owner's status/time.
+// The "v2" suffix throws away any old rfid-keyed cache left in localStorage.
+const TODAY_ATTENDANCE_CACHE_KEY = "rfid-attendance:today-attendance:v2";
 
 function getTodayKey() {
   return new Date().toDateString();
@@ -96,17 +101,17 @@ function loadAttendanceCache() {
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     if (parsed.date !== getTodayKey()) return {};
-    return parsed.byRfid && typeof parsed.byRfid === "object" ? parsed.byRfid : {};
+    return parsed.byStudentId && typeof parsed.byStudentId === "object" ? parsed.byStudentId : {};
   } catch {
     return {};
   }
 }
 
-function saveAttendanceCache(byRfid) {
+function saveAttendanceCache(byStudentId) {
   try {
     localStorage.setItem(
       TODAY_ATTENDANCE_CACHE_KEY,
-      JSON.stringify({ date: getTodayKey(), byRfid })
+      JSON.stringify({ date: getTodayKey(), byStudentId })
     );
   } catch {
     // Storage full/unavailable (private browsing, quota) - the cache
@@ -409,8 +414,9 @@ function RFIDAttendancePage() {
         // away, before the live fetch below even resolves - see the
         // comment on TODAY_ATTENDANCE_CACHE_KEY above for why this
         // matters specifically for "On School" rows.
-        const cache = loadAttendanceCache();
-        let merged = fetched.map((r) => (cache[r.rfid] ? { ...r, todayAttendance: cache[r.rfid] } : r));
+        // FIX: no more cache overlay before the live fetch - a cached
+        // status must never be shown on a row the backend didn't confirm.
+        let merged = fetched;
 
         // GET /api/attendance?gradeLevel= - FIX: this used to only run
         // "if (section)", i.e. only once a SPECIFIC Section was picked in
@@ -437,6 +443,12 @@ function RFIDAttendancePage() {
           // "why is this row blank" check starts in the console instead
           // of guessing.
           console.error("GET /api/attendance failed:", attendanceError);
+          // Fallback only: repaint what this page already saw today,
+          // matched by studentId so a replaced RFID can't leak a status.
+          const cache = loadAttendanceCache();
+          merged = fetched.map((r) =>
+            cache[r.studentId] ? { ...r, todayAttendance: cache[r.studentId] } : r
+          );
         }
 
         if (!ignore) {
@@ -486,8 +498,8 @@ function RFIDAttendancePage() {
     const cache = loadAttendanceCache();
     let changed = false;
     for (const r of records) {
-      if (r.todayAttendance && r.rfid) {
-        cache[r.rfid] = r.todayAttendance;
+      if (r.todayAttendance && r.studentId) {
+        cache[r.studentId] = r.todayAttendance;
         changed = true;
       }
     }

@@ -286,6 +286,15 @@ function EnrollmentPage() {
     });
   }, [students]);
 
+  // Same rule as Promote Student: the checkboxes (and Select All) stay
+  // faded/disabled until BOTH a Grade Level and a Section are picked. Going
+  // back to "All ..." on either one clears whatever was selected.
+  const hasActiveFilter = Boolean(level && section);
+
+  useEffect(() => {
+    if (!hasActiveFilter) setSelectedIds((prev) => (prev.length === 0 ? prev : []));
+  }, [hasActiveFilter]);
+
   function handleToggleSelect(studentId) {
     setSelectedIds((prev) =>
       prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
@@ -439,11 +448,13 @@ function EnrollmentPage() {
             schoolYear={schoolYear}
             schoolYearOptions={schoolYearOptions}
             onSchoolYearChange={handleSchoolYearChange}
-            canBulkSelect={!isLoading && selectableIds.length > 0}
+            canBulkSelect={hasActiveFilter && !isLoading && selectableIds.length > 0}
             allSelected={allSelectableSelected}
             onToggleSelectAll={handleToggleSelectAll}
             selectAllTitle={
-              selectableIds.length === 0
+              !hasActiveFilter
+                ? "Select a Grade Level and Section first to enable selection"
+                : selectableIds.length === 0
                 ? "No enrolled students on this page"
                 : "Selects every enrolled student on this page"
             }
@@ -478,6 +489,7 @@ function EnrollmentPage() {
             role={role}
             schoolYear={schoolYear}
             selectedIds={selectedIds}
+            canSelectRows={hasActiveFilter}
             onToggleSelect={handleToggleSelect}
             onClearSelection={handleClearSelection}
           />

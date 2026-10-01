@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { X, UserCheck, UserX, KeyRound, Loader2 } from "lucide-react";
+import { UserCheck, UserX, KeyRound, Loader2 } from "lucide-react";
 
 // Mirrors STATUS_META in Confirmschoolyearstatusmodal.jsx so the icon/color
 // the person sees in the kebab menu (Usermanagementtable.jsx) is the same
@@ -87,27 +87,17 @@ function Confirmuserstatusmodal({ isOpen, onClose, onConfirm, userName, newStatu
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-user-status-title"
-        className="relative flex w-full max-w-sm flex-col rounded-2xl bg-white p-6 shadow-xl"
+        className="flex w-full max-w-sm flex-col rounded-xl bg-white p-6 shadow-xl"
       >
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isSubmitting}
-          aria-label="Close"
-          className="absolute right-4 top-4 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <X size={18} />
-        </button>
-
         <div className="flex items-start gap-4">
           <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${badgeClass}`}>
             <Icon size={22} />
           </div>
           <div className="flex-1 pt-1">
-            <h2 id="confirm-user-status-title" className="text-base font-bold text-primary">
+            <h2 id="confirm-user-status-title" className="text-xl font-bold text-primary">
               {title(userName)}
             </h2>
-            <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
+            <p className="mt-1 text-base text-gray-600">{bodyText}</p>
           </div>
         </div>
 
@@ -116,7 +106,7 @@ function Confirmuserstatusmodal({ isOpen, onClose, onConfirm, userName, newStatu
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="flex-1 cursor-pointer rounded-lg border border-gray-300 bg-white py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 cursor-pointer rounded-lg border border-gray-300 bg-white py-3 text-base font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
           </button>
@@ -124,7 +114,7 @@ function Confirmuserstatusmodal({ isOpen, onClose, onConfirm, userName, newStatu
             type="button"
             onClick={handleConfirmClick}
             disabled={isSubmitting}
-            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${confirmButtonClass}`}
+            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-3 text-base font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${confirmButtonClass}`}
           >
             {isSubmitting && <Loader2 size={16} className="animate-spin" />}
             {isSubmitting ? `${verbIng}...` : verb}

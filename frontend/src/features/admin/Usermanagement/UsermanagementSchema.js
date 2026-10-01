@@ -44,9 +44,26 @@ const contactNumberField = Yup.string()
   .required("Contact number is required")
   .matches(MOBILE_REGEX, "Mobile number must be exactly 11 digits and start with 09");
 
+// Backend AdminCreateUserRequest.confirmPassword is @NotBlank and checked by @PasswordsMatch.
+const confirmPasswordField = Yup.string()
+  .required("Confirm password is required")
+  .oneOf([Yup.ref("password")], "Password and confirm password do not match");
+
+// Edit: confirm is only required once a new password is typed
+// (mirrors PasswordsMatchValidator, which skips the check when password is blank).
+const confirmNewPasswordField = Yup.string().when("newPassword", {
+  is: (value) => !!value,
+  then: (schema) =>
+    schema
+      .required("Confirm password is required")
+      .oneOf([Yup.ref("newPassword")], "Password and confirm password do not match"),
+  otherwise: (schema) => schema,
+});
+
 export const createUserSchema = Yup.object({
   username: usernameField,
   password: passwordField,
+  confirmPassword: confirmPasswordField,
   firstName: firstNameField,
   middleName: middleNameField,
   lastName: lastNameField,
@@ -60,4 +77,5 @@ export const editUserSchema = Yup.object({
   lastName: lastNameField,
   contactNumber: contactNumberField,
   newPassword: newPasswordField,
+  confirmNewPassword: confirmNewPasswordField,
 });

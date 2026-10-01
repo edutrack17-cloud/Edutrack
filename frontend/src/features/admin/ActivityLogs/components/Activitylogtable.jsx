@@ -9,11 +9,11 @@ import React from "react";
 // dropdown color always matches the color its logs render with in the feed.
 const ACTION_STYLES = [
   { match: "archived", label: "Archived", colorClass: "text-secondary" },
-  { match: "dropped", label: "Dropped", colorClass: "text-secondary" },
+  { match: "dropped", label: "Dropped", colorClass: "text-danger" },
   { match: "absent", label: "Marked Absent", colorClass: "text-warning" },
   { match: "transferred", label: "Transferred", colorClass: "text-warning" },
   { match: "transfer", label: "Section Transfer", colorClass: "text-warning" },
-  { match: "graduated", label: "Graduated", colorClass: "text-success" },
+  { match: "graduated", label: "Graduated", colorClass: "text-primary" },
   { match: "promoted", label: "Promoted", colorClass: "text-success" },
   { match: "activated", label: "Activated", colorClass: "text-success" },
   { match: "enrolled", label: "Enrolled", colorClass: "text-success" },

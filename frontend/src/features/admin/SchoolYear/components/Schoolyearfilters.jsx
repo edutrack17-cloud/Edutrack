@@ -124,7 +124,7 @@ function SchoolYearFilterDropdown({ schoolYearId, onSchoolYearChange }) {
         (data || []).map((schoolYear) => ({
           value: String(schoolYear.schoolYearId),
           label: schoolYear.schoolYearName,
-          status: schoolYear.status,
+          status: schoolYear.schoolYearStatus,
         }))
       );
     } catch {

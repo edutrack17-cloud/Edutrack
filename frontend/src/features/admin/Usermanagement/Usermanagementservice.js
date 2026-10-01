@@ -120,12 +120,24 @@ export async function getUser(userId) {
   }
 }
 
+// CONNECTED: GET /api/user/teachers - active teachers only, unpaged (ADMIN only).
+// For dropdowns such as picking a section adviser.
+export async function getTeacherDropdown() {
+  try {
+    const { data } = await userApi.get("/user/teachers");
+    return data.map(mapTeacherResponse);
+  } catch (error) {
+    throw new Error(getErrorMessage(error, "Failed to load teachers"));
+  }
+}
+
 // CONNECTED: POST /api/user/createTeacher
 export async function createUser(formData) {
   try {
     const { data } = await userApi.post("/user/createTeacher", {
       username: formData.username,
       password: formData.password,
+      confirmPassword: formData.confirmPassword, // required by AdminCreateUserRequest (@NotBlank + @PasswordsMatch)
       firstName: formData.firstName,
       middleName: formData.middleName,
       lastName: formData.lastName,
@@ -149,7 +161,9 @@ export async function updateUser(userId, formData) {
     };
 
     if (formData.newPassword) {
-      payload.password = formData.newPassword; // backend field is "password", not "newPassword"
+      // backend fields are "password" / "confirmPassword" (UpdateUserRequest), not "newPassword"
+      payload.password = formData.newPassword;
+      payload.confirmPassword = formData.confirmNewPassword;
     }
 
     const { data } = await userApi.patch(`/user/update/${userId}`, payload);

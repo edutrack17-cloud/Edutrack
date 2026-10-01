@@ -12,8 +12,8 @@ const STATUS_OPTIONS = [
 // having it here too caused text-gray-700 to fight with text-danger/text-red-600
 // on the trigger button and win, so "Disabled" rendered gray/black instead of red.
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+  "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 text-left text-sm font-medium outline-none cursor-pointer transition-colors focus-visible:border-primary";
+const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -49,7 +49,7 @@ function Usermanagementfilters({ status, onStatusChange }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-2">
       <div className={wrapperClass} ref={dropdownRef}>
         <button
           type="button"
@@ -69,7 +69,7 @@ function Usermanagementfilters({ status, onStatusChange }) {
         {isOpen && (
           <ul
             role="listbox"
-            className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+            className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
           >
             {STATUS_OPTIONS.map((option) => {
               const isSelected = option.value === selected.value;
@@ -78,12 +78,12 @@ function Usermanagementfilters({ status, onStatusChange }) {
                   <button
                     type="button"
                     onClick={() => handleSelect(option.value)}
-                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition hover:bg-gray-100 ${option.textClass} ${
+                    className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition hover:bg-gray-100 ${option.textClass} ${
                       isSelected ? `${option.selectedBgClass} font-medium` : ""
                     }`}
                   >
                     {option.label}
-                    {isSelected && <Check size={14} />}
+                    {isSelected && <Check size={16} />}
                   </button>
                 </li>
               );

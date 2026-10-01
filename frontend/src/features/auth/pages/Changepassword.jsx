@@ -5,6 +5,7 @@ import { Lock } from "lucide-react";
 import Input from "../../../components/ui/Input";
 import changePasswordSchema from "./ChangepasswordSchema";
 import { changePassword } from "../authService";
+import { useAuth } from "../../../Context/Authcontext";
 
 // Change Password modal. Same structure and sizing as EnrollStudentModal
 // (dimmed backdrop, max-w-2xl white card, header / scrollable body /
@@ -22,16 +23,28 @@ import { changePassword } from "../authService";
 // Usage:
 //   <ChangePassword isOpen={isOpen} onClose={() => setIsOpen(false)} />
 function ChangePassword({ isOpen, onClose }) {
+  const { user } = useAuth();
   const closeTimer = useRef(null);
   const latestClose = useRef(null);
 
   async function handleChangePassword(values, formikHelpers) {
     formikHelpers.setStatus(undefined);
 
+    if (!user?.id || !user?.username) {
+      formikHelpers.setStatus({
+        type: "error",
+        message: "Session not found. Please log in again.",
+      });
+      formikHelpers.setSubmitting(false);
+      return;
+    }
+
     try {
-      // TODO: BACKEND CONNECTION - see changePassword() in authService.js
-      // PATCH /api/auth/change-password
+      // See changePassword() in authService.js - it verifies the current
+      // password, then updates via PATCH /api/user/update/{userId}.
       await changePassword({
+        userId: user.id,
+        username: user.username,
         currentPassword: values.currentPassword,
         newPassword: values.newPassword,
       });
@@ -48,12 +61,16 @@ function ChangePassword({ isOpen, onClose }) {
         onClose?.();
       }, 1200);
     } catch (error) {
-      formikHelpers.setStatus({
-        type: "error",
-        message:
-          error?.response?.data?.message ||
-          "Unable to update password. Please check your current password and try again.",
-      });
+      if (error?.code === "WRONG_CURRENT_PASSWORD") {
+        formikHelpers.setFieldError("currentPassword", error.message);
+      } else {
+        formikHelpers.setStatus({
+          type: "error",
+          message:
+            error?.response?.data?.message ||
+            "Unable to update password. Please try again.",
+        });
+      }
     }
 
     formikHelpers.setSubmitting(false);

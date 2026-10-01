@@ -178,10 +178,46 @@ export async function logoutUser() {
   await api.post("/logout");
 }
 
-export async function changePassword({ currentPassword, newPassword }) {
-  const response = await api.patch("/change-password", {
-    currentPassword,
-    newPassword,
+// Change password, frontend-only.
+//
+// The backend has no "change my password" endpoint that checks the current
+// password, so this is built from endpoints that already exist:
+//
+//   1. Verify the current password by calling POST /auth/login with it.
+//      refreshClient is used on purpose: it has no interceptors and we never
+//      call setTokens() here, so the tokens of the active session are left alone.
+//   2. GET /user/{id} to read the current middleName. PATCH /user/update/{id}
+//      (UserService.updateUser) sets middleName to null whenever the request
+//      has none, so it has to be sent back or the teacher's middle name is wiped.
+//   3. PATCH /user/update/{id} with password + confirmPassword. Every other
+//      field is null, which the backend ignores.
+//
+// Both /user endpoints allow TEACHER, but only for their own userId.
+export async function changePassword({
+  userId,
+  username,
+  currentPassword,
+  newPassword,
+}) {
+  try {
+    await refreshClient.post("/login", { username, password: currentPassword });
+  } catch (error) {
+    if (error.response?.status === 401) {
+      const wrongPassword = new Error("Current password is incorrect.");
+      wrongPassword.code = "WRONG_CURRENT_PASSWORD";
+      throw wrongPassword;
+    }
+    throw error;
+  }
+
+  // Absolute URLs bypass the "/auth" baseURL but still go through the
+  // Authorization header + 401/refresh interceptors on `api`.
+  const { data: profile } = await api.get(`${API_ROOT}/user/${userId}`);
+
+  const response = await api.patch(`${API_ROOT}/user/update/${userId}`, {
+    middleName: profile.middleName ?? "",
+    password: newPassword,
+    confirmPassword: newPassword,
   });
   return response.data;
 }

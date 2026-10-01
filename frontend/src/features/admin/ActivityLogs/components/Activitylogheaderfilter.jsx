@@ -11,6 +11,7 @@ const SELECTED_BG_BY_TEXT_CLASS = {
   "text-success": "bg-success/10",
   "text-primary": "bg-primary/10",
   "text-secondary": "bg-secondary/10",
+  "text-danger": "bg-danger/10",
   "text-warning": "bg-warning/10",
 };
 

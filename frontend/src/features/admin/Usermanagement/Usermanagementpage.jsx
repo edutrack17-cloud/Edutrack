@@ -1,6 +1,7 @@
 // features/admin/Usermanagement/Usermanagementpage.jsx
 
 import React, { useCallback, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import Usermanagementfilters from "./components/Usermanagementfilter";
 import Usermanagementsearchinput from "./components/Usermanagementsearchinput";
 import Usermanagementtable from "./components/Usermanagementtable";
@@ -167,21 +168,22 @@ function Usermanagementpage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-4 rounded-lg bg-white p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
         <Usermanagementfilters
           status={status}
           onStatusChange={(event) => setStatus(event.target.value)}
         />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
           <Usermanagementsearchinput value={search} onChange={(event) => setSearch(event.target.value)} />
 
           <button
             type="button"
             onClick={() => setIsCreateOpen(true)}
-            className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-32"
+            className="flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
           >
+            <Plus size={16} strokeWidth={2.5} />
             Add User
           </button>
         </div>

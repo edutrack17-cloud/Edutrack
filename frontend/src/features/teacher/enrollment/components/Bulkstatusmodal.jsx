@@ -6,7 +6,8 @@
 // via StudentTable's handleBulkConfirm -> enrollmentService.bulkUpdateStudentStatus().
 //
 // Layout follows the backend integration guide:
-//   - shared "Left At" date (defaults to today) - batch-wide
+//   - "Left At" is fixed to today and display-only (same as the single-student
+//     StatusDetailsModal) - batch-wide, not something the user picks
 //   - a "shared reason" box that pre-fills every row's reason...
 //   - ...but each row's reason can still be overridden individually
 //   - per-row remove button, so the user can drop one student from the batch
@@ -92,8 +93,9 @@ function BulkStatusModal({
 
   const isRowValid = (row) => !remarksRequired || row.remarks.trim().length > 0;
   const areRowsValid = rows.length > 0 && rows.every(isRowValid);
-  const isLeftAtValid = Boolean(leftAt) && leftAt <= getLocalDateISO();
-  const canSubmit = areRowsValid && isLeftAtValid;
+  // leftAt is fixed to today (see the field below) so it's never user-invalid -
+  // only the per-row reasons still need a validity check.
+  const canSubmit = areRowsValid;
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -150,20 +152,16 @@ function BulkStatusModal({
             applies to everyone in the list or to no one - if one student can&apos;t be updated, nothing changes.
           </p>
 
-          <div className="mb-4 grid gap-4 sm:grid-cols-[11rem_1fr]">
+          <div className="mb-4 grid gap-4">
             <div>
               <label className="mb-1 block text-sm font-semibold text-gray-700">Left At</label>
+              {/* Fixed to today and display-only, same as StatusDetailsModal. */}
               <input
                 type="date"
                 value={leftAt}
-                max={getLocalDateISO()}
-                onChange={(e) => setLeftAt(e.target.value)}
-                disabled={isSubmitting}
-                className={`${fieldBase} [&::-webkit-calendar-picker-indicator]:opacity-40 ${touched && !isLeftAtValid ? fieldError : fieldOk}`}
+                disabled
+                className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-base text-gray-500 outline-none [&::-webkit-calendar-picker-indicator]:opacity-40"
               />
-              {touched && !isLeftAtValid && (
-                <p className="mt-1 text-sm text-danger">Pick a date that isn&apos;t in the future.</p>
-              )}
             </div>
 
             <div>
