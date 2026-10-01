@@ -15,12 +15,12 @@ const LEVEL_ALL = { value: "", label: "All Grade Levels", textClass: "text-gray-
 const SECTION_ALL = { value: "", label: "All Sections", textClass: "text-gray-700" };
 
 const triggerClass =
-  "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 text-left text-sm font-medium outline-none cursor-pointer transition-colors focus-visible:border-primary";
-const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34";
 
 // Same width family as the Level/Section dropdowns, a touch wider for year
 // labels like "2049-2050".
-const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39";
+const schoolYearWidthClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -71,7 +71,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
         aria-expanded={isOpen}
         aria-label={ariaLabel}
       >
-        <span className="truncate">{selected.label}</span>
+        <span className="truncate" title={selected.label}>{selected.label}</span>
         <ChevronDown
           size={16}
           className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
@@ -81,7 +81,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
       {isOpen && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
@@ -94,7 +94,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
                   className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   {option.label}
-                  {isSelected && <Check size={16} />}
+                  {isSelected && <Check size={14} />}
                 </button>
               </li>
             );
@@ -162,7 +162,7 @@ function StudentFilters({
   // "All School Years" (same label/position as Sectionlevelfilters) uses
   // its own ALL_SCHOOL_YEARS value because "" is already the active year.
   const schoolYearMenuOptions = [
-    { value: ALL_SCHOOL_YEARS, label: "All School Years", textClass: "text-gray-700" },
+    { value: ALL_SCHOOL_YEARS, label: "All Years", textClass: "text-gray-700" },
     { value: "", label: activeSchoolYear?.label ?? "Current Year", textClass: "text-gray-700" },
     ...pastSchoolYears.map((sy) => ({ value: String(sy.id), label: sy.label, textClass: "text-gray-700" })),
   ];
@@ -174,7 +174,7 @@ function StudentFilters({
         value={level}
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
-        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44"
       />
 
       <FilterDropdown
@@ -182,7 +182,7 @@ function StudentFilters({
         value={section}
         onChange={onSectionChange}
         ariaLabel="Filter by section"
-        wrapperClassName="relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-40 md:w-39"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34"
       />
 
       <FilterDropdown
@@ -208,7 +208,7 @@ function StudentFilters({
           onClick={onToggleSelectAll}
           disabled={!canBulkSelect}
           title={selectAllTitle}
-          className="h-10 w-32 cursor-pointer whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
+          className="h-11 w-full cursor-pointer sm:w-36 sm:h-9 whitespace-nowrap rounded-md border border-gray-300 bg-white px-4 text-base font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
         >
           {allSelected ? "Deselect All" : "Select All"}
         </button>

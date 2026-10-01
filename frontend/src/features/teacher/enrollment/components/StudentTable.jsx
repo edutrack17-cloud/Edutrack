@@ -259,14 +259,14 @@ function StudentTable({
   const showGraduateHint = showGraduateButton && !canGraduateSelection;
 
   const bulkButtonClass =
-    "flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium transition-colors";
+    "flex h-11 items-center gap-2 rounded-md sm:h-9 border border-gray-300 bg-white px-4 text-base font-medium transition-colors";
 
   // 16px table text (text-base) at every breakpoint - this was PromoteStudentTable's
   // text-xs -> sm:text-sm scale, so the two tables now differ on purpose. The <colgroup> widths below
   // are tuned so the 12-digit LRN and "Transferred Out" still fit at
   // min-w-275 without being cut off by `truncate`.
   const thClass =
-    "truncate px-3 py-2.5 text-center text-base font-semibold text-white sm:px-4";
+    "truncate px-3 py-2 text-center text-base font-semibold text-white sm:px-4";
   const tdClass =
     "truncate px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4";
 
@@ -586,7 +586,7 @@ function StudentTable({
           <tbody>
             {students.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-6 text-center text-base text-gray">
+                <td colSpan={8} className="px-6 py-6 text-center text-sm text-gray">
                   No students found.
                 </td>
               </tr>
@@ -651,6 +651,12 @@ function StudentTable({
           </tbody>
         </table>
       </div>
+
+      {students.length > 0 && (
+        <p className="text-center text-sm text-gray sm:hidden">
+          Swipe the table sideways to see more columns
+        </p>
+      )}
 
       {/* ---- Modals ---- */}
       <ViewStudentModal

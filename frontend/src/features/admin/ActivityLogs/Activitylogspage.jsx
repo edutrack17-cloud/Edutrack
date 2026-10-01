@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
 import Activitylogtable from "./components/Activitylogtable";
 import Activitylogheaderfilter from "./components/Activitylogheaderfilter";
 import Activitylogpagination from "./components/Activitylogpagination";
@@ -16,7 +15,6 @@ const AUTO_REFRESH_MS = 15000;
 function Activitylogspage() {
   const [logs, setLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   // Exact value from the /headers list, sent as-is to the
@@ -25,7 +23,7 @@ function Activitylogspage() {
   const [logHeader, setLogHeader] = useState("");
 
   // Filter dropdown options, fetched once per page mount from
-  // GET /api/activity-log/headers (and again on manual Refresh). A failure
+  // GET /api/activity-log/headers. A failure
   // here only degrades the dropdown to "All Activities"; the log list itself
   // still works.
   const [headers, setHeaders] = useState([]);
@@ -131,23 +129,6 @@ function Activitylogspage() {
     };
   }, [currentPage]);
 
-  // Also re-fetches the filter list, so a brand-new kind of activity shows
-  // up in the dropdown too.
-  async function refreshHeaders() {
-    try {
-      setHeaders(await getActivityLogHeaders());
-    } catch (error) {
-      if (error.code === "ERR_CANCELED") return;
-      console.warn("Activity log filters unavailable:", error.message);
-    }
-  }
-
-  async function handleManualRefresh() {
-    setIsManualRefreshing(true);
-    await Promise.all([loadLogs({ background: true }), refreshHeaders()]);
-    setIsManualRefreshing(false);
-  }
-
   function handleFilterChange(event) {
     setLogHeader(event.target.value);
     setCurrentPage(1);
@@ -163,16 +144,6 @@ function Activitylogspage() {
             headers={headers}
             isLoading={isHeadersLoading}
           />
-
-          <button
-            type="button"
-            onClick={handleManualRefresh}
-            disabled={isLoading || isManualRefreshing}
-            className="flex h-9 items-center justify-center gap-2 rounded-md border border-gray/50 bg-white px-3 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw size={14} className={isManualRefreshing ? "animate-spin" : ""} />
-            Refresh
-          </button>
         </div>
 
         {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}

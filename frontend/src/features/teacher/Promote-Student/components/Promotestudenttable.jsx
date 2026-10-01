@@ -7,9 +7,9 @@
 import React from "react";
 
 const thClass =
-  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
+  "truncate px-3 py-2 text-center text-base font-semibold text-white sm:px-4";
 const tdClass =
-  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
+  "truncate px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4";
 
 // Matches GradeLevel enum's "Grade_4"/"Grade_5"/"Grade_6" (see
 // GradeLevel.java) - same formatter as Enrollment's StudentTable.
@@ -68,7 +68,7 @@ function PromoteStudentTable({ students, selectedIds, onToggleSelect, canBulkSel
             const isSelected = selectedIds.includes(student.studentId);
 
             return (
-              <tr key={student.studentId} className="border-b border-gray-200 transition hover:bg-gray-50">
+              <tr key={student.studentId} className="odd:bg-white even:bg-primary/10">
                 <td className={tdClass}>
                   <label
                     className={`inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 transition ${

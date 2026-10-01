@@ -1,3 +1,9 @@
+// Shared pagination bar - keep this file IDENTICAL on every page that has
+// one (SF2 Attendance, Enrollment, ...). Standard size: text-sm, 15px
+// chevrons, compact primary bar with white bordered prev/next buttons.
+// Purely presentational: the page owns the current page and what happens
+// in onPageChange.
+
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -7,20 +13,18 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
 
   function goToPrevious() {
     if (!isFirstPage) {
-      // GET /api/student (page - 1)
       onPageChange(currentPage - 1);
     }
   }
 
   function goToNext() {
     if (!isLastPage) {
-      // GET /api/student (page + 1)
       onPageChange(currentPage + 1);
     }
   }
 
   return (
-    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:gap-6 sm:text-sm">
+    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-white sm:w-auto sm:gap-6">
       <button
         type="button"
         onClick={goToPrevious}

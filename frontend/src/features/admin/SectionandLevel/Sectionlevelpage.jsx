@@ -522,47 +522,63 @@ function Sectionlevelpage() {
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6 -mt-4">
       <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <Sectionlevelfilters
-            gradeLevel={gradeLevel}
-            status={status}
-            schoolYear={schoolYearFilter}
-            schoolYearOptions={allSchoolYears}
-            teacher={teacherFilter}
-            teacherOptions={advisers}
-            onGradeLevelChange={handleGradeLevelChange}
-            onStatusChange={handleStatusChange}
-            onSchoolYearChange={handleSchoolYearFilterChange}
-            onSchoolYearDropdownOpen={loadAllSchoolYears}
-            onTeacherChange={handleTeacherFilterChange}
-            onTeacherDropdownOpen={loadAdvisers}
-          />
+        {/* Toolbar. Responsive to the TOOLBAR's own width (container queries), so a sidebar eating into the viewport can't break it.
+            relative z-10 keeps the filter dropdown lists above the table.
+              < 40rem : stacked full width (filters 2 per row, buttons 2 per row)
+              >= 40rem: filters are only as wide as their label (w-fit, never truncated unless a selected name passes 16rem),
+                        flush left. The search + buttons group sits on the same line when it fits (search stretches, buttons
+                        stay on the right); otherwise it drops to its own full-width row underneath.
+            The [&>div] / [&>div>div] classes restyle Sectionlevelfilters' root and its dropdowns from here, so that
+            component doesn't need to change. */}
+        <div className="@container relative z-10">
+          <div className="flex flex-col gap-3 @min-[40rem]:flex-row @min-[40rem]:flex-wrap @min-[40rem]:items-center">
+            <div className="min-w-0 [&>div]:grid [&>div]:grid-cols-2 @min-[40rem]:[&>div]:flex @min-[40rem]:[&>div]:flex-wrap [&>div>div]:w-full [&>div>div]:min-w-0 @min-[40rem]:[&>div>div]:w-fit @min-[40rem]:min-w-50 @min-[40rem]:[&>div>div]:max-w-[16rem] @min-[40rem]:[&>div>div]:flex-none">
+              <Sectionlevelfilters
+                gradeLevel={gradeLevel}
+                status={status}
+                schoolYear={schoolYearFilter}
+                schoolYearOptions={allSchoolYears}
+                teacher={teacherFilter}
+                teacherOptions={advisers}
+                onGradeLevelChange={handleGradeLevelChange}
+                onStatusChange={handleStatusChange}
+                onSchoolYearChange={handleSchoolYearFilterChange}
+                onSchoolYearDropdownOpen={loadAllSchoolYears}
+                onTeacherChange={handleTeacherFilterChange}
+                onTeacherDropdownOpen={loadAdvisers}
+              />
+            </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <Sectionlevelsearchinput
-              value={search}
-              onChange={handleSearchChange}
-              placeholder="Search by section or adviser"
-            />
+            <div className="flex flex-col gap-3 @min-[40rem]:flex-1 @min-[40rem]:basis-0 @min-[40rem]:flex-row @min-[40rem]:items-center">
+              <div className="w-full @min-[40rem]:min-w-40 @min-[40rem]:flex-1 [&_input]:w-full">
+                <Sectionlevelsearchinput
+                  value={search}
+                  onChange={handleSearchChange}
+                  placeholder="Search section or adviser"
+                />
+              </div>
 
-            {/* Primary, frequent, low-stakes action: solid fill so it reads as the default thing you'd click on this page. */}
-            <button
-              type="button"
-              onClick={handleOpenAdd}
-              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-32"
-            >
-              <Plus size={15} strokeWidth={2.5} />
-              Add Section
-            </button>
+              <div className="grid grid-cols-2 gap-2 @min-[40rem]:flex @min-[40rem]:shrink-0 @min-[40rem]:items-center">
+                {/* Primary, frequent, low-stakes action: solid fill so it reads as the default thing you'd click on this page. */}
+                <button
+                  type="button"
+                  onClick={handleOpenAdd}
+                  className="flex h-11 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:h-9 @min-[40rem]:w-auto @min-[40rem]:text-sm"
+                >
+                  <Plus size={15} strokeWidth={2.5} />
+                  Add Section
+                </button>
 
-           <button
-              type="button"
-              onClick={handleOpenNewSchoolYear}
-              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-40"
-            >
-              <CalendarSync size={15} strokeWidth={2.5} />
-              New School Year
-            </button>
+                <button
+                  type="button"
+                  onClick={handleOpenNewSchoolYear}
+                  className="flex h-11 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:h-9 @min-[40rem]:w-auto @min-[40rem]:text-sm"
+                >
+                  <CalendarSync size={15} strokeWidth={2.5} />
+                  New School Year
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

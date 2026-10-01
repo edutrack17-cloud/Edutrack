@@ -73,7 +73,7 @@ function InfoField({ label, value, className = "" }) {
 // exitType on those old assignment rows) is a backend/data job.
 function HistoryTimeline({ entries, studentStatus }) {
   if (entries.length === 0) {
-    return <p className="py-6 text-center text-base text-gray-500">No section history yet.</p>;
+    return <p className="py-6 text-center text-sm text-gray-500">No section history yet.</p>;
   }
 
   return (
@@ -296,7 +296,7 @@ function ViewStudentModal({ isOpen, onClose, student, role }) {
           ) : (
             <>
               {isLoadingHistory && (
-                <p className="py-6 text-center text-base text-gray-500">Loading history...</p>
+                <p className="py-6 text-center text-sm text-gray-500">Loading history...</p>
               )}
 
               {!isLoadingHistory && historyError && (

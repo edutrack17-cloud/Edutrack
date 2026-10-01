@@ -30,9 +30,9 @@ function Input({
   const inputType =
     type === "password" && showPassword ? "text" : type;
 
-  // Other pages (login, User Management, ...) pass nothing here, so they keep
-  // the same 14px they had before. Enrollment passes its own size.
-  const inputSizeClass = HAS_TEXT_SIZE.test(inputClassName) ? "" : "text-sm";
+  // Type scale: inputs are text-base (16px), labels/errors are text-sm (14px).
+  // Pages that pass their own size in inputClassName still win.
+  const inputSizeClass = HAS_TEXT_SIZE.test(inputClassName) ? "" : "text-base";
   const labelSizeClass = HAS_TEXT_SIZE.test(labelClassName) ? "" : "text-sm";
 
   return (

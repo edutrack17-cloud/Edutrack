@@ -5,12 +5,12 @@ import { GRADE_LEVEL_OPTIONS } from "../Sectionlevelservice";
 import { getSectionFormSchema, emptySectionForm } from "../SectionlevelSchema";
 
 const inputClass = (hasError, textColorClass = "text-gray-700") =>
-  `w-full rounded-lg border px-3 py-2.5 text-sm ${
+  `w-full rounded-lg border px-3 py-2.5 text-base ${
     hasError ? "border-danger" : "border-gray-300"
   } bg-white ${textColorClass} placeholder:text-gray-500 outline-none focus:border-primary`;
 
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
-const errorClass = "mt-1 text-xs text-danger";
+const errorClass = "mt-1 text-sm text-danger";
 
 // Searchable adviser picker: advisers are sorted alphabetically and can be
 // filtered by typing, since the adviser list can grow well past what's
@@ -127,7 +127,7 @@ function AdviserSearchField({ advisers, value, onChange, placeholder, hasError, 
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search adviser..."
-              className="w-full text-sm text-gray-700 outline-none placeholder:text-gray-500"
+              className="w-full text-base text-gray-700 outline-none placeholder:text-gray-500"
             />
           </div>
 
@@ -151,7 +151,7 @@ function AdviserSearchField({ advisers, value, onChange, placeholder, hasError, 
                   <button
                     type="button"
                     onClick={() => handleSelect(teacher)}
-                    className={`flex w-full cursor-pointer items-center justify-between px-3 py-2 text-left text-sm transition hover:bg-primary/5 ${
+                    className={`flex w-full cursor-pointer items-center justify-between px-3 py-2 text-left text-base transition hover:bg-primary/5 ${
                       isSelected
                         ? "bg-primary/5 font-medium text-primary"
                         : "text-gray-700"
@@ -251,7 +251,7 @@ function Sectionformmodal({
 
             <h2
               id="view-section-title"
-              className="flex-1 text-center text-lg font-bold text-primary sm:text-xl"
+              className="flex-1 text-center text-2xl font-bold text-primary"
             >
               View Section
             </h2>
@@ -267,7 +267,7 @@ function Sectionformmodal({
           </div>
 
           <div className="px-4 py-5 sm:px-6">
-            <h3 className="mb-4 text-base font-bold uppercase text-primary">
+            <h3 className="mb-4 text-lg font-bold uppercase text-primary">
               Section Information
             </h3>
 
@@ -275,7 +275,7 @@ function Sectionformmodal({
               {details.map((detail) => (
                 <div key={detail.label} className="min-w-0">
                   <dt className="text-sm font-semibold text-gray-700">{detail.label}</dt>
-                  <dd className="mt-1 wrap-break-words text-sm font-normal text-gray-500">
+                  <dd className="mt-1 wrap-break-words text-base font-normal text-gray-500">
                     {detail.value || ""}
                   </dd>
                 </div>
@@ -287,7 +287,7 @@ function Sectionformmodal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+              className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700"
             >
               Close
             </button>
@@ -337,20 +337,10 @@ function Sectionformmodal({
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
       <div className="flex w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
         <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             {mode === "edit" ? "Edit Section" : "Add Section"}
           </h2>
 
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isBusy}
-            className="text-gray-500 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <X size={22} />
-          </button>
         </div>
 
         <Formik
@@ -365,7 +355,6 @@ function Sectionformmodal({
             isSubmitting,
             values,
             setFieldValue,
-            resetForm,
           }) => {
             // Formik's own `dirty` does a strict string compare, so a
             // case-only sectionName edit (e.g. "Apple" -> "APPLE") flips it
@@ -396,17 +385,12 @@ function Sectionformmodal({
             const isSaveDisabled =
               isSubmitting || (mode === "edit" && !hasRealChanges);
 
-            function handleClear() {
-              resetForm();
-              setSubmitError("");
-            }
-
             return (
               <Form className="flex flex-col">
                 <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
 
                   {/* Main section header */}
-                  <h3 className="text-base font-bold uppercase text-primary">
+                  <h3 className="text-lg font-bold uppercase text-primary">
                     Section Information
                   </h3>
 
@@ -564,7 +548,7 @@ function Sectionformmodal({
                   <button
                     type="submit"
                     disabled={isSaveDisabled}
-                    className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSubmitting
                       ? "Saving..."
@@ -575,10 +559,11 @@ function Sectionformmodal({
 
                   <button
                     type="button"
-                    onClick={handleClear}
-                    className="flex-1 cursor-pointer rounded-lg bg-slate-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-600"
+                    onClick={onClose}
+                    disabled={isBusy}
+                    className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {mode === "edit" ? "Undo Changes" : "Clear"}
+                    Cancel
                   </button>
                 </div>
               </Form>

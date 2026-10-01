@@ -1,11 +1,8 @@
-// features/teacher/sf2Attendance/components/Pagination.jsx
-// Same visual style as Sectionlevelpagination.jsx - compact primary bar
-// with white bordered prev/next buttons - so pagination looks identical
-// across Section Level, Promote Student, and SF2 Attendance. Purely
-// presentational: SF2AttendancePage already has the full section's
-// records in memory and slices them client-side (see PAGE_SIZE there),
-// so onPageChange just flips the page index - there's no server request
-// to make here.
+// Shared pagination bar - keep this file IDENTICAL on every page that has
+// one (SF2 Attendance, Enrollment, ...). Standard size: text-sm, 15px
+// chevrons, compact primary bar with white bordered prev/next buttons.
+// Purely presentational: the page owns the current page and what happens
+// in onPageChange.
 
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -27,7 +24,7 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
   }
 
   return (
-    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:w-auto sm:gap-6 sm:text-sm">
+    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-white sm:w-auto sm:gap-6">
       <button
         type="button"
         onClick={goToPrevious}

@@ -1,5 +1,4 @@
 import React from "react";
-import { X } from "lucide-react";
 import AttendanceStatus from "./AttendanceStatus";
 
 // Same formatter AttendanceTable already uses for the Time In/Out
@@ -19,13 +18,13 @@ function formatDisplayTime(hhmm) {
 // (InfoField there) - reused here (not imported, since the two modals
 // live in different feature folders/services) so the two "View" modals
 // in the app read as one consistent family: same header treatment,
-// same section-label style, same field layout, same blue Close button
-// - instead of this one looking like a different, older component.
+// same section heading (text-lg), same field layout (text-sm label /
+// text-base value), same blue Close button.
 function InfoField({ label, value }) {
   return (
     <div>
-      <p className="mb-1 text-sm font-semibold text-gray-700">{label}</p>
-      <p className="text-sm text-gray-500">{value || "—"}</p>
+      <p className="mb-0.5 text-sm font-semibold text-gray-500">{label}</p>
+      <p className="text-base text-gray-700">{value || "—"}</p>
     </div>
   );
 }
@@ -37,19 +36,11 @@ function ViewAttendanceModal({ isOpen, onClose, record }) {
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="flex shrink-0 items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+        <div className="flex shrink-0 items-center border-b border-gray-200 px-6 py-3">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             Attendance Record
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-gray-500 transition-colors hover:text-gray-700"
-          >
-            <X size={22} />
-          </button>
         </div>
 
         {/* text-left here on purpose: this modal is rendered from inside
@@ -61,13 +52,13 @@ function ViewAttendanceModal({ isOpen, onClose, record }) {
             otherwise identical. ViewStudentModal doesn't need this
             because it's rendered outside any <td>, as a sibling of the
             table itself. */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 text-left sm:px-6">
-          <div className="flex flex-col gap-7">
+        <div className="flex-1 overflow-y-auto px-6 py-4 text-left">
+          <div className="flex flex-col gap-5">
             <div>
-              <h3 className="mb-4 text-sm font-bold tracking-wide text-primary uppercase">
+              <h3 className="mb-3 text-lg font-semibold text-primary">
                 Student Information
               </h3>
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
                 <InfoField label="Name" value={record.name} />
                 <InfoField label="Level" value={record.gradeLevel} />
                 <InfoField label="Section" value={record.section} />
@@ -77,16 +68,16 @@ function ViewAttendanceModal({ isOpen, onClose, record }) {
             </div>
 
             <div>
-              <h3 className="mb-4 mt-2 text-sm font-bold tracking-wide text-primary uppercase">
+              <h3 className="mb-3 text-lg font-semibold text-primary">
                 Today's Attendance
               </h3>
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
                 <div>
-                  <p className="mb-1 text-sm font-semibold text-gray-700">Status</p>
+                  <p className="mb-0.5 text-sm font-semibold text-gray-500">Status</p>
                   {todayAttendance?.status ? (
                     <AttendanceStatus status={todayAttendance.status} />
                   ) : (
-                    <p className="text-sm text-gray-500">—</p>
+                    <p className="text-base text-gray-700">—</p>
                   )}
                 </div>
                 <InfoField label="Time In" value={formatDisplayTime(todayAttendance?.timeIn)} />
@@ -100,11 +91,11 @@ function ViewAttendanceModal({ isOpen, onClose, record }) {
             was the app's one red (bg-secondary) Close button on an
             otherwise plain informational modal, which read as a
             destructive/cancel action rather than "just close this". */}
-        <div className="shrink-0 border-t border-gray-200 px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-t border-gray-200 px-6 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="w-full cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+            className="w-full cursor-pointer rounded-lg bg-primary py-2.5 text-base font-semibold text-white transition-colors hover:bg-sky-700"
           >
             Close
           </button>

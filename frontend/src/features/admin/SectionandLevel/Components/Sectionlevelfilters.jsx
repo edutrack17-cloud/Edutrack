@@ -17,18 +17,21 @@ const GRADE_LEVEL_MENU_OPTIONS = [GRADE_LEVEL_ALL, ...GRADE_LEVEL_OPTIONS];
 // Shared visual language for both dropdown triggers so radius, height,
 // weight, and icon/rotation behavior are identical between the two filters.
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-34";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-sm font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:h-9";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-initial sm:w-34";
 
 // School Year gets its own (wider) width since "All School Years" is
 // longer than the other two triggers' labels - keeping it on the shared
 // wrapperClass above would either truncate this one or needlessly widen
 // Grade Level/Status too.
-const schoolYearWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-[8.5rem] md:w-[8.5rem]";
+const schoolYearWidthClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-initial sm:w-44";
+
+// "All Grade Levels" is as long as "All School Years", so it gets the same wider width instead of the shared wrapperClass (which Status also uses).
+const gradeLevelWidthClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-initial sm:w-44";
 
 // Teacher names tend to run longer than a school year label, so this gets
 // its own (wider) width too, same reasoning as schoolYearWidthClass above.
-const teacherWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
+const teacherWidthClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-initial sm:w-36 md:w-40";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -53,7 +56,11 @@ function useClickOutside(isOpen, ref, onClose) {
 // Generic dropdown used for both filters so their open/close icon
 // behavior stays perfectly in sync (a native <select> can't animate its
 // own arrow, which was the source of the mismatch).
-function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, widthClass }) {
+// labelWidthClass (optional): pins the label to a fixed width instead of sizing
+// the trigger to its longest option. Used by the Teacher filter, whose longest
+// name would otherwise make the trigger wide enough to push the search row down.
+// The selected label truncates (full text shows on hover via title).
+function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, widthClass, labelWidthClass }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
@@ -86,8 +93,30 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, widthClas
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
+        title={labelWidthClass ? selected.label : undefined}
       >
-        <span className="truncate">{selected.label}</span>
+        {/* Width stays locked no matter what is selected. Every option label is
+            rendered invisibly in the SAME grid cell as the visible label, so the
+            trigger is always as wide as its longest option (e.g. "All Grade Levels")
+            even when the current value is a short one like "Grade 4". Needed because
+            the page sizes these wrappers with w-fit, which otherwise follows only
+            the selected label and shrinks the filter on every pick. */}
+        {labelWidthClass ? (
+          <span className={`truncate text-left ${labelWidthClass}`}>{selected.label}</span>
+        ) : (
+          <span className="grid min-w-0 flex-1 text-left">
+            {options.map((option) => (
+              <span
+                key={option.value || "all"}
+                aria-hidden="true"
+                className="invisible col-start-1 row-start-1 truncate"
+              >
+                {option.label}
+              </span>
+            ))}
+            <span className="col-start-1 row-start-1 truncate">{selected.label}</span>
+          </span>
+        )}
         <ChevronDown
           size={16}
           className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
@@ -180,12 +209,13 @@ function Sectionlevelfilters({
     : [];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:min-w-0 lg:flex-nowrap">
       <FilterDropdown
         options={GRADE_LEVEL_MENU_OPTIONS}
         value={gradeLevel}
         onChange={onGradeLevelChange}
         ariaLabel="Filter by grade level"
+        widthClass={gradeLevelWidthClass}
       />
 
       <FilterDropdown
@@ -214,6 +244,7 @@ function Sectionlevelfilters({
           ariaLabel="Filter by teacher"
           onOpen={onTeacherDropdownOpen}
           widthClass={teacherWidthClass}
+          labelWidthClass="w-[7.5rem]"
         />
       )}
     </div>

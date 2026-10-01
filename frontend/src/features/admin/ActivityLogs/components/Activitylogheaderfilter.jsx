@@ -34,10 +34,12 @@ function buildOption(header) {
 
 const ALL_OPTION = { value: "", label: "All Activities", textClass: "text-gray-700" };
 
+// Same trigger/wrapper size as the Enrollment and Attendance filter dropdowns
+// (h-11 on mobile / sm:h-9 on desktop, text-sm, sm:w-44 like their widest one).
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
 
-const wrapperClass = "relative h-9 w-full shrink-0 sm:w-55";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -85,7 +87,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
         aria-expanded={isOpen}
         aria-label={ariaLabel}
       >
-        <span className="min-w-0 truncate">{selected.label}</span>
+        <span className="min-w-0 truncate" title={selected.label}>{selected.label}</span>
         <ChevronDown
           size={16}
           className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
@@ -104,7 +106,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName 
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between gap-2 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   <span>{option.label}</span>
                   {isSelected && <Check size={14} className="shrink-0" />}
@@ -122,14 +124,14 @@ function Activitylogheaderfilter({ value, onChange, headers = [], isLoading = fa
   const options = useMemo(() => [ALL_OPTION, ...headers.map(buildOption)], [headers]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-2">
       <FilterDropdown
         options={options}
         value={value}
         onChange={onChange}
         ariaLabel="Filter by activity"
       />
-      {isLoading && <span className="text-xs text-gray-400">Loading filters...</span>}
+      {isLoading && <span className="text-sm text-gray-400">Loading filters...</span>}
     </div>
   );
 }

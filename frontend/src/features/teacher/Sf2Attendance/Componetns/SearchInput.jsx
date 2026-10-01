@@ -1,9 +1,9 @@
-// features/teacher/sf2Attendance/components/SearchInput.jsx
-// Same visual style as Sectionlevelsearchinput.jsx - a bare styled
-// <input> + search icon (no shared <Input> component), so the search
-// bar looks identical across Section Level, Promote Student, and SF2
-// Attendance. Kept its own default width (sm:w-64 md:w-72) since this
-// page sits next to an "Export SF2 Report" button.
+// Shared search bar - keep this file IDENTICAL on every page that has one
+// (SF2 Attendance, Enrollment, ...). Standard size: h-11 on mobile /
+// sm:h-9 on desktop, rounded-md, text-base on mobile / sm:text-sm on desktop
+// (16px on phones stops iOS Safari from zooming in on focus), 14px icon. Width is NOT set here: the page passes it through the
+// className prop on the wrapper (the input just fills it), e.g.
+// className="w-full sm:w-64".
 
 import React from "react";
 import { Search } from "lucide-react";
@@ -26,7 +26,7 @@ function SearchInput({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="h-9 w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-xs font-normal text-gray-700 shadow-sm outline-none transition-colors focus:border-primary sm:w-64 sm:text-xs md:w-72"
+        className="h-11 w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-base font-normal sm:h-9 sm:text-sm text-gray-700 shadow-sm outline-none transition-colors focus:border-primary"
       />
     </div>
   );

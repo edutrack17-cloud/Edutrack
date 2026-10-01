@@ -30,7 +30,7 @@ function ConfirmStatusModal({
         </div>
 
         <h2 className="mb-2 text-2xl font-bold text-primary">Confirm Status Change</h2>
-        <p className="mb-6 text-base text-gray-600">
+        <p className="mb-6 text-sm text-gray-600">
           Mark <span className="font-semibold text-gray-800">{studentName}</span> as{" "}
           <span className={`font-semibold ${statusColorClass}`}>{newStatus}</span>?
         </p>

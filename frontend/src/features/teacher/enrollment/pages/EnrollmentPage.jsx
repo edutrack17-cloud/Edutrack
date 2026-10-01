@@ -434,7 +434,7 @@ function EnrollmentPage() {
   // on that page.
   return (
     <>
-      <div className="flex flex-col gap-4 rounded-lg bg-white p-4 sm:p-6">
+      <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
           <StudentFilters
             level={level}
@@ -461,14 +461,18 @@ function EnrollmentPage() {
           />
 
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
-            <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} />
+            <SearchInput
+              className="w-full sm:w-64"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
 
             <button
               type="button"
               onClick={handleAddStudent}
-              className="flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
+              className="flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap sm:h-9 rounded-md bg-primary px-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
             >
-              <Plus size={16} strokeWidth={2.5} />
+              <Plus size={15} strokeWidth={2.5} />
               Add Student
             </button>
           </div>
@@ -478,7 +482,7 @@ function EnrollmentPage() {
         {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
 
         {isLoading ? (
-          <p className="py-6 text-center text-base text-gray-500">Loading students...</p>
+          <p className="py-6 text-center text-sm text-gray-500">Loading students...</p>
         ) : (
           <StudentTable
             students={students}

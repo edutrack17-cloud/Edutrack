@@ -3,8 +3,10 @@ import React from "react";
 // NO_COL_WIDTH must match the actual rendered width of the "No"
 // column, since "Name"'s sticky offset is calculated from it - if you
 // resize the No column, update this too.
-const NO_COL_WIDTH = "w-10"; // 2.5rem = 40px
-const NAME_COL_LEFT = "left-10"; // must equal NO_COL_WIDTH's value
+// Responsive on purpose: 48px on phones (the sticky No + Name columns take up
+// less of a small screen), 56px from sm up. Keep both pairs in sync.
+const NO_COL_WIDTH = "w-12 sm:w-14"; // 3rem = 48px, then 3.5rem = 56px
+const NAME_COL_LEFT = "left-12 sm:left-14"; // must equal NO_COL_WIDTH's value at each size
 
 export const STATUS_STYLES = {
   present: {
@@ -78,26 +80,26 @@ function Sf2AttendanceTable({
           <thead className="bg-primary">
             <tr>
               <th
-                className={`sticky left-0 z-20 ${NO_COL_WIDTH} whitespace-nowrap bg-primary px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm`}
+                className={`sticky left-0 z-20 ${NO_COL_WIDTH} whitespace-nowrap bg-primary px-2 py-2 text-center text-base font-semibold text-white sm:px-4 sm:py-2`}
               >
                 No
               </th>
               <th
-                className={`sticky ${NAME_COL_LEFT} z-20 whitespace-nowrap bg-primary px-3 py-2 text-left text-xs font-semibold text-white shadow-[2px_0_4px_rgba(0,0,0,0.15)] sm:px-4 sm:py-2 sm:text-sm`}
+                className={`sticky ${NAME_COL_LEFT} z-20 whitespace-nowrap bg-primary px-3 py-2 text-left text-base font-semibold text-white shadow-[2px_0_4px_rgba(0,0,0,0.15)] sm:px-4 sm:py-2`}
               >
                 Name
               </th>
-              <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm">
+              <th className="whitespace-nowrap px-3 py-2 text-left text-base font-semibold text-white sm:px-4 sm:py-2">
                 LRN
               </th>
               {schoolDays.map((schoolDay) => (
                 <th
                   key={schoolDay.date}
                   title={schoolDay.date}
-                  className="whitespace-nowrap px-2 py-2 text-center text-xs font-semibold leading-tight text-white sm:py-2 sm:text-sm"
+                  className="whitespace-nowrap px-2 py-2 text-center text-base font-semibold leading-tight text-white sm:py-2"
                 >
                   <div>{schoolDay.day}</div>
-                  <div className="text-[10px] font-medium opacity-80">
+                  <div className="text-sm font-medium opacity-80">
                     {schoolDay.weekday}
                   </div>
                 </th>
@@ -132,16 +134,20 @@ function Sf2AttendanceTable({
               records.map((record, index) => (
                 <tr key={record.id} className="border-b border-gray-200">
                   <td
-                    className={`sticky left-0 z-10 ${NO_COL_WIDTH} whitespace-nowrap bg-white px-3 py-2 text-center text-xs text-gray-700 sm:px-4 sm:text-sm`}
+                    className={`sticky left-0 z-10 ${NO_COL_WIDTH} whitespace-nowrap bg-white px-2 py-2 text-center text-base text-gray-700 sm:px-4`}
                   >
                     {startIndex + index + 1}
                   </td>
                   <td
-                    className={`sticky ${NAME_COL_LEFT} z-10 whitespace-nowrap bg-white px-3 py-2 text-left text-xs text-gray-700 shadow-[2px_0_4px_rgba(0,0,0,0.06)] sm:px-4 sm:text-sm`}
+                    className={`sticky ${NAME_COL_LEFT} z-10 whitespace-nowrap bg-white px-3 py-2 text-left text-base text-gray-700 shadow-[2px_0_4px_rgba(0,0,0,0.06)] sm:px-4`}
                   >
-                    {record.name}
+                    {/* Phones: fixed 7rem box that wraps long names onto 2 lines so the
+                        sticky columns stay narrow. sm and up: one line, as before. */}
+                    <div className="w-28 whitespace-normal wrap-break-words sm:w-auto sm:whitespace-nowrap">
+                      {record.name}
+                    </div>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-left text-xs text-gray-700 sm:px-4 sm:text-sm">
+                  <td className="whitespace-nowrap px-3 py-2 text-left text-base text-gray-700 sm:px-4">
                     {record.lrn}
                   </td>
                   {schoolDays.map((schoolDay) => {
@@ -149,7 +155,7 @@ function Sf2AttendanceTable({
                     return (
                       <td
                         key={schoolDay.date}
-                        className={`whitespace-nowrap px-2 py-2 text-center text-xs font-bold sm:text-sm ${
+                        className={`whitespace-nowrap px-2 py-2 text-center text-base font-bold ${
                           dayStatus ? dayStatus.cellClass : NO_RECORD_CELL_CLASS
                         }`}
                       >
@@ -163,7 +169,7 @@ function Sf2AttendanceTable({
         </table>
       </div>
 
-      <p className="text-center text-xs text-gray sm:hidden">
+      <p className="text-center text-sm text-gray sm:hidden">
         Swipe the table sideways to see more days 
       </p>
     </div>

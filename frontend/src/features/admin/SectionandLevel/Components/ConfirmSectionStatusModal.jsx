@@ -90,7 +90,7 @@ function ConfirmSectionStatusModal({
             <Icon size={22} />
           </div>
           <div className="flex-1 pt-1">
-            <h2 id="confirm-status-title" className="text-base font-bold text-primary">
+            <h2 id="confirm-status-title" className="text-2xl font-bold text-primary">
               {actionVerb} "{sectionName}"?
             </h2>
             <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
@@ -102,7 +102,7 @@ function ConfirmSectionStatusModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="flex-1 cursor-pointer rounded-lg border border-gray-300 bg-white py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 cursor-pointer rounded-lg border border-gray-300 bg-white py-2.5 text-base font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
           </button>
@@ -110,7 +110,7 @@ function ConfirmSectionStatusModal({
             type="button"
             onClick={handleConfirmClick}
             disabled={isSubmitting}
-            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${confirmButtonClass}`}
+            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-base font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${confirmButtonClass}`}
           >
             {isSubmitting && <Loader2 size={16} className="animate-spin" />}
             {isSubmitting ? `${actionVerbIng}...` : actionVerb}

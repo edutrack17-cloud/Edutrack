@@ -1,9 +1,8 @@
-// features/teacher/Promote-Student/components/Pagination.jsx
-// Same visual style as Sectionlevelpagination.jsx - compact primary bar
-// with white bordered prev/next buttons - so pagination looks identical
-// across the Section Level and Promote Student pages. Props/behavior
-// (currentPage, totalPages, onPageChange) are unchanged, so nothing in
-// PromoteStudentPage.jsx needs to change.
+// Shared pagination bar - keep this file IDENTICAL on every page that has
+// one (SF2 Attendance, Enrollment, ...). Standard size: text-sm, 15px
+// chevrons, compact primary bar with white bordered prev/next buttons.
+// Purely presentational: the page owns the current page and what happens
+// in onPageChange.
 
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -13,15 +12,19 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
   const isLastPage = currentPage >= totalPages;
 
   function goToPrevious() {
-    if (!isFirstPage) onPageChange(currentPage - 1);
+    if (!isFirstPage) {
+      onPageChange(currentPage - 1);
+    }
   }
 
   function goToNext() {
-    if (!isLastPage) onPageChange(currentPage + 1);
+    if (!isLastPage) {
+      onPageChange(currentPage + 1);
+    }
   }
 
   return (
-    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white sm:w-auto sm:gap-6 sm:text-sm">
+    <div className="flex w-full items-center justify-center gap-4 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-white sm:w-auto sm:gap-6">
       <button
         type="button"
         onClick={goToPrevious}

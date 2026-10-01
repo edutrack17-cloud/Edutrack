@@ -38,11 +38,11 @@ const STATUS_OPTIONS = [
   { value: "Absent", label: "Absent", textClass: "text-danger", selectedBgClass: "bg-danger/10" },
 ];
 
-// Same shared visual language as Sectionlevelfilters' triggerClass/wrapperClass,
+// Same trigger/wrapper/list styling as the Enrollment page's StudentFilters,
 // so both filter bars look and behave identically.
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-34";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-28 sm:flex-initial sm:w-34";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -67,7 +67,7 @@ function useClickOutside(isOpen, ref, onClose) {
 // Identical to Sectionlevelfilters' FilterDropdown (no more "disabled"
 // trigger state - see the comment on refreshKey below for why that's no
 // longer needed).
-function FilterDropdown({ options, value, onChange, ariaLabel, onOpen }) {
+function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperClassName }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
@@ -99,7 +99,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen }) {
   }
 
   return (
-    <div className={wrapperClass} ref={dropdownRef}>
+    <div className={wrapperClassName || wrapperClass} ref={dropdownRef}>
       <button
         type="button"
         onClick={handleToggle}
@@ -108,7 +108,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen }) {
         aria-expanded={isOpen}
         aria-label={ariaLabel}
       >
-        <span className="truncate">{selected.label}</span>
+        <span className="truncate" title={selected.label}>{selected.label}</span>
         <ChevronDown
           size={16}
           className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
@@ -118,7 +118,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen }) {
       {isOpen && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
@@ -127,7 +127,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen }) {
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   {option.label}
                   {isSelected && <Check size={14} />}
@@ -241,13 +241,14 @@ function AttendaceFilters({
   }, [level, role, userId, refreshKey]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-3 sm:min-w-0 sm:flex-nowrap sm:gap-2">
       <FilterDropdown
         options={levelOptions}
         value={level}
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
         onOpen={handleDropdownOpen}
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-28 sm:flex-initial sm:w-44"
       />
       <FilterDropdown
         options={sectionOptions}
@@ -255,6 +256,7 @@ function AttendaceFilters({
         onChange={onSectionChange}
         ariaLabel="Filter by section"
         onOpen={handleDropdownOpen}
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-28 sm:flex-initial sm:w-34"
       />
       <FilterDropdown options={STATUS_OPTIONS} value={status} onChange={onStatusChange} ariaLabel="Filter by status" />
     </div>

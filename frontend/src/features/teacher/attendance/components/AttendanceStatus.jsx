@@ -9,7 +9,7 @@ function AttendanceStatus({ status }) {
   const colorClass = STATUS_STYLES[status] || "text-gray-500";
 
   return (
-    <span className={`text-sm font-semibold ${colorClass}`}>{status}</span>
+    <span className={`text-base font-semibold ${colorClass}`}>{status}</span>
   );
 }
 

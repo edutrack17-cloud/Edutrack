@@ -234,7 +234,7 @@ function PromoteStudentPage() {
 
   return (
     <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
         <PromoteStudentFilters
           gradeLevel={gradeLevel}
           section={section}
@@ -247,14 +247,18 @@ function PromoteStudentPage() {
           sections={filterSections}
         />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} />
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
+          <SearchInput
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="w-full sm:w-64"
+          />
 
           {selectedIds.length > 0 && (
             <button
               type="button"
               onClick={handleBulkPromoteClick}
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
+              className="flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap sm:h-9 rounded-md bg-primary px-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
             >
               Promote Selected ({selectedIds.length})
             </button>
@@ -266,7 +270,7 @@ function PromoteStudentPage() {
       {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
 
       {!canBulkSelect && (
-        <p className="text-xs text-gray-500">
+        <p className="text-sm text-gray-500">
           {!gradeLevel && !section && (
             <>
               Select a Grade Level and Section above to enable selection - check one or more

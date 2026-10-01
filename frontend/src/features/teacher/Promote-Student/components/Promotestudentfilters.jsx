@@ -2,15 +2,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-const LEVEL_ALL = { value: "", label: "Grade Level", textClass: "text-gray-700" };
-const SECTION_ALL = { value: "", label: "Section", textClass: "text-gray-700" };
+const LEVEL_ALL = { value: "", label: "All Grade Levels", textClass: "text-gray-700" };
+const SECTION_ALL = { value: "", label: "All Sections", textClass: "text-gray-700" };
 
 // Same trigger/wrapper classes as Sectionlevelfilters/StudentFilters so
 // radius, height, weight, and icon/rotation behavior stay identical
 // across all filter bars.
 const triggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const wrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -35,7 +35,7 @@ function useClickOutside(isOpen, ref, onClose) {
 // Same generic dropdown used by Sectionlevelfilters/StudentFilters, in
 // place of the old native <select> so the UI (radius, checkmark, text
 // color) matches everywhere.
-function FilterDropdown({ options, value, onChange, ariaLabel }) {
+function FilterDropdown({ options, value, onChange, ariaLabel, wrapperClassName }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   useClickOutside(isOpen, dropdownRef, () => setIsOpen(false));
@@ -51,7 +51,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
   }
 
   return (
-    <div className={wrapperClass} ref={dropdownRef}>
+    <div className={wrapperClassName || wrapperClass} ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -60,7 +60,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
         aria-expanded={isOpen}
         aria-label={ariaLabel}
       >
-        <span className="truncate">{selected.label}</span>
+        <span className="truncate" title={selected.label}>{selected.label}</span>
         <ChevronDown
           size={16}
           className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
@@ -70,7 +70,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
       {isOpen && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
@@ -79,7 +79,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel }) {
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   {option.label}
                   {isSelected && <Check size={14} />}
@@ -120,12 +120,13 @@ function PromoteStudentFilters({
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-2">
       <FilterDropdown
         options={levelOptions}
         value={gradeLevel}
         onChange={onGradeLevelChange}
         ariaLabel="Filter by grade level"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44"
       />
 
       <FilterDropdown
@@ -140,7 +141,7 @@ function PromoteStudentFilters({
         onClick={onToggleSelectAll}
         disabled={!canBulkSelect}
         title={canBulkSelect ? undefined : "Select a Grade Level and Section first to enable selection"}
-        className="cursor-pointer rounded-md border border-gray/50 bg-white px-4 py-2 text-xs font-medium text-primary shadow-sm outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent sm:text-sm whitespace-nowrap"
+        className="h-11 w-full cursor-pointer sm:w-36 sm:h-9 whitespace-nowrap rounded-md border border-gray-300 bg-white px-4 text-base font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
       >
         {allSelected ? "Deselect All" : "Select All"}
       </button>

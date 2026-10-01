@@ -19,15 +19,15 @@ const ALL_SCHOOL_YEARS_OPTION = { value: "", label: "All School Years" };
 // Same trigger/wrapper sizing as Sectionlevelfilters.jsx so both pages
 // share identical dropdown height, radius, and text scale.
 const statusTriggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs";
-const statusWrapperClass = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28 md:w-32";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-sm font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:h-9";
+const statusWrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34";
 
 // School year names run longer than status labels ("2026-2027" vs.
 // "Archived"), so this gets its own, wider wrapper instead of reusing
 // statusWrapperClass.
 const schoolYearTriggerClass =
-  "flex h-9 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-xs font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:text-xs disabled:cursor-not-allowed disabled:opacity-60";
-const schoolYearWrapperClass = "relative min-w-[140px] flex-1 sm:min-w-0 sm:flex-none sm:w-48 md:w-36";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-sm font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 sm:h-9 disabled:cursor-not-allowed disabled:opacity-60";
+const schoolYearWrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {

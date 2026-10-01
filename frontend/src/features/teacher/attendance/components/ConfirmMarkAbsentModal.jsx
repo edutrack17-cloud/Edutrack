@@ -1,5 +1,9 @@
+// Same look as the Enrollment page's ConfirmStatusModal (centered warning
+// icon, text-2xl title, blue Confirm + red Cancel side by side) so the two
+// confirmation dialogs read as one family.
+
 import React, { useEffect, useState } from "react";
-import { X, UserX, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 function ConfirmMarkAbsentModal({ isOpen, onClose, onConfirm, sectionName = "" }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,47 +50,33 @@ function ConfirmMarkAbsentModal({ isOpen, onClose, onConfirm, sectionName = "" }
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-mark-absent-title"
-        className="relative flex w-full max-w-sm flex-col rounded-2xl bg-white p-6 shadow-xl"
+        className="w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-xl"
       >
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isSubmitting}
-          aria-label="Close"
-          className="absolute right-4 top-4 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <X size={18} />
-        </button>
-
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-secondary/10 text-secondary">
-            <UserX size={22} />
-          </div>
-          <div className="flex-1 pt-1">
-            <h2 id="confirm-mark-absent-title" className="text-base font-bold text-primary">
-              Mark remaining as absent?
-            </h2>
-            <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
-          </div>
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-warning/10">
+          <AlertTriangle size={24} className="text-warning" />
         </div>
 
-        <div className="mt-6 flex w-full flex-col-reverse gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="flex-1 cursor-pointer rounded-lg border border-gray-300 bg-white py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Cancel
-          </button>
+        <h2 id="confirm-mark-absent-title" className="mb-2 text-2xl font-bold text-primary">
+          Mark remaining as absent?
+        </h2>
+        <p className="mb-6 text-sm text-gray-600">{bodyText}</p>
+
+        <div className="flex gap-3">
           <button
             type="button"
             onClick={handleConfirmClick}
             disabled={isSubmitting}
-            className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-secondary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
             {isSubmitting ? "Marking..." : "Mark Absent"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
           </button>
         </div>
       </div>

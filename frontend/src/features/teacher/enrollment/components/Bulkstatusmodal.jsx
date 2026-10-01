@@ -210,7 +210,7 @@ function BulkStatusModal({
             })}
 
             {rows.length === 0 && (
-              <li className="py-4 text-center text-base text-gray-500">
+              <li className="py-4 text-center text-sm text-gray-500">
                 No students left in this list. Cancel to go back and select again.
               </li>
             )}

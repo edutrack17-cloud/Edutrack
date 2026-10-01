@@ -951,8 +951,8 @@ function RFIDAttendancePage() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto rounded-2xl bg-white p-4 shadow-md sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-nowrap sm:items-center">
           <AttendaceFilters
             level={level}
             section={section}
@@ -983,8 +983,14 @@ function RFIDAttendancePage() {
             userId={user?.id}
           />
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          {/* Filters + search + Mark Absent stay on ONE row from sm: up. The
+              search takes whatever width is left (min-w-52 .. max-w-2xl); if
+              the panel is too narrow even for that, the filter dropdowns
+              shrink a little (see AttendaceFilters) instead of wrapping. Below
+              sm: everything stacks. */}
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-1 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
             <AttendanceSearchInput
+              className="w-full sm:min-w-52 sm:max-w-2xl sm:flex-1"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search LRN or Name"
@@ -1005,12 +1011,12 @@ function RFIDAttendancePage() {
                     ? "Select a section first"
                     : "Marks every student in this section with no record today, or still \"On School\" (tapped at the gate but never in class), as absent."
                 }
-                className="flex h-9 w-fit shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-secondary px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                className="flex h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-secondary px-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 sm:h-9 sm:w-auto"
               >
                 {isMarkingRemainingAbsent ? (
-                  <Loader2 size={14} className="animate-spin" />
+                  <Loader2 size={15} className="animate-spin" />
                 ) : (
-                  <UserX size={14} />
+                  <UserX size={15} />
                 )}
                 {isMarkingRemainingAbsent ? "Marking..." : "Mark Absent"}
               </button>
@@ -1019,13 +1025,13 @@ function RFIDAttendancePage() {
         </div>
 
         {loadError && (
-          <p className="mt-3 text-sm text-red-500">Failed to load: {loadError}</p>
+          <p className="text-sm text-red-500">Failed to load: {loadError}</p>
         )}
 
         {isLoading ? (
           <p className="py-6 text-center text-sm text-gray-500">Loading students...</p>
         ) : (
-          <div className="mt-4 flex flex-col gap-3">
+          <>
             <AttendanceTable
               records={records}
               searchTerm={search}
@@ -1042,7 +1048,7 @@ function RFIDAttendancePage() {
               totalPages={totalPages}
               onPageChange={setCurrentPage}
             />
-          </div>
+          </>
         )}
       </div>
 

@@ -49,12 +49,8 @@ function buildYearOptions(currentYear) {
 // endpoint returns the whole section at once, so paging is done here.
 const PAGE_SIZE = 15;
 
-// Widths: same approach as Sectionlevelfilters (per-filter width classes).
-const GRADE_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
-const SCHOOL_YEAR_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-[8.5rem]";
-const SECTION_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-36 md:w-40";
-const MONTH_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-32";
-const YEAR_WIDTH = "relative min-w-[100px] flex-1 sm:min-w-0 sm:flex-none sm:w-28";
+// Filter widths: no per-filter width constants. Sf2FilterDropdown is fluid
+// (w-full) and the grid in the JSX below sets the column widths.
 
 function ErrorBanner({ message, onRetry }) {
   return (
@@ -66,7 +62,7 @@ function ErrorBanner({ message, onRetry }) {
       <button
         type="button"
         onClick={onRetry}
-        className="cursor-pointer self-start rounded-md border border-danger/40 bg-white px-3 py-1 text-xs font-semibold text-danger transition-colors hover:bg-danger/10 sm:self-auto"
+        className="cursor-pointer self-start rounded-md border border-danger/40 bg-white px-3 py-1 text-base font-semibold text-danger transition-colors hover:bg-danger/10 sm:self-auto"
       >
         Try again
       </button>
@@ -292,7 +288,7 @@ function SF2AttendancePage() {
         ...gradeLevels.map((level) => ({ value: level, label: level })),
       ]
     : [
-        { value: "", label: "All Grade Levels" },
+        { value: "", label: "All Grades" },
         ...gradeLevels.map((level) => ({ value: level, label: level })),
       ];
   const schoolYearOptions = [
@@ -305,10 +301,12 @@ function SF2AttendancePage() {
   // empty. Drop the "All" framing entirely: when there's exactly one match
   // it's already selected, so there's nothing to place-hold; otherwise show
   // a plain "pick one" placeholder that says what's actually going on.
-  let sectionPlaceholderLabel = "Select a Section";
+  // Kept short on purpose: the trigger is only ~8.5rem wide and truncates
+  // anything longer ("Select a Section" / "No matching section" got cut off).
+  let sectionPlaceholderLabel = "Section";
   if (isSectionsLoading) sectionPlaceholderLabel = "Loading...";
   else if (sections.length === 0) sectionPlaceholderLabel = "No sections";
-  else if (sectionsForFilters.length === 0) sectionPlaceholderLabel = "No matching section";
+  else if (sectionsForFilters.length === 0) sectionPlaceholderLabel = "No match";
 
   const sectionOptions =
     sectionsForFilters.length === 1
@@ -461,18 +459,21 @@ function SF2AttendancePage() {
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
-      {/* Same breakpoint as Sectionlevelpage.jsx (sm:, not lg:) so the
-          filter row and the search/export row sit side-by-side as soon
-          as there's room, instead of staying stacked until a large
-          viewport. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      {/* Filter bar (layout only - no logic here).
+          lg and up: ONE line - the 5 dropdowns on the left (fixed, equal
+          widths, all h-9), then the search bar (takes the leftover room,
+          capped so it doesn't stretch too wide), then "Export Report" at
+          the far right.
+          Below lg: dropdowns in a grid (2 cols mobile -> 3 cols sm), with
+          search and the export button stacked underneath, in that order. */}
+
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:shrink-0 lg:items-center">
           <Sf2FilterDropdown
             options={gradeLevelOptions}
             value={gradeLevel}
             onChange={handleGradeLevelChange}
             ariaLabel="Filter by grade level"
-            widthClass={GRADE_WIDTH}
             disabled={isSectionsLoading}
           />
 
@@ -481,7 +482,6 @@ function SF2AttendancePage() {
             value={sectionId}
             onChange={setSectionId}
             ariaLabel="Select section"
-            widthClass={SECTION_WIDTH}
             disabled={isSectionsLoading}
           />
 
@@ -490,7 +490,6 @@ function SF2AttendancePage() {
             value={schoolYearId}
             onChange={handleSchoolYearChange}
             ariaLabel="Filter by school year"
-            widthClass={SCHOOL_YEAR_WIDTH}
             disabled={isSectionsLoading}
           />
 
@@ -499,7 +498,6 @@ function SF2AttendancePage() {
             value={String(monthIndex)}
             onChange={(value) => setMonthIndex(Number(value))}
             ariaLabel="Select month"
-            widthClass={MONTH_WIDTH}
           />
 
           <Sf2FilterDropdown
@@ -507,24 +505,26 @@ function SF2AttendancePage() {
             value={String(year)}
             onChange={(value) => setYear(Number(value))}
             ariaLabel="Select year"
-            widthClass={YEAR_WIDTH}
           />
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} />
+        <SearchInput
+          className="w-full lg:ml-auto lg:min-w-40 lg:max-w-sm lg:flex-1"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
 
-          <button
-            type="button"
-            onClick={handleOpenExportConfirm}
-            disabled={!sectionId}
-            title={exportDisabledReason || undefined}
-            className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary sm:w-auto sm:text-sm"
-          >
-            <FileSpreadsheet size={15} strokeWidth={2.5} />
-            Export SF2 Report
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleOpenExportConfirm}
+          disabled={!sectionId}
+          title={exportDisabledReason || undefined}
+          aria-label="Export SF2 Report"
+          className="flex h-11 w-full items-center justify-center gap-1.5 sm:h-9 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary lg:w-auto lg:shrink-0"
+        >
+          <FileSpreadsheet size={15} strokeWidth={2.5} />
+          <span>Export Report</span>
+        </button>
       </div>
 
       {sectionsError && (
@@ -539,7 +539,7 @@ function SF2AttendancePage() {
       )}
 
       {tableData && !isLoading && (
-        <p className="text-center text-xs text-gray-500 sm:text-sm">
+        <p className="text-center text-sm text-gray-500">
           {[tableData.gradeLevel, tableData.sectionName].filter(Boolean).join(" - ")},{" "}
           {tableData.month} {year} ({schoolDays.length} school day
           {schoolDays.length === 1 ? "" : "s"})

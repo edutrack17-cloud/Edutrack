@@ -1,15 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import { getSchoolYearFormSchema, emptySchoolYearForm } from "../Schoolyearschema";
 
 const inputClass = (hasError) =>
-  `w-full rounded-lg border px-3 py-2.5 text-sm ${
+  `w-full rounded-lg border px-3 py-2 text-base ${
     hasError ? "border-danger" : "border-gray-300"
   } bg-white text-gray-700 placeholder:text-gray-500 outline-none focus:border-primary`;
 
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
-const errorClass = "mt-1 text-xs text-danger";
+const errorClass = "mt-1 text-sm text-danger";
 
 function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSubmit }) {
   const [submitError, setSubmitError] = useState("");
@@ -81,19 +80,11 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-        <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+        <div className="flex items-center border-b border-gray-200 px-6 py-4">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             {mode === "edit" ? "Edit School Year" : "Add School Year"}
           </h2>
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="text-gray-500 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <X size={22} />
-          </button>
         </div>
 
         <Formik
@@ -102,22 +93,14 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
           onSubmit={handleFormSubmit}
           enableReinitialize
         >
-          {({ errors, touched, isSubmitting, dirty, resetForm }) => {
+          {({ errors, touched, isSubmitting, dirty }) => {
 
             const isSaveDisabled = isSubmitting || (mode === "edit" && !dirty);
 
-            // The X icon already handles closing/cancelling the modal, so
-            // this second button no longer duplicates that - it resets the
-            // fields back to their initial values instead (blank for Add,
-            // the loaded record for Edit) without closing the modal.
-            function handleClear() {
-              resetForm();
-            }
-
             return (
             <Form>
-              <div className="flex flex-col gap-3 px-4 py-5 sm:px-6">
-                <h3 className="text-base font-bold uppercase text-primary">
+              <div className="flex flex-col gap-4 px-6 py-5">
+                <h3 className="text-lg font-semibold text-primary">
                   School Year Information
                 </h3>
 
@@ -158,7 +141,7 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
                 </div>
 
                 {mode === "add" && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm text-gray-500">
                     New school years always start as Planning. Use the row actions on the table to mark one Active later.
                   </p>
                 )}
@@ -166,21 +149,21 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
                 {submitError && <p className={errorClass}>{submitError}</p>}
               </div>
 
-              <div className="flex gap-3 border-t border-gray-200 px-4 py-4 sm:px-6">
+              <div className="flex gap-3 border-t border-gray-200 px-6 py-4">
                 <button
                   type="submit"
                   disabled={isSaveDisabled}
-                  className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSubmitting ? "Saving..." : mode === "edit" ? "Save Changes" : "Add School Year"}
                 </button>
                 <button
                   type="button"
-                  onClick={handleClear}
-                  disabled={isSubmitting || !dirty}
-                  className="flex-1 cursor-pointer rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-100"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Clear
+                  Cancel
                 </button>
               </div>
             </Form>

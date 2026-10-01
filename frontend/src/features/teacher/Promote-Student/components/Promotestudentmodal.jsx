@@ -1,6 +1,6 @@
 // features/teacher/Promote-Student/components/PromoteStudentModal.jsx
 import React, { useEffect, useState } from "react";
-import { X, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { getTargetSections } from "../promotestudentservice";
 
 // Matches GradeLevel.java - only these 3 exist, no Grade_7 to promote
@@ -124,15 +124,6 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
     });
   }
 
-  // Resets the Section pick back to blank ("Select Section") without
-  // closing the modal - the X icon already handles closing/cancelling,
-  // same reasoning as SchoolYearFormModal's Clear. targetLevel isn't
-  // touched: it's a read-only computed value, not a user edit, so
-  // there's nothing to reset there.
-  function handleClear() {
-    setTargetSection("");
-  }
-
   const canConfirm = !isSubmitting && !hasMixedSections && (isGraduating || Boolean(targetSection));
   const showNoTargetSectionsWarning =
     !isGraduating && targetLevel && targetSections.length === 0 && !sectionsError;
@@ -141,14 +132,10 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
         <div className="flex items-center border-b border-gray-200 px-6 py-4">
-          <div className="w-6" />
-          <h2 className="flex-1 text-center text-lg font-semibold text-primary">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             {isGraduating ? "Graduate Student" : "Promote Student"}
             {students.length > 1 ? "s" : ""}
           </h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100">
-            <X size={20} />
-          </button>
         </div>
 
         <div className="flex flex-col gap-4 px-6 py-5">
@@ -156,7 +143,7 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
             <p className="mb-1 text-sm font-semibold text-primary">
               Selected Student{students.length > 1 ? "s" : ""} ({students.length})
             </p>
-            <div className="max-h-28 overflow-y-auto rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+            <div className="max-h-35 overflow-y-auto rounded-lg border border-gray-200 p-3 text-base text-gray-700">
               {/* StudentResponse only has a combined fullName, not
                   firstName/lastName - same backend gap EditStudentModal
                   already works around. Grade/Section/School Year shown
@@ -167,7 +154,7 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
               {students.map((student) => (
                 <div key={student.studentId} className="flex items-center justify-between gap-2 py-0.5">
                   <span className="truncate">{student.fullName}</span>
-                  <span className="shrink-0 text-xs text-gray-500">
+                  <span className="shrink-0 text-sm text-gray-500">
                     {formatGradeLevel(student.section?.gradeLevel)} · {student.section?.sectionName ?? "—"} ·{" "}
                     {student.section?.schoolYear ?? "—"}
                   </span>
@@ -186,7 +173,7 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
           ) : (
             <div>
               <p className="mb-1 text-sm font-semibold text-primary">Current Level and Section</p>
-              <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+              <div className="rounded-lg border border-gray-200 p-3 text-base text-gray-700">
                 {formatGradeLevel(currentGradeLevel)} - {currentSectionName}
                 {currentSchoolYear ? ` (${currentSchoolYear})` : ""}
               </div>
@@ -207,7 +194,7 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
               <p className="text-sm font-semibold text-primary">Promote to Grade Level</p>
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-2">
-                  <label className="text-xs font-semibold text-gray-500">Level</label>
+                  <label className="text-sm font-semibold text-gray-500">Level</label>
                   {/* Read-only, not a <select>: with skip-level promotion
                       disallowed, this is always exactly one computed
                       value (currentGradeLevel + 1) - there's no real
@@ -215,19 +202,19 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
                       would just be misleading. targetLevel is still
                       driven by the same useEffect below and still used
                       for getTargetSections()/the promote payload. */}
-                  <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  <div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-base text-gray-700">
                     {formatGradeLevel(targetLevel)}
                   </div>
                 </div>
 
                 <div className="flex flex-1 flex-col gap-2">
-                  <label className="text-xs font-semibold text-gray-500">Section</label>
+                  <label className="text-sm font-semibold text-gray-500">Section</label>
                   <div className="relative">
                     <select
                       value={targetSection}
                       onChange={(event) => setTargetSection(event.target.value)}
                       disabled={targetSections.length === 0}
-                      className="w-full appearance-none rounded-lg border border-gray-300 py-2 pl-3 pr-10 text-sm text-gray-700 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                      className="w-full appearance-none rounded-lg border border-gray-300 py-2 pl-3 pr-10 text-base text-gray-700 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
                     >
                       <option value="">Select Section</option>
                       {targetSections.map((section) => (
@@ -256,17 +243,17 @@ function PromoteStudentModal({ isOpen, onClose, students, onConfirm, isSubmittin
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm}
-            className="flex-1 rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? "Saving..." : isGraduating ? "Graduate" : "Promote"}
           </button>
           <button
             type="button"
-            onClick={handleClear}
-            disabled={isSubmitting || isGraduating}
-            className="flex-1 rounded-lg bg-gray-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Clear
+            Cancel
           </button>
         </div>
       </div>

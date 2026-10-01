@@ -1,39 +1,27 @@
 import React, { useEffect, useState } from "react";
-import { X, Archive, Hourglass, CircleCheck, Lock, Loader2, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
-// Mirrors STATUS_ACTIONS in Schoolyeartable.jsx so the icon/color the
-// person sees in the kebab menu is the same one they see here.
+// Same layout as the Enrollment page's ConfirmStatusModal.jsx (centered
+// warning icon, "Confirm Status Change", primary Confirm + red Cancel).
+// Only the copy that depends on the school year status lives here.
+//
+// textClass mirrors getSchoolYearStatusColorClass in Schoolyeartable.jsx so
+// the status word is the same color the person sees in the table.
 const STATUS_META = {
   archived: {
-    verb: "Archive",
-    verbIng: "Archiving",
-    Icon: Archive,
-    badgeClass: "bg-secondary/10 text-secondary",
-    confirmButtonClass: "bg-secondary hover:bg-red-700",
+    textClass: "text-secondary",
     bodyText: "It will be removed from the list, and can't be restored from here.",
   },
   planning: {
-    verb: "Mark Planning",
-    verbIng: "Marking Planning",
-    Icon: Hourglass,
-    badgeClass: "bg-warning/10 text-warning",
-    confirmButtonClass: "bg-warning hover:bg-amber-600",
+    textClass: "text-warning",
     bodyText: "It's not in use yet, but it's ready. You can make it Active anytime.",
   },
   active: {
-    verb: "Mark Active",
-    verbIng: "Marking Active",
-    Icon: CircleCheck,
-    badgeClass: "bg-success/10 text-success",
-    confirmButtonClass: "bg-success hover:bg-emerald-700",
+    textClass: "text-success",
     bodyText: "This will be the school year in use starting now.",
   },
   closed: {
-    verb: "Mark Closed",
-    verbIng: "Marking Closed",
-    Icon: Lock,
-    badgeClass: "bg-danger/10 text-danger",
-    confirmButtonClass: "bg-danger hover:bg-red-700",
+    textClass: "text-danger",
     bodyText: "This school year is done. It can only be Archived next — it won't go back to Planning or Active.",
   },
 };
@@ -66,9 +54,7 @@ function ConfirmSchoolYearStatusModal({
 
   if (!isOpen) return null;
 
-  const statusKey = newStatus?.toLowerCase();
-  const meta = STATUS_META[statusKey] ?? STATUS_META.archived;
-  const { verb, verbIng, Icon, badgeClass, confirmButtonClass, bodyText } = meta;
+  const meta = STATUS_META[newStatus?.toLowerCase()] ?? STATUS_META.archived;
 
   function handleBackdropClick(event) {
     if (event.target === event.currentTarget && !isSubmitting) onClose();
@@ -96,53 +82,46 @@ function ConfirmSchoolYearStatusModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-status-title"
-        className="relative flex w-full max-w-sm flex-col rounded-2xl bg-white p-6 shadow-xl"
+        className="w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-xl"
       >
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isSubmitting}
-          aria-label="Close"
-          className="absolute right-4 top-4 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <X size={18} />
-        </button>
-
-        <div className="flex items-start gap-4">
-          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${badgeClass}`}>
-            <Icon size={22} />
-          </div>
-          <div className="flex-1 pt-1">
-            <h2 id="confirm-status-title" className="text-base font-bold text-primary">
-              {verb} "{schoolYearName}"?
-            </h2>
-            <p className="mt-1 text-sm text-gray-600">{bodyText}</p>
-            {isVacatingOnlyActive && (
-              <div className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                <span>No school year will be Active until you set a new one.</span>
-              </div>
-            )}
-          </div>
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-warning/10">
+          <AlertTriangle size={24} className="text-warning" />
         </div>
 
-        <div className="mt-6 flex w-full flex-col-reverse gap-2 sm:flex-row">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="flex-1 cursor-pointer rounded-lg border border-gray-300 bg-white py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Cancel
-          </button>
+        <h2 id="confirm-status-title" className="mb-2 text-2xl font-bold text-primary">
+          Confirm Status Change
+        </h2>
+
+        <div className="mb-6 flex flex-col gap-2 text-sm text-gray-600">
+          <p>
+            Mark <span className="font-semibold text-gray-800">{schoolYearName}</span> as{" "}
+            <span className={`font-semibold ${meta.textClass}`}>{newStatus}</span>?
+          </p>
+          <p>{meta.bodyText}</p>
+          {isVacatingOnlyActive && (
+            <div className="flex items-start justify-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-left font-medium text-warning">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>No school year will be Active until you set a new one.</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3">
           <button
             type="button"
             onClick={handleConfirmClick}
             disabled={isSubmitting}
-            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${confirmButtonClass}`}
+            className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-            {isSubmitting ? `${verbIng}...` : verb}
+            {isSubmitting ? "Saving..." : "Confirm"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
           </button>
         </div>
       </div>

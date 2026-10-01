@@ -85,7 +85,7 @@ function TimeDropdown({ value, onChange, onBlur, hasError }) {
         onClick={() => setIsOpen((prev) => !prev)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`flex w-full items-center justify-between rounded-lg border py-2.5 pl-3 pr-9 text-left text-sm outline-none transition-colors focus:border-primary ${
+        className={`flex w-full items-center justify-between rounded-lg border py-2 pl-3 pr-9 text-left text-base outline-none transition-colors focus:border-primary ${
           hasError ? "border-danger" : "border-gray-300"
         } text-gray-700`}
       >
@@ -112,7 +112,7 @@ function TimeDropdown({ value, onChange, onBlur, hasError }) {
                   type="button"
                   disabled={isDisabled}
                   onClick={() => handleSelect(option.value)}
-                  className={`block w-full px-3 py-2 text-left text-sm transition ${
+                  className={`block w-full px-3 py-2 text-left text-base transition ${
                     isDisabled
                       ? "cursor-not-allowed text-gray-300"
                       : `hover:bg-gray-100 ${isSelected ? "bg-gray-100 font-medium text-primary" : "text-gray-700"}`
@@ -171,11 +171,11 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
 
   return (
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
         <div className="flex items-center border-b border-gray-200 px-6 py-4">
           <div className="w-6" />
 
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             Manual {isTimeIn ? "Time In" : "Time Out"}
           </h2>
 
@@ -192,13 +192,13 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
           <div className="flex items-center gap-3 rounded-lg bg-gray-50 px-4 py-3">
             <Clock size={18} className={accentColorClass} />
             <div>
-              <p className="text-sm font-semibold text-gray-700">
+              <p className="text-base font-semibold text-gray-700">
                 {attendance.name}
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-gray-500">
                 {attendance.gradeLevel} - {attendance.section}
               </p>
-              <p className="mt-1 text-xs text-gray-400">{attendance.date}</p>
+              <p className="mt-1 text-sm text-gray-400">{attendance.date}</p>
             </div>
           </div>
 
@@ -213,7 +213,7 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
               hasError={hasError}
             />
             {hasError && (
-              <p className="mt-1 text-xs text-danger">{formik.errors.time}</p>
+              <p className="mt-1 text-sm text-danger">{formik.errors.time}</p>
             )}
           </div>
         </div>
@@ -222,7 +222,7 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
           <button
             type="button"
             onClick={formik.handleSubmit}
-            className={`flex-1 cursor-pointer rounded-lg py-3 text-sm font-semibold text-white transition-colors ${buttonColorClass}`}
+            className={`flex-1 cursor-pointer rounded-lg py-3 text-base font-semibold text-white transition-colors ${buttonColorClass}`}
           >
             Confirm {isTimeIn ? "Time In" : "Time Out"}
           </button>
@@ -230,7 +230,7 @@ function ManualTimeModal({ isOpen, mode, attendance, onClose, onSubmit }) {
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+            className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700"
           >
             Cancel
           </button>

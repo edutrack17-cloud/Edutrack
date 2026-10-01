@@ -6,9 +6,9 @@ import AttendanceStatus from "./AttendanceStatus";
 import ViewAttendanceModal from "./Viewattendancemdodal";
 
 const thClass =
-  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
+  "truncate px-3 py-2 text-center text-base font-semibold text-white sm:px-4";
 const tdClass =
-  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
+  "truncate px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4";
 
 const MENU_WIDTH = 160;
 
@@ -141,7 +141,7 @@ function ActionKebab({
               <button
                 type="button"
                 onClick={() => handleSelect("present")}
-                className="block w-full cursor-pointer px-3 py-2 text-left text-xs font-semibold text-success transition hover:bg-gray-100"
+                className="block w-full cursor-pointer px-3 py-2 text-left text-base font-semibold text-success transition hover:bg-gray-100"
               >
                 Present
               </button>
@@ -151,7 +151,7 @@ function ActionKebab({
               <button
                 type="button"
                 onClick={() => handleSelect("timeout")}
-                className="block w-full cursor-pointer px-3 py-2 text-left text-xs font-semibold text-danger transition hover:bg-gray-100"
+                className="block w-full cursor-pointer px-3 py-2 text-left text-base font-semibold text-danger transition hover:bg-gray-100"
               >
                 Time out
               </button>
@@ -164,7 +164,7 @@ function ActionKebab({
                   setIsOpen(false);
                   setIsViewOpen(true);
                 }}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-base font-semibold text-gray-600 transition hover:bg-gray-100"
               >
                 <Eye size={14} />
                 View
@@ -209,14 +209,14 @@ function AttendanceTable({
 
   return (
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
-      <table className="w-full min-w-160 table-fixed border-collapse">
+      <table className="w-full min-w-250 table-fixed border-collapse">
         <colgroup>
-          <col className="w-[13%]" />
-          <col className="w-[13%]" />
-          <col className="w-[21%]" />
           <col className="w-[15%]" />
-          <col className="w-[15%]" />
-          <col className="w-[15%]" />
+          <col className="w-[14%]" />
+          <col className="w-[22%]" />
+          <col className="w-[10%]" />
+          <col className="w-[14%]" />
+          <col className="w-[17%]" />
           <col className="w-[8%]" />
         </colgroup>
 
@@ -241,16 +241,13 @@ function AttendanceTable({
             </tr>
           )}
           {filteredRecords.map((record) => (
-            <tr
-              key={record.assignmentId}
-              className="border-b border-gray-200 transition hover:bg-gray-50"
-            >
+            <tr key={record.assignmentId} className="odd:bg-white even:bg-primary/10">
               <td className={tdClass}>{record.lrn}</td>
               <td className={tdClass}>{record.rfid}</td>
               <td className={tdClass} title={record.name}>{record.name}</td>
               <td className={tdClass}>{record.gradeLevel}</td>
               <td
-                className="whitespace-normal break-normal px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm"
+                className="whitespace-normal break-normal px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4"
                 title={record.section}
               >
                 {record.section}
@@ -260,7 +257,7 @@ function AttendanceTable({
                   <div className="flex flex-col items-center gap-0.5">
                     <AttendanceStatus status={record.todayAttendance.status} />
                     {(record.todayAttendance.timeIn || record.todayAttendance.timeOut) && (
-                      <span className="text-[10px] font-normal">
+                      <span className="text-sm font-normal">
                         {record.todayAttendance.timeIn && (
                           <span className="text-success">{formatDisplayTime(record.todayAttendance.timeIn)}</span>
                         )}

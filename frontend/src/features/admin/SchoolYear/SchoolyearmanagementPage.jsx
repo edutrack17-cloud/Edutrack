@@ -218,8 +218,8 @@ function SchoolYearManagementpage() {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
           <SchoolYearFilters
             status={status}
             onStatusChange={handleStatusChange}
@@ -227,13 +227,17 @@ function SchoolYearManagementpage() {
             onSchoolYearChange={handleSchoolYearFilterChange}
           />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <SchoolYearSearchInput value={search} onChange={handleSearchChange} />
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
+            <SchoolYearSearchInput
+              className="w-full sm:w-64"
+              value={search}
+              onChange={handleSearchChange}
+            />
 
             <button
               type="button"
               onClick={handleOpenAdd}
-              className="flex h-9 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-auto"
+              className="flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap sm:h-9 rounded-md bg-primary px-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
             >
               <Plus size={15} strokeWidth={2.5} />
               Add School Year

@@ -5,9 +5,9 @@ import { MoreHorizontal, Pencil, Archive, Hourglass, CircleCheck, Lock } from "l
 // (was py-3/py-4 + no truncate before, which read noticeably bulkier
 // next to the Section table).
 const thClass =
-  "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
+  "truncate px-3 py-2 text-center text-base font-semibold text-white sm:px-4 sm:py-2";
 const tdClass =
-  "truncate px-3 py-2 text-center text-xs font-normal text-gray-700 sm:px-4 sm:py-2 sm:text-sm";
+  "truncate px-3 py-2 text-center text-base font-normal text-gray-700 sm:px-4 sm:py-2";
 
 export function getSchoolYearStatusColorClass(status) {
   if (status === "archived") return "text-secondary";
@@ -169,14 +169,14 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, activeSchoolYear
             const hasAnyAction = isEditable || availableStatuses.length > 0;
 
             return (
-              <tr key={schoolYear.schoolYearId} className="border-b border-gray-200 transition hover:bg-gray-50">
+              <tr key={schoolYear.schoolYearId} className="odd:bg-white even:bg-primary/10">
                 <td className={tdClass} title={schoolYear.schoolYearName}>
                   {schoolYear.schoolYearName}
                 </td>
                 <td className={tdClass}>{formatDate(schoolYear.startDate)}</td>
                 <td className={tdClass}>{formatDate(schoolYear.endDate)}</td>
                 <td className={tdClass}>
-                  <span className={`text-sm font-semibold ${getSchoolYearStatusColorClass(schoolYear.schoolYearStatus)}`}>
+                  <span className={`text-base font-semibold ${getSchoolYearStatusColorClass(schoolYear.schoolYearStatus)}`}>
                     {getSchoolYearStatusLabel(schoolYear.schoolYearStatus)}
                   </span>
                 </td>
@@ -208,7 +208,7 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, activeSchoolYear
                             setOpenMenuId(null);
                             onEdit?.(schoolYear);
                           }}
-                          className="flex w-full items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray/10"
+                          className="flex w-full items-center gap-3 px-4 py-2 text-base font-medium text-gray-700 transition hover:bg-gray/10"
                         >
                           <Pencil size={16} />
                           Edit
@@ -227,7 +227,7 @@ function SchoolYearTable({ schoolYears, onEdit, onChangeStatus, activeSchoolYear
                               setOpenMenuId(null);
                               onChangeStatus?.(schoolYear, status);
                             }}
-                            className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-sm font-medium transition ${action.colorClass}`}
+                            className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-base font-medium transition ${action.colorClass}`}
                           >
                             <Icon size={16} />
                             {action.label}

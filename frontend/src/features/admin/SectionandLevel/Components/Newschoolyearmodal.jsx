@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { X, ChevronDown, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { ChevronDown, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import { GRADE_LEVEL_OPTIONS, getSections } from "../Sectionlevelservice";
 import {
@@ -11,13 +11,13 @@ import {
 const PREVIEW_FETCH_SIZE = 300;
 
 const inputClass = (hasError, textColorClass = "text-gray-700") =>
-  `w-full rounded-lg border px-3 py-2.5 text-sm ${
+  `w-full rounded-lg border px-3 py-2.5 text-base ${
     hasError ? "border-danger" : "border-gray-300"
   } bg-white ${textColorClass} placeholder:text-gray-500 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500`;
 
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
-const errorClass = "mt-1 text-xs text-danger";
-const hintClass = "mt-1 text-xs text-gray-500";
+const errorClass = "mt-1 text-sm text-danger";
+const hintClass = "mt-1 text-sm text-gray-500";
 
 // Sentinel used only inside this modal's own grade-level picker - never sent
 // to the backend as-is. Distinct from "" (the picker's unselected/placeholder
@@ -106,7 +106,7 @@ function SectionCarryOverPreview({
   if (!sourceLabel || !gradeLevel) return null;
 
   if (isLoading) {
-    return <p className="text-xs text-gray-500">Checking sections to copy...</p>;
+    return <p className="text-sm text-gray-500">Checking sections to copy...</p>;
   }
 
   // "All Grade Levels" reads awkwardly slotted into "No All Grade Levels
@@ -116,7 +116,7 @@ function SectionCarryOverPreview({
 
   if (sections.length === 0) {
     return (
-      <p className="text-xs text-gray-500">
+      <p className="text-sm text-gray-500">
         No {gradePrefix}sections in "{sourceLabel}".
       </p>
     );
@@ -124,7 +124,7 @@ function SectionCarryOverPreview({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-xs font-semibold text-gray-600">
+      <p className="text-sm font-semibold text-gray-600">
         {sections.length} {gradePrefix}section{sections.length === 1 ? "" : "s"} will be copied over:
       </p>
 
@@ -135,7 +135,7 @@ function SectionCarryOverPreview({
           return (
             <div
               key={section.sectionId}
-              className={`px-3 py-2 text-xs font-medium text-gray-700 ${isLastRow ? "" : "border-b border-gray-100"}`}
+              className={`px-3 py-2 text-sm font-medium text-gray-700 ${isLastRow ? "" : "border-b border-gray-100"}`}
             >
               {section.sectionName}
             </div>
@@ -315,20 +315,10 @@ function Newschoolyearmodal({
     <div className="font-primary fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
       <div className="flex w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
         <div className="flex items-center border-b border-gray-200 px-4 py-4 sm:px-6">
-          <div className="w-6" />
-
-          <h2 className="flex-1 text-center text-lg font-bold text-primary sm:text-xl">
+          <h2 className="flex-1 text-center text-2xl font-bold text-primary">
             Start New School Year
           </h2>
 
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isBusy}
-            className="cursor-pointer text-gray-500 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <X size={22} />
-          </button>
         </div>
 
         <Formik
@@ -337,7 +327,7 @@ function Newschoolyearmodal({
           onSubmit={handleFormSubmit}
           enableReinitialize
         >
-          {({ errors, touched, isSubmitting, values, setFieldValue, resetForm }) => {
+          {({ errors, touched, isSubmitting, values, setFieldValue }) => {
             const selectedSource = sortedSourceYears.find(
               (sy) => String(sy.id) === values.sourceSchoolYear
             );
@@ -374,18 +364,13 @@ function Newschoolyearmodal({
               (isSelectedSourceActive && hasMultipleActiveYears) ||
               (hasGradeLevel && countsReady && gradeSectionCount === 0);
 
-            function handleClear() {
-              resetForm();
-              setSubmitError("");
-            }
-
             return (
               <Form className="flex flex-col">
                 <FormValueWatcher value={values.sourceSchoolYear} onChange={setSelectedSourceId} />
                 <FormValueWatcher value={values.gradeLevel} onChange={setSelectedGradeLevel} />
 
                 <div className="flex flex-col gap-3 px-4 py-5 sm:px-6">
-                  <p className="text-xs leading-snug text-gray-500">
+                  <p className="text-sm leading-snug text-gray-500">
                     {isSelectedSourcePast ? (
                       <>
                         Copies a grade level's sections - or all of them at once - into
@@ -406,14 +391,14 @@ function Newschoolyearmodal({
                     <label className={labelClass}>Source School Year</label>
 
                     {isSourceLocked && !hasNoSourceYear && (
-                      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-700">
+                      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-base font-medium text-gray-700">
                         <CheckCircle2 size={15} className="shrink-0 text-success" />
                         {sortedSourceYears[0].label}
                       </div>
                     )}
 
                     {hasNoSourceYear && (
-                      <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
+                      <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-500">
                         No school years available to copy from yet.
                       </p>
                     )}
@@ -458,7 +443,7 @@ function Newschoolyearmodal({
                         )}
 
                         {isSelectedSourceActive && (
-                          <p className="mt-1 text-xs text-warning">
+                          <p className="mt-1 text-sm text-warning">
                             Current Active year. It will be Closed once the new year starts.
                           </p>
                         )}
@@ -478,7 +463,7 @@ function Newschoolyearmodal({
                     )}
 
                     {hasMultipleActiveYears && (
-                      <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+                      <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-sm text-warning">
                         <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                         <p>
                           {activeSourceYears.length} school years are marked "Active" —
@@ -533,7 +518,7 @@ function Newschoolyearmodal({
                     )}
 
                     {values.targetSchoolYear && (
-                      <p className="mt-1 text-xs text-success">
+                      <p className="mt-1 text-sm text-success">
                         {!isSelectedSourcePast
                           ? "Will become the new Active school year."
                           : selectedTarget?.status === "active"
@@ -549,7 +534,7 @@ function Newschoolyearmodal({
                       <label className={labelClass}>
                         Grade Level <span className="text-danger">*</span>
                       </label>
-                      <span className="text-[11px] font-medium text-gray-500">
+                      <span className="text-sm font-medium text-gray-500">
                         Or copy every grade at once
                       </span>
                     </div>
@@ -575,7 +560,7 @@ function Newschoolyearmodal({
                   </div>
 
                   {hasGradeLevel && isSelectedSourceActive && !isAllGradesSelected && (
-                    <div className="flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs leading-snug text-gray-600">
+                    <div className="flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm leading-snug text-gray-600">
                       <Info size={14} className="mt-0.5 shrink-0 text-primary" />
                       <p>
                         Only {gradeLabelFor(values.gradeLevel)} moves over here, then "
@@ -587,7 +572,7 @@ function Newschoolyearmodal({
                   )}
 
                   {hasGradeLevel && isSelectedSourceActive && isAllGradesSelected && (
-                    <div className="flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs leading-snug text-gray-600">
+                    <div className="flex items-start gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm leading-snug text-gray-600">
                       <Info size={14} className="mt-0.5 shrink-0 text-primary" />
                       <p>
                         Every grade level moves over here, then "{selectedSource?.label}"
@@ -610,7 +595,7 @@ function Newschoolyearmodal({
                   <button
                     type="submit"
                     disabled={isStartDisabled}
-                    className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex-1 cursor-pointer rounded-lg bg-primary py-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSubmitting
                       ? isSelectedSourcePast
@@ -623,10 +608,11 @@ function Newschoolyearmodal({
 
                   <button
                     type="button"
-                    onClick={handleClear}
-                    className="flex-1 cursor-pointer rounded-lg bg-slate-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-600"
+                    onClick={onClose}
+                    disabled={isBusy}
+                    className="flex-1 cursor-pointer rounded-lg bg-secondary py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Clear
+                    Cancel
                   </button>
                 </div>
               </Form>
