@@ -10,6 +10,24 @@ function formatTime(isoDateTime) {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+// The dashboard API sends the status as the raw backend value ("present",
+// "on_school", "absent"), but AttendanceStatus only knows the display
+// labels ("Present", "On School", "Absent") - an unknown value falls back
+// to plain gray, which is why the dashboard showed gray lowercase text.
+// Converting here gives the same warning/success/danger colors as the
+// Attendance page and its Status filter.
+const STATUS_LABELS = {
+  present: "Present",
+  on_school: "On School",
+  absent: "Absent",
+};
+
+function toStatusLabel(status) {
+  if (!status) return "";
+  const key = String(status).trim().toLowerCase().replace(/\s+/g, "_");
+  return STATUS_LABELS[key] ?? status;
+}
+
 function DailyLogsTable({ logs, isLoading }) {
   const thClass =
     "truncate px-3 py-2 text-center text-xs font-semibold text-white sm:px-4 sm:py-2 sm:text-sm";
@@ -30,7 +48,18 @@ function DailyLogsTable({ logs, isLoading }) {
       </div>
 
       <div className="w-full overflow-x-auto rounded-xl">
-        <table className="min-w-full border-collapse">
+        {/* table-fixed + colgroup: same approach as AttendanceTable.jsx, so
+            every column keeps a stable width and `truncate` actually works
+            on long names / section names (it needs a fixed table layout). */}
+        <table className="w-full min-w-xl table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[17%]" />
+            <col className="w-[28%]" />
+            <col className="w-[22%]" />
+            <col className="w-[15%]" />
+            <col className="w-[18%]" />
+          </colgroup>
+
           <thead className="bg-primary">
             <tr>
               <th className={thClass}>LRN</th>
@@ -58,11 +87,14 @@ function DailyLogsTable({ logs, isLoading }) {
               </tr>
             )}
 
+            {/* Alternating row colors - same odd:bg-white / even:bg-primary/10
+                as the Attendance page's AttendanceTable.jsx. No hover color
+                on purpose, so rows don't change color under the cursor. */}
             {!isLoading &&
               rows.map((log) => (
                 <tr
                   key={`${log.lrn}-${log.timeIn}`}
-                  className="border-b border-gray-100 transition hover:bg-gray-50"
+                  className="odd:bg-white even:bg-primary/10"
                 >
                   <td className={tdClass}>{log.lrn}</td>
                   <td className={tdClass} title={log.studentName}>{log.studentName}</td>
@@ -70,8 +102,8 @@ function DailyLogsTable({ logs, isLoading }) {
                   <td className={tdClass}>{formatTime(log.timeIn)}</td>
                   <td className={tdClass}>
                     {log.status ? (
-                      <div className="flex justify-center">
-                        <AttendanceStatus status={log.status} />
+                      <div className="flex justify-center [&_span]:text-sm">
+                        <AttendanceStatus status={toStatusLabel(log.status)} />
                       </div>
                     ) : (
                       <span className="text-gray-400">--</span>

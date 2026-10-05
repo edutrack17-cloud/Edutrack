@@ -209,6 +209,43 @@ export async function fetchStudentRecords({
   }
 }
 
+// Walks EVERY roster page for the given filters. The backend caps the page
+// size, so asking for size=1000 only ever returned the first ~10 students -
+// which is why a Status filter (On School / Present / Absent) came back empty
+// unless the search narrowed the roster down to someone in that first page.
+// Cached briefly so changing pages/status doesn't re-download the roster.
+const rosterAllCache = new Map();
+const ROSTER_ALL_CACHE_TTL_MS = 60_000;
+
+export function invalidateStudentRosterCache() {
+  rosterAllCache.clear();
+}
+
+export async function fetchAllStudentRecords({
+  level = "",
+  section = "",
+  search = "",
+  size = 1000,
+  maxPages = 100,
+} = {}) {
+  const cacheKey = JSON.stringify([level, section, search]);
+  const cached = rosterAllCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const first = await fetchStudentRecords({ page: 1, level, section, search, size });
+  const records = [...first.records];
+  const lastPage = Math.min(first.totalPages, maxPages);
+
+  for (let page = 2; page <= lastPage; page += 1) {
+    const next = await fetchStudentRecords({ page, level, section, search, size });
+    records.push(...next.records);
+  }
+
+  const result = { records, totalPages: 1, currentPage: 1 };
+  rosterAllCache.set(cacheKey, { data: result, expiresAt: Date.now() + ROSTER_ALL_CACHE_TTL_MS });
+  return result;
+}
+
 // GET /api/attendance?gradeLevel={gradeLevel}
 //
 // The backend `GET /api/attendance` now accepts a `gradeLevel` query
@@ -225,22 +262,82 @@ export async function fetchStudentRecords({
 // NOTE: the response DTO does NOT include `rfid` - callers that need to
 // correlate these rows with a roster should key on the attendance id or
 // the student name + gradeAndSection, not on rfid.
-export async function fetchTodaysAttendance({ gradeLevel, size = 1000 } = {}) {
+function getLocalTodayString() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+// The backend caps the page size (the roster shows 10 rows/page even though
+// the page asks for 20, so a requested size=1000 is silently cut down) and
+// GET /api/attendance has no "today" filter. So ONE request is never enough:
+// it only ever returned the first few records. This walks the pages
+// newest-first (sort=attendanceId,desc) and stops as soon as it reaches a
+// record from a previous day, the last page, or `maxPages`.
+//
+// - `status` (e.g. "On School") is sent as the server-side attendanceStatus
+//   filter, so a Status-filtered view only pages through matching records.
+// - `maxPages` lets the 15s background poll stay cheap (it only needs the
+//   newest taps); the full load uses the larger default.
+// - results are cached for `cacheMs` so paging through the roster doesn't
+//   re-walk every attendance page on each click. Pass cacheMs: 0 to bypass.
+const todaysAttendanceCache = new Map();
+
+export function invalidateTodaysAttendanceCache() {
+  todaysAttendanceCache.clear();
+}
+
+export async function fetchTodaysAttendance({
+  gradeLevel,
+  status,
+  size = 1000,
+  maxPages = 40,
+  cacheMs = 30_000,
+} = {}) {
+  const cacheKey = JSON.stringify([gradeLevel || "", status || "", maxPages]);
+  if (cacheMs > 0) {
+    const cached = todaysAttendanceCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+  }
+
   try {
-    // FIX: no `size` used to be sent at all, so this rode whatever the
-    // backend's default Pageable size is (commonly 20) - fine for a
-    // teacher's one section, but for a whole school's worth of today's
-    // taps (admin, no gradeLevel picked) it silently dropped everyone
-    // past the first page, same root cause as fetchStudentRecords'
-    // missing `size` above. An explicit large size is harmless when
-    // there's less data than that - Spring just returns everything.
-    const params = { size };
-    if (gradeLevel) {
-      params.gradeLevel = LABEL_TO_GRADE_LEVEL[gradeLevel] ?? gradeLevel;
+    const all = [];
+    let reachedOldDay = false;
+
+    for (let page = 0; page < maxPages && !reachedOldDay; page += 1) {
+      const params = { size, page, sort: "attendanceId,desc" };
+      if (gradeLevel) {
+        params.gradeLevel = LABEL_TO_GRADE_LEVEL[gradeLevel] ?? gradeLevel;
+      }
+      if (status) {
+        params.attendanceStatus = LABEL_TO_STATUS[status] ?? status;
+      }
+
+      const { data } = await attendanceApi.get("/attendance", { params });
+      const content = Array.isArray(data?.content) ? data.content : [];
+      const mapped = content.map(mapAttendanceRecord);
+      all.push(...mapped);
+
+      const today = getLocalTodayString();
+      if (mapped.some((r) => r.date && r.date !== today)) reachedOldDay = true;
+
+      const isLastPage = data?.last === true || page + 1 >= (data?.totalPages ?? 1);
+      if (isLastPage || content.length === 0) break;
     }
-    const { data } = await attendanceApi.get("/attendance", { params });
-    const content = Array.isArray(data?.content) ? data.content : [];
-    return content.map(mapAttendanceRecord);
+
+    // Records with a time-in carry their date; "absent" records have no
+    // dateTimeIn, so they're kept only if newer than the newest record
+    // known to be from a previous day.
+    const today = getLocalTodayString();
+    const maxOldId = all.reduce(
+      (max, r) => (r.date && r.date !== today ? Math.max(max, r.id) : max),
+      0
+    );
+    const result = all.filter((r) => (r.date ? r.date === today : r.id > maxOldId));
+
+    if (cacheMs > 0) {
+      todaysAttendanceCache.set(cacheKey, { data: result, expiresAt: Date.now() + cacheMs });
+    }
+    return result;
   } catch (error) {
     throw buildAttendanceError(error, "GET /api/attendance");
   }

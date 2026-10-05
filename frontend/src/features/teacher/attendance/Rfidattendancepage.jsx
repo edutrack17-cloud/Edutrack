@@ -5,7 +5,9 @@ import {
   timeOutAttendance,
   closeAttendanceForSection,
   fetchStudentRecords,
+  fetchAllStudentRecords,
   fetchTodaysAttendance,
+  invalidateTodaysAttendanceCache,
   markPresentManual,
   manualTimeOut,
 } from "./Attendanceservice";
@@ -189,9 +191,15 @@ function normalizeName(name) {
 function mergeTodaysAttendance(rows, todaysAttendance) {
   const byRfid = new Map();
   const byName = new Map();
+  // If duplicates ever slip through, keep the newest record (highest id).
+  function keepNewest(map, key, record) {
+    const existing = map.get(key);
+    if (!existing || record.id > existing.id) map.set(key, record);
+  }
+
   for (const a of todaysAttendance) {
-    if (a.rfid) byRfid.set(a.rfid, a);
-    else if (a.name) byName.set(normalizeName(a.name), a);
+    if (a.rfid) keepNewest(byRfid, a.rfid, a);
+    else if (a.name) keepNewest(byName, normalizeName(a.name), a);
   }
 
   let changed = false;
@@ -239,6 +247,7 @@ function RFIDAttendancePage() {
   const lastLocalChangeRef = useRef(0);
   function markLocalChange() {
     lastLocalChangeRef.current = Date.now();
+    invalidateTodaysAttendanceCache();
   }
 
   const TAP_COOLDOWN_MS = 3000;
@@ -401,13 +410,20 @@ function RFIDAttendancePage() {
         // AttendanceTable's client-side name/LRN filter (fed by the raw,
         // non-debounced `search`) stays layered on top of this and is
         // the only thing that makes LRN search work at all.
-        const { records: fetched, totalPages: fetchedTotalPages } = await fetchStudentRecords({
-          page: isStatusFilterActive ? 1 : currentPage,
-          level,
-          section,
-          search: debouncedSearch,
-          size: isStatusFilterActive ? STATUS_FETCH_SIZE : PAGE_SIZE,
-        });
+        // FIX: with a Status filter the whole roster is needed, but the
+        // backend caps the page size - one size=1000 request only ever
+        // returned the first ~10 students, so "On School" showed nothing
+        // unless the search narrowed the roster to that first page.
+        // fetchAllStudentRecords walks every roster page instead.
+        const { records: fetched, totalPages: fetchedTotalPages } = isStatusFilterActive
+          ? await fetchAllStudentRecords({ level, section, search: debouncedSearch })
+          : await fetchStudentRecords({
+              page: currentPage,
+              level,
+              section,
+              search: debouncedSearch,
+              size: PAGE_SIZE,
+            });
 
         // Repaint any status/times this page has already seen today
         // (from a previous load, a live tap, or a manual action) right
@@ -433,7 +449,10 @@ function RFIDAttendancePage() {
         // roster (and cache overlay above) are still usable, just
         // without a fresher status than whatever was already cached.
         try {
-          const todaysAttendance = await fetchTodaysAttendance({ gradeLevel: level });
+          const todaysAttendance = await fetchTodaysAttendance({
+            gradeLevel: level,
+            status: isStatusFilterActive ? status : undefined,
+          });
           merged = mergeTodaysAttendance(merged, todaysAttendance);
         } catch (attendanceError) {
           // Non-fatal (roster still usable without today's status), but
@@ -540,7 +559,13 @@ function RFIDAttendancePage() {
       const startedAt = Date.now();
       try {
         // GET /api/attendance?gradeLevel=
-        const todaysAttendance = await fetchTodaysAttendance({ gradeLevel: level });
+        // Poll only the newest pages (new gate taps are the newest records)
+        // and bypass the cache so it always sees fresh data.
+        const todaysAttendance = await fetchTodaysAttendance({
+          gradeLevel: level,
+          maxPages: 5,
+          cacheMs: 0,
+        });
         if (ignore || lastLocalChangeRef.current > startedAt) return;
         setRecords((prev) => mergeTodaysAttendance(prev, todaysAttendance));
       } catch (error) {

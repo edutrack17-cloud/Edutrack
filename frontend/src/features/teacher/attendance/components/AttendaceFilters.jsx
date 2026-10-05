@@ -42,7 +42,7 @@ const STATUS_OPTIONS = [
 // so both filter bars look and behave identically.
 const triggerClass =
   "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
-const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-28 sm:flex-initial sm:w-34";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -241,14 +241,14 @@ function AttendaceFilters({
   }, [level, role, userId, refreshKey]);
 
   return (
-    <div className="flex flex-wrap items-center gap-3 sm:min-w-0 sm:flex-nowrap sm:gap-2">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-2">
       <FilterDropdown
         options={levelOptions}
         value={level}
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
         onOpen={handleDropdownOpen}
-        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-28 sm:flex-initial sm:w-44"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44"
       />
       <FilterDropdown
         options={sectionOptions}
@@ -256,7 +256,7 @@ function AttendaceFilters({
         onChange={onSectionChange}
         ariaLabel="Filter by section"
         onOpen={handleDropdownOpen}
-        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-28 sm:flex-initial sm:w-34"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34"
       />
       <FilterDropdown options={STATUS_OPTIONS} value={status} onChange={onStatusChange} ariaLabel="Filter by status" />
     </div>
