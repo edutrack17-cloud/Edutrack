@@ -11,7 +11,7 @@ import {
   promoteStudents as promoteStudentsRequest,
   graduateStudents as graduateStudentsRequest,
 } from "./promotestudentservice";
-import { useAuth } from "../../../Context/Authcontext";
+import { useAuth } from "../../../Context/AuthContext";
 
 const PAGE_SIZE = 10;
 

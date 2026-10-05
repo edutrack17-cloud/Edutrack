@@ -5,7 +5,7 @@ import { Lock } from "lucide-react";
 import Input from "../../../components/ui/Input";
 import changePasswordSchema from "./ChangepasswordSchema";
 import { changePassword } from "../authService";
-import { useAuth } from "../../../Context/Authcontext";
+import { useAuth } from "../../../Context/AuthContext";
 
 // Change Password modal. Same structure and sizing as EnrollStudentModal
 // (dimmed backdrop, max-w-2xl white card, header / scrollable body /

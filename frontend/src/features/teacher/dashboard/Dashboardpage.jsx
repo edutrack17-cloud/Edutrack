@@ -5,7 +5,7 @@ import AttendanceChart from "./components/Attendancechart";
 import DailyLogsTable from "./components/Dailylogstable";
 import SectionDropdown from "./components/dropdownsectiondashboard";
 import { getAdminDashboard, getTeacherDashboard } from "./dashboardservice";
-import { useAuth } from "../../../Context/Authcontext";
+import { useAuth } from "../../../Context/AuthContext";
 
 // Maps Attendancechart's "Show:" labels to DashboardPeriod.java's enum values.
 const LABEL_TO_PERIOD = { Daily: "daily", Week: "weekly", Month: "monthly", Year: "yearly" };

@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
-import { useAuth } from "../../Context/Authcontext";
+import { useAuth } from "../../Context/AuthContext";
 
 
 const pageTitles = {

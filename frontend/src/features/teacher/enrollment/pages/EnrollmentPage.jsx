@@ -16,7 +16,7 @@ import {
   ALL_SCHOOL_YEARS,
 } from "../enrollmentService";
 import { useToasts, ToastContainer } from "../../../../components/ui/Toast";
-import { useAuth } from "../../../../Context/Authcontext";
+import { useAuth } from "../../../../Context/AuthContext";
 
 const PAGE_SIZE = 10;
 

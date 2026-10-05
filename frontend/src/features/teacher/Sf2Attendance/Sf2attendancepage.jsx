@@ -8,11 +8,11 @@ import Sf2FilterDropdown from "./Componetns/Sf2filterdropdown";
 import { exportSf2Report } from "./Componetns/Sf2exportexcel";
 import { fetchSf2Sections, fetchSf2SectionsByAdviser, fetchSf2Table } from "./Sf2attendanceservice";
 // Same context EnrollmentPage.jsx uses for its own role/adviser split
-// (src/Context/Authcontext.jsx). Path depth assumes this file lives in the
+// (src/Context/AuthContext.jsx). Path depth assumes this file lives in the
 // same folder as Sf2attendanceservice.js, matching that file's own
 // "../../../services/apiClient" import - adjust the "../" count if this
 // file actually lives somewhere deeper (e.g. a "pages" subfolder).
-import { useAuth } from "../../../Context/Authcontext";
+import { useAuth } from "../../../Context/AuthContext";
 
 // GradeLevel is a fixed enum on the backend (Grade_4 / Grade_5 / Grade_6).
 // This only pins display order (4 -> 5 -> 6) - the actual option list is

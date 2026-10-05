@@ -13,7 +13,7 @@ import { useToasts, ToastContainer } from "../../../components/ui/Toast";
 import { editUserSchema } from "../../admin/Usermanagement/UsermanagementSchema";
 // Reuses the admin Usermanagement service - see getUser()'s comment there.
 import { getUser, updateUser } from "../../admin/Usermanagement/Usermanagementservice";
-import { useAuth } from "../../../Context/Authcontext";
+import { useAuth } from "../../../Context/AuthContext";
 
 const EDITABLE_FIELDS = ["firstName", "middleName", "lastName", "username", "contactNumber"];
 

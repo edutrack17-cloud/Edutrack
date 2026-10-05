@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
 import ProtectedRoute from "./Protectedroute";
-import { useAuth } from "../Context/Authcontext";
+import { useAuth } from "../Context/AuthContext";
 import LoginPage from "../features/auth/LoginPage";
 import ForgotPasswordPage from "../features/auth/ForgotPass/ForgotPasswordPage";
 import ChangePassword from "../features/auth/pages/Changepassword";

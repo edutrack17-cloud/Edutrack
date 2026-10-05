@@ -18,7 +18,7 @@ import Pagination from "./components/Pagination";
 import ManualTimeModal from "./components/Manualtimemodal";
 import ConfirmMarkAbsentModal from "./components/ConfirmMarkAbsentModal";
 import { UserX, Loader2 } from "lucide-react";
-import { useAuth } from "../../../Context/Authcontext";
+import { useAuth } from "../../../Context/AuthContext";
 
 const SCHOOL_NAME = "Cecilio M. Saliba Elementary School";
 

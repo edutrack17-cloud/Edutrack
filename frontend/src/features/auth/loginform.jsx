@@ -7,7 +7,7 @@ import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import loginSchema from "./loginSchema";
 import { loginUser } from "./authService";
-import { useAuth } from "../../Context/Authcontext";
+import { useAuth } from "../../Context/AuthContext";
 
 const MIN_LOADING_MS = 600;
 
