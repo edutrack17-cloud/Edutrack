@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
 import SearchInput from "./Componetns/SearchInput";
 import Pagination from "./Componetns/Pagiantion";
@@ -8,7 +8,7 @@ import Sf2FilterDropdown from "./Componetns/Sf2filterdropdown";
 import { exportSf2Report } from "./Componetns/Sf2exportexcel";
 import { fetchSf2Sections, fetchSf2SectionsByAdviser, fetchSf2Table } from "./Sf2attendanceservice";
 // Same context EnrollmentPage.jsx uses for its own role/adviser split
-// (src/Context/AuthContext.jsx). Path depth assumes this file lives in the
+// (src/Context/Authcontext.jsx). Path depth assumes this file lives in the
 // same folder as Sf2attendanceservice.js, matching that file's own
 // "../../../services/apiClient" import - adjust the "../" count if this
 // file actually lives somewhere deeper (e.g. a "pages" subfolder).

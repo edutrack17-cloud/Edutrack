@@ -16,7 +16,7 @@
 // The request is all-or-nothing on the backend, so on failure this modal just
 // shows `error` inline and stays open - nothing has been changed.
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { getLocalDateISO } from "../enrollmentService";
 import ConfirmStatusModal from "./ConfirmStatusModal";

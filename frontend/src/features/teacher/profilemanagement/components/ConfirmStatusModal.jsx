@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 
 // Generic confirm-before-you-commit dialog, reusable across pages.

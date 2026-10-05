@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 // True if a className string already sets a Tailwind font size

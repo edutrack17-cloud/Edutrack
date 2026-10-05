@@ -1,4 +1,4 @@
-import React from "react";
+
 
 // Same InfoField treatment as ViewStudentModal.jsx, so both "view" modals read as one component family
 function InfoField({ label, value }) {

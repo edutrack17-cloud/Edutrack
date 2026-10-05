@@ -1,6 +1,6 @@
 // features/auth/pages/Profileinformationpage.jsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormik } from "formik";
 import { Loader2, RotateCcw } from "lucide-react";
 // Reusable confirm-before-you-save dialog, not tied to this page.

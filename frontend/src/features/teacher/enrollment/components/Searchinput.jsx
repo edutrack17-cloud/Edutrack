@@ -5,7 +5,7 @@
 // className prop on the wrapper (the input just fills it), e.g.
 // className="w-full sm:w-64".
 
-import React from "react";
+
 import { Search } from "lucide-react";
 
 function SearchInput({

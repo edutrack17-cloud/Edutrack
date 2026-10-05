@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import { useRef } from "react";
 
 // Segmented one-time-code input: one box per digit, auto-advances on type,
 // steps back on backspace, and accepts a full pasted / autofilled code.

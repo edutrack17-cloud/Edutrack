@@ -15,7 +15,7 @@
 // "../components/Transfersectionmodal"` was throwing "does not provide
 // an export named 'default'".
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { getSections } from "../enrollmentService";
 

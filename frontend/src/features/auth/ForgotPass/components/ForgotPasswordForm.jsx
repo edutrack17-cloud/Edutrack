@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormik } from "formik";
 import { useNavigate } from "react-router-dom";
 import { User, Lock, Loader2 } from "lucide-react";
 
 import Input from "../../../../components/ui/Input";
 import Button from "../../../../components/ui/Button";
-import OtpInput from "./OtpInput";
+import OtpInput from "./Otpinput";
 import {
   requestOtpSchema,
   resetWithOtpSchema,

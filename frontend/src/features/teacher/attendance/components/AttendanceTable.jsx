@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Loader2, Eye, LogIn, LogOut } from "lucide-react";
 import { getRowActionState } from "../Attendanceservice";
 import AttendanceStatus from "./AttendanceStatus";

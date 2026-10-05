@@ -1,6 +1,6 @@
 // Generic confirm dialog, shared by both Archive and Activate.
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Archive, ArchiveRestore, Loader2 } from "lucide-react";
 
 function ConfirmSectionStatusModal({

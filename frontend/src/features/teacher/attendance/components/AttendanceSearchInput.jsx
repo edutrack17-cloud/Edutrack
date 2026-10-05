@@ -5,7 +5,7 @@
 // makes room for that button once there's text to clear, so the placeholder
 // gets the full width while the box is empty.
 
-import React from "react";
+
 import { Search, X } from "lucide-react";
 
 function AttendanceSearchInput({

@@ -1,4 +1,4 @@
-import React from "react";
+
 import AttendanceStatus from "./AttendanceStatus";
 
 // Same formatter AttendanceTable already uses for the Time In/Out

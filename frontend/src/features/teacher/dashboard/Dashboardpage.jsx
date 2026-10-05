@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Users, UserCheck, UserX, ClipboardX, DoorOpen, UserRound, Layers } from "lucide-react";
 import StatCard from "./components/Statcard";
 import AttendanceChart from "./components/Attendancechart";

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { GraduationCap, UserX, Shuffle, ArrowUpCircle, Repeat, Clock } from "lucide-react";
 import { getStudentHistory } from "../enrollmentService";
 

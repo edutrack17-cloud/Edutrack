@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Rss, Check } from "lucide-react";
 
 // REAL SCANNER CONNECTION (replaces the old simulateTap() mock)

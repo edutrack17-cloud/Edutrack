@@ -1,5 +1,5 @@
 // features/teacher/Promote-Student/components/PromoteStudentModal.jsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { getTargetSections } from "../promotestudentservice";
 

@@ -1,4 +1,4 @@
-import React from "react";
+
 
 // NO_COL_WIDTH must match the actual rendered width of the "No"
 // column, since "Name"'s sticky offset is calculated from it - if you

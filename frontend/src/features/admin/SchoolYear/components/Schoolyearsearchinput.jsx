@@ -1,4 +1,4 @@
-import React from "react";
+
 import { Search } from "lucide-react";
 
 function SchoolYearSearchInput({ value, onChange, placeholder = "Search by school year name" }) {

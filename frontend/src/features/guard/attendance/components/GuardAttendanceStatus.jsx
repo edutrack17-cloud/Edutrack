@@ -1,4 +1,4 @@
-import React from "react";
+
 const STATUS_STYLES = {
   "On School": "text-warning",
   Present: "text-success",

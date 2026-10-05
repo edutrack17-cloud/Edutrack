@@ -5,7 +5,7 @@
 // student, a different title/button text, and PATCH instead of POST on
 // submit.
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormik } from "formik";
 import RfidFormModal from "./RfidFormModal";
 import StudentForm from "./StudentForm";

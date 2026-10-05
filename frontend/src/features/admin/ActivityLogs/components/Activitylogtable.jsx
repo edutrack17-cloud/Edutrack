@@ -1,4 +1,4 @@
-import React from "react";
+
 
 // Maps keywords found in logHeader to a short label + color, so this stays
 // flexible for whatever action types eventually come from the backend

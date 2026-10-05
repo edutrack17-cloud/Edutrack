@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx
+// src/Context/AuthContext.jsx
 //
 // Single source of truth for "who is logged in and what's their role."
 // Sidebar/MainLayout/route guards all read from here instead of
@@ -9,7 +9,7 @@
 // "user" key. See authService.js for why: it's also the file that owns
 // the /refresh call and needs to read/write those tokens.
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 import { logoutUser, getAccessToken, clearTokens } from "../features/auth/authService";
 
 const AuthContext = createContext(null);
@@ -17,32 +17,23 @@ const AuthContext = createContext(null);
 const USER_KEY = "user";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [isInitializing, setIsInitializing] = useState(true);
-
-  // Rehydrate on refresh - without this, hitting F5 would log everyone
-  // out on every reload even though the token's still valid.
-  //
-  // This doesn't check whether the access token is actually still
-  // valid/unexpired - it doesn't need to. If it's expired, the first
-  // API call the app makes will 401, and authService's response
-  // interceptor will silently refresh it and retry. That's also what
-  // makes the "stay logged in across sessions" fix actually work end
-  // to end: as long as a refresh token still exists, the user never
-  // gets bounced back to login just because the access token aged out.
-  useEffect(() => {
+  const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem(USER_KEY);
     const storedAccessToken = getAccessToken();
-    if (storedUser && storedAccessToken) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem(USER_KEY);
-        clearTokens();
-      }
+
+    if (!storedUser || !storedAccessToken) {
+      return null;
     }
-    setIsInitializing(false);
-  }, []);
+
+    try {
+      return JSON.parse(storedUser);
+    } catch {
+      localStorage.removeItem(USER_KEY);
+      clearTokens();
+      return null;
+    }
+  });
+  const isInitializing = false;
 
   // Called by LoginForm.jsx right after loginUser() resolves.
   //

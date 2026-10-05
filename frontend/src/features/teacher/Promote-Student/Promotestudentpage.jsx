@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PromoteStudentFilters from "./components/Promotestudentfilters";
 import SearchInput from "./components/Promotestudentsearchinput";
 import PromoteStudentTable from "./components/Promotestudenttable";

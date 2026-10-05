@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 // Same dropdown chrome as Sectionlevelfilters.jsx; colors match Usermanagementtable's getStatusClass()

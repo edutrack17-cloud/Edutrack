@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Activitylogtable from "./components/Activitylogtable";
 import Activitylogheaderfilter from "./components/Activitylogheaderfilter";
 import Activitylogpagination from "./components/Activitylogpagination";

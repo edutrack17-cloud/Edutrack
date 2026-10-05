@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import SchoolYearTable, { getSchoolYearStatusLabel } from "./components/Schoolyeartable";
 import SchoolYearFilters from "./components/Schoolyearfilters";

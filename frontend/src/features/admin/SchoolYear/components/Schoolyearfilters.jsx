@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Loader2 } from "lucide-react";
 import { getSchoolYearDropdown } from "../Schoolyearservice";
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
 // Same layout as the Enrollment page's ConfirmStatusModal.jsx (centered

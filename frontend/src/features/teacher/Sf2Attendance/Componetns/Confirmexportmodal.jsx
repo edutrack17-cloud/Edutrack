@@ -7,7 +7,7 @@
 // exportSf2ToExcel actually runs, so the download is opt-in instead of
 // firing the moment "Export SF2 Report" is clicked.
 
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { X, FileSpreadsheet, Loader2 } from "lucide-react";
 
 function ConfirmExportModal({

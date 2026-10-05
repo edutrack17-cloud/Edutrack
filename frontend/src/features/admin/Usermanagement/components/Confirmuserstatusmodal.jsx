@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { UserCheck, UserX, KeyRound, Loader2 } from "lucide-react";
 
 // Mirrors STATUS_META in Confirmschoolyearstatusmodal.jsx so the icon/color

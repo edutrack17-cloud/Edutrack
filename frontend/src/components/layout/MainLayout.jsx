@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import Header from "./Header";
+import Header from "./header";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import { useAuth } from "../../Context/AuthContext";

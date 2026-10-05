@@ -3,7 +3,7 @@
 // nearly-identical modals - the specific status text/color is passed
 // in as a prop.
 
-import React from "react";
+
 import { AlertTriangle } from "lucide-react";
 
 function ConfirmStatusModal({

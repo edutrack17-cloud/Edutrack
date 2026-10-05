@@ -10,7 +10,7 @@
 //   - onChange receives the new value directly (not a fake { target } event)
 //   - a `disabled` prop, for while the sections are still loading
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 const triggerClass =

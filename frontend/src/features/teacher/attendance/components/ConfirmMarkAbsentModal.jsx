@@ -2,7 +2,7 @@
 // icon, text-2xl title, blue Confirm + red Cancel side by side) so the two
 // confirmation dialogs read as one family.
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
 function ConfirmMarkAbsentModal({ isOpen, onClose, onConfirm, sectionName = "" }) {

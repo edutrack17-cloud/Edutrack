@@ -1,5 +1,5 @@
 // features/teacher/Promote-Student/components/PromoteStudentFilters.jsx
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 const LEVEL_ALL = { value: "", label: "All Grade Levels", textClass: "text-gray-700" };

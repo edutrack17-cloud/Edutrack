@@ -4,7 +4,7 @@
 // Purely presentational: the page owns the current page and what happens
 // in onPageChange.
 
-import React from "react";
+
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 function Pagination({ currentPage, totalPages, onPageChange }) {

@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { timeInAttendance } from "./Attendaceserviceguard";
 import Pagination from "./components/Pagination";
 import AttendanceStatus from "./components/GuardAttendanceStatus";
-import Header from "../../../components/layout/Header"; // TODO: adjust to wherever Header.jsx actually lives relative to this file
+import Header from "../../../components/layout/header"; // TODO: adjust to wherever Header.jsx actually lives relative to this file
 import Footer from "../../../components/layout/Footer"; // TODO: adjust to wherever Footer.jsx actually lives relative to this file
-import { useAuth } from "../../../Context/AuthContext"; // TODO: adjust to wherever AuthContext actually lives relative to this file
+import { useAuth } from "../../../Context/AuthContext"; // TODO: adjust to wherever Authcontext actually lives relative to this file
 
 // 6 per page (not 5) so the card grid below fills a clean 3x2 layout
 // on desktop instead of leaving an odd card dangling on its own row.

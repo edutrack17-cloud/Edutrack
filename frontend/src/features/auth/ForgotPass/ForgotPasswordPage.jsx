@@ -1,4 +1,4 @@
-import React from "react";
+
 import ForgotPasswordForm from "./components/ForgotPasswordForm";
 import logo from "../../../assets/images/logo.jpg";
 import loginBg from "../../../assets/images/Loginpic.jpeg";

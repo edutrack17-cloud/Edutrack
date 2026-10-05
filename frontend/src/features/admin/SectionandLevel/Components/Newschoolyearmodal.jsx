@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import { GRADE_LEVEL_OPTIONS, getSections } from "../Sectionlevelservice";

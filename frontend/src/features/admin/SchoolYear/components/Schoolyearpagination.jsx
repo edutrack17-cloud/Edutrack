@@ -1,4 +1,4 @@
-import React from "react";
+
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 function SchoolYearPagination({ currentPage, totalPages, onPageChange }) {

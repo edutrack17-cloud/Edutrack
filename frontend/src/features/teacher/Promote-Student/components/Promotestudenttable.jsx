@@ -4,7 +4,7 @@
 // table looks like it belongs to the same app as the Section Level page.
 // Selection (checkbox column, canBulkSelect) is unique to this table and
 // kept as-is; only the styling was brought in line.
-import React from "react";
+
 
 const thClass =
   "truncate px-3 py-2 text-center text-base font-semibold text-white sm:px-4";

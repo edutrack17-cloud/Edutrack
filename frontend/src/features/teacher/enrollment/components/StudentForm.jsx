@@ -1,4 +1,4 @@
-import React from "react";
+
 import { ChevronDown, Rss } from "lucide-react";
 import Input from "../../../../components/ui/Input";
 import { MIN_AGE_BY_LEVEL } from "../enrollmentSchema";

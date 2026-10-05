@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, XCircle, X } from "lucide-react";
 
 // 3s gives enough time to actually read the message (2s was cutting off

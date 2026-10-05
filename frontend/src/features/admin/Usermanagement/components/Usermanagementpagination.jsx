@@ -1,4 +1,4 @@
-import React from "react";
+
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Same pagination chrome as Sectionlevelpagination.jsx, for visual consistency across admin list pages

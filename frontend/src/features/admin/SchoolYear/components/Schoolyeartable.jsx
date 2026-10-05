@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MoreHorizontal, Pencil, Archive, Hourglass, CircleCheck, Lock } from "lucide-react";
 
 // Same compact padding/text-scale as Sectiontable.jsx's thClass/tdClass

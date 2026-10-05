@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { GRADE_LEVEL_OPTIONS } from "../Sectionlevelservice";
 
