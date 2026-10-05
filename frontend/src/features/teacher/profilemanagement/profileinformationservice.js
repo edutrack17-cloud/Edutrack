@@ -9,7 +9,7 @@ import {
   getAccessToken,
   clearTokens,
   refreshAccessToken,
-} from "./authService";
+} from "../../auth/authService";
 
 const API_ROOT = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
 const API_BASE_URL = `${API_ROOT}/user`;
