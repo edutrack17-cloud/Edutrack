@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { timeInAttendance } from "./Attendaceserviceguard";
-import Pagination from "./components/Pagination";
+import Pagination from "./components/pagination";
 import AttendanceStatus from "./components/GuardAttendanceStatus";
 import Header from "../../../components/layout/header"; // TODO: adjust to wherever Header.jsx actually lives relative to this file
 import Footer from "../../../components/layout/Footer"; // TODO: adjust to wherever Footer.jsx actually lives relative to this file

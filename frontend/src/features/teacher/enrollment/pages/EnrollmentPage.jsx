@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import StudentFilters from "../components/StudentFilters";
-import SearchInput from "../components/SearchInput";
+import SearchInput from "../components/Searchinput";
 import Pagination from "../components/Pagination";
 import StudentTable from "../components/StudentTable";
 import EnrollStudentModal from "../components/EnrollStudentModal";

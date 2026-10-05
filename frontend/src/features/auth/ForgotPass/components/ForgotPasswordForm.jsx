@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { User, Lock, Loader2 } from "lucide-react";
 
 import Input from "../../../../components/ui/Input";
-import Button from "../../../../components/ui/Button";
+import Button from "../../../../components/ui/button";
 import OtpInput from "./Otpinput";
 import {
   requestOtpSchema,
