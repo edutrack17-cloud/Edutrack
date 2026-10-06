@@ -74,6 +74,7 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password/request",
                                 "/api/auth/forgot-password/verify"
                         ).permitAll()
+                        .requestMatchers("/api/health/keepalive").permitAll()
                         .requestMatchers("/api/user/createTeacher").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
