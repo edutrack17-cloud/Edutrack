@@ -41,7 +41,7 @@ const STATUS_OPTIONS = [
 // Same trigger/wrapper/list styling as the Enrollment page's StudentFilters,
 // so both filter bars look and behave identically.
 const triggerClass =
-  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-semibold sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
 const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-32";
 
 function useClickOutside(isOpen, ref, onClose) {
@@ -103,7 +103,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperCl
       <button
         type="button"
         onClick={handleToggle}
-        className={`${triggerClass} text-gray-700`}
+        className={`${triggerClass} ${selected.textClass || "text-gray-700"}`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
@@ -111,7 +111,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperCl
         <span className="truncate" title={selected.label}>{selected.label}</span>
         <ChevronDown
           size={16}
-          className={`shrink-0 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -127,7 +127,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperCl
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal text-gray-700 transition hover:bg-gray-100 ${isSelected ? "bg-gray-100 font-medium" : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
                 >
                   {option.label}
                   {isSelected && <Check size={14} />}

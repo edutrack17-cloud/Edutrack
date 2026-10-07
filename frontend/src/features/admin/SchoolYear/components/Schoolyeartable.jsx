@@ -59,18 +59,18 @@ const STATUS_ACTIONS = {
 // Closed year get bounced back to Planning/Active, which doesn't make
 // sense for a year that has already run its course.
 //
-// This is the BASE map - "archived" is always offered from Planning,
-// but "active" is added back in per-row (see availableStatuses below)
-// only when there's currently no Active school year at all. That keeps
+// This is the BASE map - Planning has no base transitions, and "active"
+// is added back in per-row (see availableStatuses below) only when
+// there's currently no Active school year at all. That keeps
 // "Mark Active" from ever showing up as a dead-end disabled option -
 // it's either a real, clickable action or it isn't shown at all.
-//   Planning -> Archive always; -> Active only when nothing else is Active
+//   Planning -> Active only, and only when nothing else is Active
 //   Active   -> Closed only (backend rejects archiving an Active year -
 //               ArchiveNotAllowed - so it must be Closed first)
 //   Closed   -> Archive only
 //   Archived -> nothing here (would need a dedicated restore action)
 const ALLOWED_TRANSITIONS = {
-  planning: ["archived"],
+  planning: [],
   active: ["closed"],
   closed: ["archived"],
   archived: [],
