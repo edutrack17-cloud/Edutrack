@@ -30,7 +30,7 @@ function AttendanceSearchInput({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className={`h-11 w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 ${value ? "pr-8" : "pr-3"} text-base font-normal text-gray-700 shadow-sm outline-none transition-colors placeholder:text-gray-400 focus:border-primary sm:h-9`}
+        className={`h-11 w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 ${value ? "pr-8" : "pr-3"} text-base font-normal text-ellipsis text-gray-700 shadow-sm outline-none transition-colors placeholder:text-gray-400 focus:border-primary sm:h-9 sm:text-sm`}
       />
 
       {value && (

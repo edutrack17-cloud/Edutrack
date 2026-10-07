@@ -531,8 +531,8 @@ function Sectionlevelpage() {
             The [&>div] / [&>div>div] classes restyle Sectionlevelfilters' root and its dropdowns from here, so that
             component doesn't need to change. */}
         <div className="@container relative z-10">
-          <div className="flex flex-col gap-3 @min-[40rem]:flex-row @min-[40rem]:flex-wrap @min-[40rem]:items-center">
-            <div className="min-w-0 [&>div]:grid [&>div]:grid-cols-2 @min-[40rem]:[&>div]:flex @min-[40rem]:[&>div]:flex-wrap [&>div>div]:w-full [&>div>div]:min-w-0 @min-[40rem]:[&>div>div]:w-fit @min-[40rem]:min-w-50 @min-[40rem]:[&>div>div]:max-w-[16rem] @min-[40rem]:[&>div>div]:flex-none">
+          <div className="flex flex-col gap-3 @min-[40rem]:flex-row @min-[40rem]:items-center @min-[68rem]:gap-2 @max-[68rem]:flex-wrap">
+            <div className="min-w-0 [&>div]:grid [&>div]:grid-cols-2 @min-[40rem]:[&>div]:flex @max-[68rem]:[&>div]:flex-wrap @min-[68rem]:[&>div]:gap-2 [&>div>div]:w-full [&>div>div]:min-w-0 @min-[40rem]:[&>div>div]:w-fit @min-[40rem]:min-w-50 @min-[40rem]:[&>div>div]:max-w-[16rem] @min-[40rem]:[&>div>div]:flex-initial">
               <Sectionlevelfilters
                 gradeLevel={gradeLevel}
                 status={status}
@@ -549,8 +549,8 @@ function Sectionlevelpage() {
               />
             </div>
 
-            <div className="flex flex-col gap-3 @min-[40rem]:flex-1 @min-[40rem]:basis-0 @min-[40rem]:flex-row @min-[40rem]:items-center">
-              <div className="w-full @min-[40rem]:min-w-40 @min-[40rem]:flex-1 [&_input]:w-full">
+            <div className="flex flex-col gap-3 @min-[40rem]:flex-1 @min-[40rem]:basis-0 @min-[40rem]:flex-row @min-[40rem]:items-center @min-[68rem]:gap-2">
+              <div className="w-full @min-[40rem]:min-w-52 @min-[40rem]:flex-1 [&_input]:w-full">
                 <Sectionlevelsearchinput
                   value={search}
                   onChange={handleSearchChange}
@@ -563,7 +563,7 @@ function Sectionlevelpage() {
                 <button
                   type="button"
                   onClick={handleOpenAdd}
-                  className="flex h-11 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:h-9 @min-[40rem]:w-auto @min-[40rem]:text-sm"
+                  className="flex h-11 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:h-9 @min-[40rem]:w-auto @min-[40rem]:px-2.5 @min-[40rem]:text-sm"
                 >
                   <Plus size={15} strokeWidth={2.5} />
                   Add Section
@@ -572,7 +572,7 @@ function Sectionlevelpage() {
                 <button
                   type="button"
                   onClick={handleOpenNewSchoolYear}
-                  className="flex h-11 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:h-9 @min-[40rem]:w-auto @min-[40rem]:text-sm"
+                  className="flex h-11 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:h-9 @min-[40rem]:w-auto @min-[40rem]:px-2.5 @min-[40rem]:text-sm"
                 >
                   <CalendarSync size={15} strokeWidth={2.5} />
                   New School Year

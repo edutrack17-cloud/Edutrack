@@ -12,6 +12,7 @@ function OtpInput({
   onChange,
   onBlur,
   name = "otp",
+  label,
   error,
   touched,
   disabled,
@@ -83,11 +84,26 @@ function OtpInput({
 
   return (
     <div>
+      {label && (
+        // htmlFor={name} points at the first box (it carries id={name}).
+        // Same classes as the label in <Input /> so both look identical.
+        <label
+          htmlFor={name}
+          className="mb-1 block text-sm font-semibold text-primary"
+        >
+          {label}
+        </label>
+      )}
+
       <div className="flex justify-between gap-2" onPaste={handlePaste}>
         {digits.map((digit, index) => (
           <input
             key={index}
-            ref={(el) => (inputRefs.current[index] = el)}
+            // Braces on purpose: the callback must not return a value
+            // (React 19 treats a returned value as a cleanup function).
+            ref={(el) => {
+              inputRefs.current[index] = el;
+            }}
             id={index === 0 ? name : undefined}
             name={`${name}-${index}`}
             type="text"

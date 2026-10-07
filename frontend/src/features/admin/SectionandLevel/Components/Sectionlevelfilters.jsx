@@ -17,7 +17,7 @@ const GRADE_LEVEL_MENU_OPTIONS = [GRADE_LEVEL_ALL, ...GRADE_LEVEL_OPTIONS];
 // Shared visual language for both dropdown triggers so radius, height,
 // weight, and icon/rotation behavior are identical between the two filters.
 const triggerClass =
-  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-sm font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:h-9";
+  "flex h-11 w-full items-center justify-between gap-1.5 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 text-left text-sm font-medium outline-none cursor-pointer transition-colors hover:border-gray-300 sm:h-9";
 const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-initial sm:w-34";
 
 // School Year gets its own (wider) width since "All School Years" is
@@ -89,7 +89,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, widthClas
       <button
         type="button"
         onClick={handleToggle}
-        className={`${triggerClass} ${selected.textClass || "text-gray-700"}`}
+        className={`${triggerClass} text-gray-700`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
@@ -119,7 +119,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, widthClas
         )}
         <ChevronDown
           size={16}
-          className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
+          className={`shrink-0 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -138,7 +138,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, widthClas
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition text-gray-700 ${option.hoverClass === undefined ? "hover:bg-gray-100" : option.hoverClass} ${isSelected ? "bg-gray-100 font-medium" : ""}`}
                 >
                   {option.label}
                   {isSelected && <Check size={14} />}
@@ -244,7 +244,7 @@ function Sectionlevelfilters({
           ariaLabel="Filter by teacher"
           onOpen={onTeacherDropdownOpen}
           widthClass={teacherWidthClass}
-          labelWidthClass="w-[7.5rem]"
+          labelWidthClass="w-24"
         />
       )}
     </div>

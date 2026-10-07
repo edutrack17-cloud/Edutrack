@@ -42,7 +42,7 @@ const STATUS_OPTIONS = [
 // so both filter bars look and behave identically.
 const triggerClass =
   "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
-const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-32";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -103,7 +103,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperCl
       <button
         type="button"
         onClick={handleToggle}
-        className={`${triggerClass} ${selected.textClass || "text-gray-700"}`}
+        className={`${triggerClass} text-gray-700`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={ariaLabel}
@@ -111,7 +111,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperCl
         <span className="truncate" title={selected.label}>{selected.label}</span>
         <ChevronDown
           size={16}
-          className={`shrink-0 transition-transform ${selected.textClass || "text-gray-700"} ${isOpen ? "rotate-180" : ""}`}
+          className={`shrink-0 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -127,7 +127,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperCl
                 <button
                   type="button"
                   onClick={() => handleSelect(option.value)}
-                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal transition ${option.textClass || "text-gray-700"} ${isSelected ? `${option.selectedBgClass || "bg-gray-100"} font-medium` : ""}`}
+                  className={`flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-2 text-left text-sm font-normal text-gray-700 transition hover:bg-gray-100 ${isSelected ? "bg-gray-100 font-medium" : ""}`}
                 >
                   {option.label}
                   {isSelected && <Check size={14} />}
@@ -241,14 +241,14 @@ function AttendaceFilters({
   }, [level, role, userId, refreshKey]);
 
   return (
-    <div className="flex flex-wrap items-center gap-3 sm:gap-2">
+    <div className="flex flex-wrap items-center gap-3 sm:shrink-0 sm:flex-nowrap sm:gap-2">
       <FilterDropdown
         options={levelOptions}
         value={level}
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
         onOpen={handleDropdownOpen}
-        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-36"
       />
       <FilterDropdown
         options={sectionOptions}
@@ -256,7 +256,7 @@ function AttendaceFilters({
         onChange={onSectionChange}
         ariaLabel="Filter by section"
         onOpen={handleDropdownOpen}
-        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-32"
       />
       <FilterDropdown options={STATUS_OPTIONS} value={status} onChange={onStatusChange} ariaLabel="Filter by status" />
     </div>

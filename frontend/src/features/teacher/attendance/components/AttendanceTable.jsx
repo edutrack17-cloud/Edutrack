@@ -32,7 +32,7 @@ function ActionIconButton({ icon: Icon, label, onClick, disabled, enabledClass, 
       disabled={disabled}
       aria-label={label}
       title={disabled ? disabledTitle : label}
-      className={`flex items-center justify-center rounded-md p-1.5 transition ${
+      className={`flex items-center justify-center rounded-md p-2 transition sm:p-1.5 ${
         disabled
           ? "cursor-not-allowed text-gray-300"
           : `cursor-pointer ${enabledClass}`
@@ -155,19 +155,22 @@ function AttendanceTable({
   });
 
   return (
+    <>
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
-      <table className="w-full min-w-4xl table-fixed border-collapse">
-        {/* Widths tuned for a ~980px card: LRN/RFID kept just wide enough
-            for their digits, Name gets the most room, Action has space
-            for up to three icon buttons. */}
+      <table className="w-full min-w-3xl table-fixed border-collapse">
+        {/* min-w-3xl (768px) is the floor before the wrapper scrolls
+            sideways, like Promote's table does at min-w-160. Widths are
+            tuned so a 12-digit LRN, the Status time range, and up to
+            three Action icons still fit at that floor; Name gets the rest
+            and truncates. */}
         <colgroup>
-          <col className="w-[13%]" />
-          <col className="w-[11%]" />
-          <col className="w-[22%]" />
+          <col className="w-[15%]" />
+          <col className="w-[10%]" />
+          <col className="w-[20%]" />
           <col className="w-[9%]" />
           <col className="w-[12%]" />
-          <col className="w-[18%]" />
-          <col className="w-[15%]" />
+          <col className="w-[17%]" />
+          <col className="w-[17%]" />
         </colgroup>
 
         <thead className="bg-primary">
@@ -240,6 +243,15 @@ function AttendanceTable({
         </tbody>
       </table>
     </div>
+
+    {/* Same hint Enrollment's StudentTable shows under its table - on a
+        phone the 7 columns don't fit, so the table scrolls sideways. */}
+    {filteredRecords.length > 0 && (
+      <p className="text-center text-sm text-gray sm:hidden">
+        Swipe the table sideways to see more columns
+      </p>
+    )}
+    </>
   );
 }
 

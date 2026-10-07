@@ -88,6 +88,9 @@ function ForgotPasswordForm() {
       setResendNotice("");
       try {
         await resetPasswordWithOtp(username, values.otp, values.newPassword);
+        // Done - stop the resend countdown so it doesn't keep ticking.
+        clearInterval(cooldownIntervalRef.current);
+        setResendCooldown(0);
         setStep("done");
       } catch (error) {
         helpers.setStatus(getResetErrorMessage(error));
@@ -118,7 +121,11 @@ function ForgotPasswordForm() {
   });
 
   async function handleResendOtp() {
-    if (resendCooldown > 0 || isResending) return;
+    // Also blocked while the reset is submitting: a new code would invalidate
+    // the one that's currently being verified.
+    if (resendCooldown > 0 || isResending || resetPasswordForm.isSubmitting) {
+      return;
+    }
 
     setIsResending(true);
     setResendNotice("");
@@ -140,6 +147,8 @@ function ForgotPasswordForm() {
   // The backend never says whether a username exists, so a typo in step 1
   // looks exactly like success. Give the user a way back.
   function handleWrongUsername() {
+    if (isResending || resetPasswordForm.isSubmitting) return;
+
     clearInterval(cooldownIntervalRef.current);
     setResendCooldown(0);
     setResendNotice("");
@@ -151,6 +160,9 @@ function ForgotPasswordForm() {
   // This is a UX gate only - the code is really checked by the backend when
   // "Reset Password" is submitted (/verify does OTP + new password in one call).
   const isOtpComplete = /^\d{6}$/.test(resetPasswordForm.values.otp);
+
+  // Anything that would clash with an in-flight request.
+  const isBusy = isResending || resetPasswordForm.isSubmitting;
 
   if (step === "request") {
     return (
@@ -166,6 +178,7 @@ function ForgotPasswordForm() {
           id="username"
           name="username"
           type="text"
+          autoComplete="username"
           placeholder="Username"
           value={requestForm.values.username}
           onChange={requestForm.handleChange}
@@ -241,6 +254,7 @@ function ForgotPasswordForm() {
               id="newPassword"
               name="newPassword"
               type="password"
+              autoComplete="new-password"
               placeholder="At least 8 characters"
               value={resetPasswordForm.values.newPassword}
               onChange={resetPasswordForm.handleChange}
@@ -256,6 +270,7 @@ function ForgotPasswordForm() {
               id="confirmNewPassword"
               name="confirmNewPassword"
               type="password"
+              autoComplete="new-password"
               placeholder="Re-enter password"
               value={resetPasswordForm.values.confirmNewPassword}
               onChange={resetPasswordForm.handleChange}
@@ -277,7 +292,7 @@ function ForgotPasswordForm() {
 
         <Button
           type="submit"
-          disabled={!isOtpComplete || resetPasswordForm.isSubmitting}
+          disabled={!isOtpComplete || isBusy}
           className="w-full bg-primary text-white hover:bg-sky-700 disabled:opacity-70 flex items-center justify-center gap-2"
         >
           {resetPasswordForm.isSubmitting ? (
@@ -291,8 +306,8 @@ function ForgotPasswordForm() {
           <button
             type="button"
             onClick={handleResendOtp}
-            disabled={resendCooldown > 0 || isResending}
-            className="text-gray-900 underline disabled:text-gray disabled:no-underline"
+            disabled={resendCooldown > 0 || isBusy}
+            className="text-primary hover:underline disabled:text-gray disabled:no-underline"
           >
             {resendCooldown > 0
               ? `Resend code in ${resendCooldown}s`
@@ -304,7 +319,8 @@ function ForgotPasswordForm() {
           <button
             type="button"
             onClick={handleWrongUsername}
-            className="text-sm text-primary hover:underline"
+            disabled={isBusy}
+            className="text-sm text-primary hover:underline disabled:text-gray disabled:no-underline"
           >
             Change username
           </button>

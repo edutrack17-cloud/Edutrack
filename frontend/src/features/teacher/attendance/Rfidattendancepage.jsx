@@ -977,7 +977,7 @@ function RFIDAttendancePage() {
       </div>
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto rounded-2xl bg-white p-4 shadow-md sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:flex-nowrap sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-nowrap sm:items-center sm:gap-4">
           <AttendaceFilters
             level={level}
             section={section}
@@ -1015,7 +1015,7 @@ function RFIDAttendancePage() {
               sm: everything stacks. */}
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-1 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
             <AttendanceSearchInput
-              className="w-full sm:min-w-52 sm:max-w-2xl sm:flex-1"
+              className="w-full sm:min-w-48 sm:max-w-2xl sm:flex-1"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search LRN or Name"
