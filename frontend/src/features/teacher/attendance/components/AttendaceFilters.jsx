@@ -8,7 +8,7 @@ const DEFAULT_LEVEL_OPTION = { value: "", label: "Grade Level", textClass: "text
 // same fetch path (see loadLevels' `role !== "teacher"` branch below)
 // but doesn't manage the full roster the way admin does, so it keeps
 // the plain "Grade Level" placeholder instead of this one.
-const ALL_LEVELS_DEFAULT_OPTION = { value: "", label: "All Grade Level", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
+const ALL_LEVELS_DEFAULT_OPTION = { value: "", label: "All Grade Levels", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
 
 const GRADE_LEVEL_CHOICES = [
   { value: "Grade 4", label: "Grade 4", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
@@ -25,7 +25,7 @@ function buildAllLevelOptions(role) {
 const DEFAULT_SECTION_OPTION = { value: "", label: "Section", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
 // Same reasoning as ALL_LEVELS_DEFAULT_OPTION above, for the Section
 // dropdown - admin only.
-const ALL_SECTIONS_DEFAULT_OPTION = { value: "", label: "All Section", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
+const ALL_SECTIONS_DEFAULT_OPTION = { value: "", label: "All Sections", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" };
 
 function getSectionDefaultOption(role) {
   return role === "admin" ? ALL_SECTIONS_DEFAULT_OPTION : DEFAULT_SECTION_OPTION;
@@ -41,8 +41,8 @@ const STATUS_OPTIONS = [
 // Same trigger/wrapper/list styling as the Enrollment page's StudentFilters,
 // so both filter bars look and behave identically.
 const triggerClass =
-  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-semibold sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
-const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-32";
+  "font-sans flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 bg-white px-2.5 text-left text-sm font-medium sm:h-9 outline-none cursor-pointer transition-colors shadow-sm focus-visible:border-primary";
+const wrapperClass = "relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-34";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
@@ -118,7 +118,7 @@ function FilterDropdown({ options, value, onChange, ariaLabel, onOpen, wrapperCl
       {isOpen && (
         <ul
           role="listbox"
-          className="absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="font-sans absolute z-20 mt-1 max-h-60 w-max min-w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           {options.map((option) => {
             const isSelected = option.value === selected.value;
@@ -248,7 +248,7 @@ function AttendaceFilters({
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
         onOpen={handleDropdownOpen}
-        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-36"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44"
       />
       <FilterDropdown
         options={sectionOptions}
@@ -256,7 +256,6 @@ function AttendaceFilters({
         onChange={onSectionChange}
         ariaLabel="Filter by section"
         onOpen={handleDropdownOpen}
-        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-32"
       />
       <FilterDropdown options={STATUS_OPTIONS} value={status} onChange={onStatusChange} ariaLabel="Filter by status" />
     </div>

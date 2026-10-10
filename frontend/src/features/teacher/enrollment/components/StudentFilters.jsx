@@ -174,7 +174,7 @@ function StudentFilters({
         value={level}
         onChange={onLevelChange}
         ariaLabel="Filter by grade level"
-        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-44"
+        wrapperClassName="relative min-w-[8.5rem] flex-1 sm:min-w-0 sm:flex-none sm:w-40"
       />
 
       <FilterDropdown
@@ -208,7 +208,7 @@ function StudentFilters({
           onClick={onToggleSelectAll}
           disabled={!canBulkSelect}
           title={selectAllTitle}
-          className="h-11 w-full cursor-pointer sm:w-36 sm:h-9 whitespace-nowrap rounded-md border border-gray-300 bg-white px-4 text-base font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
+          className="h-11 w-full cursor-pointer sm:w-32 sm:h-9 whitespace-nowrap rounded-md border border-gray-300 bg-white px-4 text-base font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
         >
           {allSelected ? "Deselect All" : "Select All"}
         </button>

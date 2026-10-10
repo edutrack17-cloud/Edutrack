@@ -435,7 +435,7 @@ function EnrollmentPage() {
   return (
     <>
       <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-4">
           <StudentFilters
             level={level}
             section={section}
@@ -462,7 +462,7 @@ function EnrollmentPage() {
 
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
             <SearchInput
-              className="w-full sm:w-64"
+              className="w-full sm:w-52"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
