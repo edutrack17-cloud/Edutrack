@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { timeInAttendance } from "./Attendaceserviceguard";
+import { timeInAttendance, fetchTodaysAttendanceUpdates } from "./Attendaceserviceguard";
 import Pagination from "./components/pagination";
 import AttendanceStatus from "./components/GuardAttendanceStatus";
 import Header from "../../../components/layout/header"; // TODO: adjust to wherever Header.jsx actually lives relative to this file
@@ -49,6 +49,57 @@ function loadStoredTaps() {
 // clear out anyone's already-stored taps.
 function formatGradeAndSection(value) {
   return (value ?? "").replace(/_/g, " ");
+}
+
+// HOW THE GUARD SEES WHAT THE TEACHER DID: the teacher's scanner is a
+// different login/browser, so nothing pushes its updates here. After a
+// student taps in class (on_school -> present) and later times out, the
+// only way this page learns about it is by asking the backend again
+// (GET /api/attendance), so it re-asks every STATUS_POLL_MS and patches
+// the matching card (matched by attendance id, which the gate tap
+// already returned) with the latest Status / Time in / Time out. Raise
+// this number if the backend rate limit gets tight; lower it if the
+// guard needs to see class taps faster.
+const STATUS_POLL_MS = 20_000;
+
+// Returns the SAME array when nothing changed so a poll that finds no
+// news doesn't re-render the cards or rewrite localStorage. Cards
+// restored from localStorage that predate this feature have no
+// status/timeOut yet, so their first poll counts as a change and fills
+// them in.
+function mergeAttendanceUpdates(taps, updates) {
+  const byId = new Map(updates.map((update) => [update.id, update]));
+  let changed = false;
+
+  const merged = taps.map((tap) => {
+    const update = byId.get(tap.id);
+    if (!update) return tap;
+    const nextTimeIn = update.timeIn || tap.timeIn;
+    if (
+      tap.status === update.status &&
+      tap.timeIn === nextTimeIn &&
+      tap.timeOut === update.timeOut
+    ) {
+      return tap;
+    }
+    changed = true;
+    return { ...tap, status: update.status, timeIn: nextTimeIn, timeOut: update.timeOut };
+  });
+
+  return changed ? merged : taps;
+}
+
+// The ONE status word a guard card shows, moving forward as the day goes:
+//   gate tap only                 -> "On School"
+//   teacher scanner confirmed     -> "Time in"
+//   timed out                     -> "Time out"
+// (Absent stays "Absent".) Cards saved before status tracking existed
+// have no status yet - they were all fresh "On School" taps.
+function getCardStatus(tap) {
+  if (tap.status === "Absent") return "Absent";
+  if (tap.timeOut) return "Time out";
+  if (tap.status === "Present") return "Time in";
+  return "On School";
 }
 
 // PAGE
@@ -115,13 +166,13 @@ function LiveClock() {
 //   3. Either scanner, end of day                  -> present -> timed
 //      out.
 //
-// "Today's Activity" below is built from taps made in THIS browser
-// session, not fetched from the backend - there's no GET endpoint for
-// "today's records" yet (see AttendanceController.java), so rather
-// than borrow the teacher account's mocked roster (a different
-// feature, different account, shouldn't share state), this just keeps
-// a running local list of successful tap-ins for the guard's own
-// reference during the shift.
+// "Today's Activity" below is a running local list of the successful
+// tap-ins made in THIS browser (so the list itself only ever contains
+// students who tapped at this gate). Each card's Status / Time in /
+// Time out is then kept current by polling GET /api/attendance (see
+// STATUS_POLL_MS above) - so once the student taps the teacher's
+// scanner (On School -> Present) and later times out, the same card
+// here updates too.
 //
 // UI matches the Figma kiosk design: "Today's Activity" renders as a
 // grid of cards (name, grade & section, time in) instead of a table -
@@ -133,12 +184,13 @@ function LiveClock() {
 //     mapAttendanceRecord only gets one pre-combined gradeAndSection
 //     string back from the API (see that file's comment), so there's
 //     nothing to split into two fields here.
-// Each card's bottom row places Status and Time in side by side,
-// centered with a small gap (not pushed to the edges), each with its
-// own label above the value so the two sides read symmetrically.
-// Status is always "On School" here since that's literally what a
-// successful gate tap sets, shown via the same AttendanceStatus badge
-// used on the teacher screen for a consistent look across both.
+// Each card's bottom row places Status, Time in and Time out side by
+// side, centered with a small gap (not pushed to the edges), each with
+// its own label above the value so the sides read symmetrically.
+// Status starts as "On School" (what a gate tap sets) and follows the
+// backend afterwards (Present / Absent), shown via the same
+// AttendanceStatus badge used on the teacher screen. Time out stays
+// "—" until the student is timed out.
 function GuardAttendancePage() {
   const [todaysTaps, setTodaysTaps] = useState(loadStoredTaps);
   const [activityPage, setActivityPage] = useState(1);
@@ -176,6 +228,74 @@ function GuardAttendancePage() {
       // still works, it just won't survive a refresh this time.
     }
   }, [todaysTaps]);
+
+  // Always-current copy of the list for the polling effect below, so the
+  // interval doesn't have to be torn down and recreated on every tap.
+  const todaysTapsRef = useRef(todaysTaps);
+  useEffect(() => {
+    todaysTapsRef.current = todaysTaps;
+  }, [todaysTaps]);
+
+  // Pulls the teacher-side updates (Present, time out) into the cards.
+  // Only taps that can still change are worth asking about - a card
+  // that already has a time out, or is marked Absent, is finished - and
+  // the fetch only walks back as far as the oldest unfinished tap (see
+  // fetchTodaysAttendanceUpdates), so the poll gets cheaper as the day
+  // goes on instead of re-downloading everything.
+  //
+  // DEPENDS ON: the guard role being allowed to call GET /api/attendance
+  // on the backend. If it's rejected (403) or missing (404/405), polling
+  // stops instead of retrying a request that will keep failing, and the
+  // cards simply stay on whatever the gate tap gave them.
+  useEffect(() => {
+    let ignore = false;
+    let isRefreshing = false;
+    let intervalId = null;
+
+    function stopPolling() {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshStatuses);
+    }
+
+    async function refreshStatuses() {
+      if (isRefreshing || document.hidden) return;
+
+      const pending = todaysTapsRef.current.filter(
+        (tap) => tap.status !== "Absent" && !tap.timeOut
+      );
+      if (pending.length === 0) return;
+
+      isRefreshing = true;
+      try {
+        const minId = Math.min(...pending.map((tap) => tap.id));
+        // GET /api/attendance
+        const updates = await fetchTodaysAttendanceUpdates({ minId });
+        if (ignore) return;
+        setTodaysTaps((prev) => mergeAttendanceUpdates(prev, updates));
+      } catch (error) {
+        if (error.status === 403 || error.status === 404 || error.status === 405) {
+          console.warn(
+            `GET /api/attendance returned ${error.status} for the guard account - ` +
+              "stopping the background refresh. Present / Time out from the teacher " +
+              "can't show up on the guard screen until the guard role is allowed to read it."
+          );
+          stopPolling();
+        } else {
+          console.error("Background refresh of guard attendance statuses failed:", error);
+        }
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    refreshStatuses();
+    intervalId = setInterval(refreshStatuses, STATUS_POLL_MS);
+    document.addEventListener("visibilitychange", refreshStatuses);
+    return () => {
+      ignore = true;
+      stopPolling();
+    };
+  }, []);
 
   // BUG FIX / HARDWARE QUIRK: some cheap USB HID RFID readers fire the
   // UID + Enter keystroke sequence TWICE for a single physical tap
@@ -360,7 +480,7 @@ function GuardAttendancePage() {
               <p className="text-sm text-gray-500">No taps recorded yet today.</p>
             </div>
           ) : (
-            <div className="mt-6 grid w-full flex-1 grid-cols-1 content-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-6 grid w-full flex-1 grid-cols-1 content-start gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {pagedTaps.map((tap) => (
                 <div
                   key={tap.id}
@@ -373,17 +493,12 @@ function GuardAttendancePage() {
                     {formatGradeAndSection(tap.gradeAndSection)}
                   </p>
 
-                  <div className="mt-6 flex w-full items-center justify-center gap-15">
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-gray-500">Status</p>
-                      <AttendanceStatus status="On School" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-success">Time in</p>
-                      <p className="text-xl font-bold text-gray-800">
-                        {tap.timeIn ? formatDisplayTime(tap.timeIn) : ""}
-                      </p>
-                    </div>
+                  {/* One centered status only - it changes from "On School" to
+                      "Time in" (teacher tap) to "Time out", instead of showing
+                      Status / Time in / Time out side by side. */}
+                  <div className="mt-6 flex w-full flex-col items-center justify-center">
+                    <p className="text-sm font-semibold text-gray-500">Status</p>
+                    <AttendanceStatus status={getCardStatus(tap)} />
                   </div>
                 </div>
               ))}

@@ -66,138 +66,140 @@ function Createusermodal({ isOpen, onClose, onSubmit }) {
           </h2>
         </div>
 
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
-          <h3 className="text-lg font-semibold text-primary">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <h3 className="mb-3 text-lg font-semibold text-primary">
             User Information
           </h3>
 
-          <div className="w-full">
-            <label className={labelClass}>Username</label>
-            <input
-              name="username"
-              value={formik.values.username}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              placeholder="william.henry"
-              className={inputClass(formik.touched.username && formik.errors.username)}
-            />
-            {formik.touched.username && formik.errors.username && (
-              <p className={errorClass}>{formik.errors.username}</p>
-            )}
-          </div>
-
-          <div className="w-full">
-            <label className={labelClass}>Password</label>
-            <div className="relative">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
+            <div className="w-full sm:col-span-2">
+              <label className={labelClass}>Username</label>
               <input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                value={formik.values.password}
+                name="username"
+                value={formik.values.username}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                placeholder="••••••••"
-                className={`${inputClass(formik.touched.password && formik.errors.password)} pr-9`}
+                placeholder="william.henry"
+                className={inputClass(formik.touched.username && formik.errors.username)}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+              {formik.touched.username && formik.errors.username && (
+                <p className={errorClass}>{formik.errors.username}</p>
+              )}
             </div>
-            {formik.touched.password && formik.errors.password && (
-              <p className={errorClass}>{formik.errors.password}</p>
-            )}
-          </div>
 
-          <div className="w-full">
-            <label className={labelClass}>Confirm Password</label>
-            <div className="relative">
+            <div className="w-full">
+              <label className={labelClass}>Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={formik.values.password}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  placeholder="••••••••"
+                  className={`${inputClass(formik.touched.password && formik.errors.password)} pr-9`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {formik.touched.password && formik.errors.password && (
+                <p className={errorClass}>{formik.errors.password}</p>
+              )}
+            </div>
+
+            <div className="w-full">
+              <label className={labelClass}>Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  value={formik.values.confirmPassword}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  placeholder="••••••••"
+                  className={`${inputClass(formik.touched.confirmPassword && formik.errors.confirmPassword)} pr-9`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {formik.touched.confirmPassword && formik.errors.confirmPassword && (
+                <p className={errorClass}>{formik.errors.confirmPassword}</p>
+              )}
+            </div>
+
+            <div className="w-full sm:col-span-2">
+              <label className={labelClass}>First Name</label>
               <input
-                type={showConfirmPassword ? "text" : "password"}
-                name="confirmPassword"
-                value={formik.values.confirmPassword}
+                name="firstName"
+                value={formik.values.firstName}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                placeholder="••••••••"
-                className={`${inputClass(formik.touched.confirmPassword && formik.errors.confirmPassword)} pr-9`}
+                placeholder="William"
+                className={inputClass(formik.touched.firstName && formik.errors.firstName)}
               />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword((prev) => !prev)}
-                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              >
-                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+              {formik.touched.firstName && formik.errors.firstName && (
+                <p className={errorClass}>{formik.errors.firstName}</p>
+              )}
             </div>
-            {formik.touched.confirmPassword && formik.errors.confirmPassword && (
-              <p className={errorClass}>{formik.errors.confirmPassword}</p>
-            )}
-          </div>
 
-          <div className="w-full">
-            <label className={labelClass}>First Name</label>
-            <input
-              name="firstName"
-              value={formik.values.firstName}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              placeholder="William"
-              className={inputClass(formik.touched.firstName && formik.errors.firstName)}
-            />
-            {formik.touched.firstName && formik.errors.firstName && (
-              <p className={errorClass}>{formik.errors.firstName}</p>
-            )}
-          </div>
+            <div className="w-full">
+              <label className={labelClass}>Middle Name</label>
+              <input
+                name="middleName"
+                value={formik.values.middleName}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                placeholder="Henry"
+                className={inputClass(formik.touched.middleName && formik.errors.middleName)}
+              />
+              {formik.touched.middleName && formik.errors.middleName && (
+                <p className={errorClass}>{formik.errors.middleName}</p>
+              )}
+            </div>
 
-          <div className="w-full">
-            <label className={labelClass}>Middle Name</label>
-            <input
-              name="middleName"
-              value={formik.values.middleName}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              placeholder="Henry"
-              className={inputClass(formik.touched.middleName && formik.errors.middleName)}
-            />
-            {formik.touched.middleName && formik.errors.middleName && (
-              <p className={errorClass}>{formik.errors.middleName}</p>
-            )}
-          </div>
+            <div className="w-full">
+              <label className={labelClass}>Last Name</label>
+              <input
+                name="lastName"
+                value={formik.values.lastName}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                placeholder="Dela Cruz"
+                className={inputClass(formik.touched.lastName && formik.errors.lastName)}
+              />
+              {formik.touched.lastName && formik.errors.lastName && (
+                <p className={errorClass}>{formik.errors.lastName}</p>
+              )}
+            </div>
 
-          <div className="w-full">
-            <label className={labelClass}>Last Name</label>
-            <input
-              name="lastName"
-              value={formik.values.lastName}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
-              placeholder="Dela Cruz"
-              className={inputClass(formik.touched.lastName && formik.errors.lastName)}
-            />
-            {formik.touched.lastName && formik.errors.lastName && (
-              <p className={errorClass}>{formik.errors.lastName}</p>
-            )}
-          </div>
-
-          <div className="w-full">
-            <label className={labelClass}>Contact Number</label>
-            <input
-              name="contactNumber"
-              value={formik.values.contactNumber}
-              onChange={handleContactNumberChange}
-              onBlur={formik.handleBlur}
-              placeholder="09xxxxxxxxx"
-              className={inputClass(formik.touched.contactNumber && formik.errors.contactNumber)}
-              maxLength={11}
-              inputMode="numeric"
-            />
-            {formik.touched.contactNumber && formik.errors.contactNumber && (
-              <p className={errorClass}>{formik.errors.contactNumber}</p>
-            )}
+            <div className="w-full sm:col-span-2">
+              <label className={labelClass}>Contact Number</label>
+              <input
+                name="contactNumber"
+                value={formik.values.contactNumber}
+                onChange={handleContactNumberChange}
+                onBlur={formik.handleBlur}
+                placeholder="09xxxxxxxxx"
+                className={inputClass(formik.touched.contactNumber && formik.errors.contactNumber)}
+                maxLength={11}
+                inputMode="numeric"
+              />
+              {formik.touched.contactNumber && formik.errors.contactNumber && (
+                <p className={errorClass}>{formik.errors.contactNumber}</p>
+              )}
+            </div>
           </div>
         </div>
 

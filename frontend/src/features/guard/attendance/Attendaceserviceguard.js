@@ -19,8 +19,20 @@ const guardAttendanceApi = createApiClient();
 // dateTimeOut, attendanceStatus, confirmed. No "rfid" field, and
 // gradeAndSection is one pre-combined string, not separate
 // gradeLevel/section.
+const STATUS_TO_LABEL = {
+  on_school: "On School",
+  present: "Present",
+  absent: "Absent",
+};
+
+// "2026-10-13T07:00:00" -> "07:00" (empty string when there's no value,
+// e.g. dateTimeOut is null until the student times out).
+function extractHHmm(datetime) {
+  const time = datetime ? datetime.split("T")[1] : "";
+  return time ? time.slice(0, 5) : "";
+}
+
 function mapAttendanceRecord(record) {
-  const timeIn = record.dateTimeIn ? record.dateTimeIn.split("T")[1] : "";
   return {
     id: record.attendanceId,
     name: record.studentName ?? "",
@@ -28,8 +40,19 @@ function mapAttendanceRecord(record) {
     // (underscore instead of space in the grade level part) - swap underscores
     // for spaces so it displays as "Grade 6 - Sampaguita".
     gradeAndSection: (record.gradeAndSection ?? "").replace(/_/g, " "),
-    timeIn: timeIn ? timeIn.slice(0, 5) : "", // "07:00:00" -> "07:00"
+    date: record.dateTimeIn ? record.dateTimeIn.split("T")[0] : "",
+    timeIn: extractHHmm(record.dateTimeIn), // "07:00:00" -> "07:00"
+    timeOut: extractHHmm(record.dateTimeOut),
+    // on_school -> "On School", present -> "Present", absent -> "Absent".
+    // A tap right after POST /api/attendance is always on_school; the
+    // teacher's scanner later moves it to present and sets timeOut.
+    status: STATUS_TO_LABEL[record.attendanceStatus] ?? record.attendanceStatus ?? "",
   };
+}
+
+function getLocalTodayString() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 
 // error is an axios error - error.response.data is already-parsed JSON
@@ -62,6 +85,49 @@ export async function timeInAttendance(rfid) {
   } catch (error) {
     throw buildAttendanceError(error);
   }
+}
+
+// GET /api/attendance - read-only lookup so the gate kiosk can show what
+// happened to a student AFTER their gate tap (teacher's scanner moved
+// them to Present, then later set a time out). Nothing pushes that to
+// this browser, so the page polls this.
+//
+// The response is a Spring Page<AttendanceResponse> (unwrap data.content)
+// with NO rfid / studentId field, so callers match rows by `id`
+// (attendanceId), which the gate tap already gave us.
+//
+// The backend caps the page size (~10 rows even if size=1000 is asked
+// for), so this walks pages NEWEST-first (sort=attendanceId,desc) and
+// stops as soon as it has gone past the oldest id the caller still cares
+// about (`minId` = smallest still-pending tap), reached a record from a
+// previous day, hit the last page, or hit `maxPages`. That keeps the
+// poll cheap once most taps are finished (timeOut set).
+export async function fetchTodaysAttendanceUpdates({ minId = 0, size = 1000, maxPages = 40 } = {}) {
+  const today = getLocalTodayString();
+  const all = [];
+
+  try {
+    for (let page = 0; page < maxPages; page += 1) {
+      const { data } = await guardAttendanceApi.get("/attendance", {
+        params: { size, page, sort: "attendanceId,desc" },
+      });
+      const content = Array.isArray(data?.content) ? data.content : [];
+      const mapped = content.map(mapAttendanceRecord);
+      all.push(...mapped);
+
+      const reachedOldDay = mapped.some((r) => r.date && r.date !== today);
+      const passedMinId = mapped.length > 0 && mapped.every((r) => r.id < minId);
+      const isLastPage = data?.last === true || page + 1 >= (data?.totalPages ?? 1);
+      if (reachedOldDay || passedMinId || isLastPage || content.length === 0) break;
+    }
+  } catch (error) {
+    const status = error.response?.status;
+    const err = new Error(`GET /api/attendance failed (${status})`);
+    err.status = status;
+    throw err;
+  }
+
+  return all;
 }
 
 export default guardAttendanceApi;
