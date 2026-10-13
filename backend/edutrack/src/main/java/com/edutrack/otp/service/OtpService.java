@@ -10,6 +10,10 @@ import com.edutrack.otp.exception.OtpNotFoundException;
 import com.edutrack.otp.repository.OtpTokenRepository;
 import com.edutrack.otp.util.OtpCodeGenerator;
 import com.edutrack.sms.dto.request.SmsRequest;
+import com.edutrack.sms.dto.response.SmsResponse;
+import com.edutrack.sms.entity.SmsLog;
+import com.edutrack.sms.enums.SmsStatus;
+import com.edutrack.sms.repository.SmsLogRepository;
 import com.edutrack.sms.service.SmsService;
 import com.edutrack.user.entity.User;
 import com.edutrack.user.repository.UserRepository;
@@ -32,15 +36,18 @@ public class OtpService {
     private final OtpTokenRepository otpTokenRepository;
     private final UserRepository userRepository;
     private final SmsService smsService;
+    private final SmsLogRepository smsLogRepository;
     private final PasswordEncoder passwordEncoder;
 
     public OtpService(OtpTokenRepository otpTokenRepository,
                       UserRepository userRepository,
                       SmsService smsService,
+                      SmsLogRepository smsLogRepository,
                       PasswordEncoder passwordEncoder) {
         this.otpTokenRepository = otpTokenRepository;
         this.userRepository = userRepository;
         this.smsService = smsService;
+        this.smsLogRepository = smsLogRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -72,7 +79,35 @@ public class OtpService {
 
         String message = "Your EduTrack verification code is " + rawCode
                 + ". Valid for 5 minutes. Do not share this code.";
-        smsService.sendSms(new SmsRequest(toE164(phone), message));
+
+        String phoneE164 = toE164(phone);
+
+        // Persist PENDING audit row first
+        SmsLog logEntry = new SmsLog();
+        logEntry.setStudentId(userId); // reuse column as "userId" for OTP context
+        logEntry.setRecipientPhone(phoneE164);
+        logEntry.setMessage(message);
+        logEntry.setStatus(SmsStatus.PENDING);
+        logEntry = smsLogRepository.save(logEntry);
+
+        try {
+            SmsResponse response = smsService.sendSms(new SmsRequest(phoneE164, message));
+
+            if (response.success()) {
+                logEntry.setStatus(SmsStatus.QUEUED);
+                logEntry.setProviderBatchId(response.batchId());
+                logEntry.setSentAt(LocalDateTime.now());
+            } else {
+                logEntry.setStatus(SmsStatus.FAILED);
+                logEntry.setErrorMessage(truncate(response.message(), 500));
+            }
+        } catch (Exception sendEx) {
+            logEntry.setStatus(SmsStatus.FAILED);
+            logEntry.setErrorMessage(truncate(sendEx.getMessage(), 500));
+            log.error("OTP SMS send failed for user {}: {}", userId, sendEx.getMessage());
+        }
+
+        smsLogRepository.save(logEntry);
 
         log.info("OTP issued for user {} purpose {}", userId, purpose);
     }
@@ -112,5 +147,10 @@ public class OtpService {
         if (digits.startsWith("0") && digits.length() == 11) return "+63" + digits.substring(1);
         if (digits.startsWith("9") && digits.length() == 10) return "+63" + digits;
         return "+" + digits;
+    }
+
+    private String truncate(String s, int max) {
+        if (s == null) return null;
+        return s.length() <= max ? s : s.substring(0, max);
     }
 }

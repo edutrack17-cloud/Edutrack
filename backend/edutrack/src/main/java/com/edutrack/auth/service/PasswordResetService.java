@@ -42,6 +42,9 @@ public class PasswordResetService {
      * Intentionally does NOT reveal whether the username exists — always returns
      * normally, even if the user is unknown or has no phone on file. The controller
      * always responds 202 Accepted.
+     *
+     * Admins ARE allowed to reset their own password through this flow, since
+     * this is the primary recovery path for the single/first administrator.
      */
     @Transactional
     public void requestReset(String username) {
@@ -53,12 +56,6 @@ public class PasswordResetService {
         }
 
         User user = maybeUser.get();
-
-        if (user.getUserRole() == com.edutrack.user.enums.UserRole.admin) {
-            // Admins should not use self-service reset; they are managed by other admins.
-            log.info("Forgot-password requested for admin '{}' — silently ignored", username);
-            return;
-        }
 
         if (user.getAccountStatus() == AccountStatus.disabled) {
             log.info("Forgot-password requested for disabled user '{}' — silently ignored", username);
@@ -84,12 +81,8 @@ public class PasswordResetService {
         // ↑ We deliberately return the same "invalid code" error for unknown usernames
         //   so an attacker can't distinguish "user missing" from "code wrong".
 
-        if (user.getUserRole() == com.edutrack.user.enums.UserRole.admin) {
-            throw new com.edutrack.otp.exception.OtpInvalidException();
-        }
-
         if (user.getAccountStatus() == AccountStatus.disabled) {
-            throw new com.edutrack.otp.exception.OtpInvalidException();
+            throw new OtpInvalidException();
         }
 
         // Verify — throws OtpInvalidException / OtpExpiredException / OtpMaxAttemptsException
