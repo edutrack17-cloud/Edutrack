@@ -62,10 +62,10 @@ function getLocalTodayString() {
 // AlreadyHasARecord/AssignmentNotFound) to the thrown Error, so callers
 // can branch on specific failures instead of only ever getting a
 // generic "request failed".
-function buildAttendanceError(error) {
+function buildAttendanceError(error, label = "POST /api/attendance") {
   const status = error.response?.status;
   const data = error.response?.data;
-  const message = (data && typeof data === "object" && data.message) || `POST /api/attendance failed (${status})`;
+  const message = (data && typeof data === "object" && data.message) || `${label} failed (${status})`;
   const err = new Error(message);
   err.status = status;
   return err;
@@ -87,6 +87,26 @@ export async function timeInAttendance(rfid) {
   }
 }
 
+// PATCH /api/attendance/time-out - the RFID "time out" tap (GUARD side).
+// Body: { rfid }. This is the student's second gate tap of the day
+// (leaving campus) - moved here from the teacher's classroom scanner,
+// which now only confirms Present (the teacher times students out by
+// hand instead). Returns the updated record with dateTimeOut set.
+//
+// Expected failures (backend exceptions, all plain 400s - only the
+// message text tells them apart, so callers match on it):
+//   NoClassromTap   - never tapped the classroom scanner (still On School)
+//   AlreadyTimedOut - already timed out today
+// plus 404 (AssignmentNotFound / no record) for an unknown card.
+export async function timeOutAttendance(rfid) {
+  try {
+    const { data } = await guardAttendanceApi.patch("/attendance/time-out", { rfid });
+    return mapAttendanceRecord(data);
+  } catch (error) {
+    throw buildAttendanceError(error, "PATCH /api/attendance/time-out");
+  }
+}
+
 // GET /api/attendance - read-only lookup so the gate kiosk can show what
 // happened to a student AFTER their gate tap (teacher's scanner moved
 // them to Present, then later set a time out). Nothing pushes that to
@@ -102,23 +122,46 @@ export async function timeInAttendance(rfid) {
 // about (`minId` = smallest still-pending tap), reached a record from a
 // previous day, hit the last page, or hit `maxPages`. That keeps the
 // poll cheap once most taps are finished (timeOut set).
-export async function fetchTodaysAttendanceUpdates({ minId = 0, size = 1000, maxPages = 40 } = {}) {
+//
+// FIX (guard cards only updating after F5):
+//   - `onPage(mappedRows)` is called after EACH page, so the UI can merge
+//     page 1 right away instead of waiting for the whole walk (up to 40
+//     requests, slowed further by the rate-limit throttle) to finish.
+//   - `pendingIds` (array of ids still waiting on the teacher) lets the
+//     walk stop the moment every one of them has been seen, instead of
+//     always walking back to the oldest stuck tap of the day.
+//   - `timeout` so one hung request can't leave the caller's
+//     "is refreshing" flag stuck forever (which silently killed polling
+//     until the page was reloaded).
+export async function fetchTodaysAttendanceUpdates({
+  minId = 0,
+  pendingIds = null,
+  onPage = null,
+  size = 1000,
+  maxPages = 40,
+} = {}) {
   const today = getLocalTodayString();
   const all = [];
+  const stillMissing = pendingIds ? new Set(pendingIds) : null;
 
   try {
     for (let page = 0; page < maxPages; page += 1) {
       const { data } = await guardAttendanceApi.get("/attendance", {
         params: { size, page, sort: "attendanceId,desc" },
+        timeout: 15_000,
       });
       const content = Array.isArray(data?.content) ? data.content : [];
       const mapped = content.map(mapAttendanceRecord);
       all.push(...mapped);
+      onPage?.(mapped);
+
+      if (stillMissing) mapped.forEach((r) => stillMissing.delete(r.id));
+      const foundAllPending = stillMissing !== null && stillMissing.size === 0;
 
       const reachedOldDay = mapped.some((r) => r.date && r.date !== today);
       const passedMinId = mapped.length > 0 && mapped.every((r) => r.id < minId);
       const isLastPage = data?.last === true || page + 1 >= (data?.totalPages ?? 1);
-      if (reachedOldDay || passedMinId || isLastPage || content.length === 0) break;
+      if (foundAllPending || reachedOldDay || passedMinId || isLastPage || content.length === 0) break;
     }
   } catch (error) {
     const status = error.response?.status;

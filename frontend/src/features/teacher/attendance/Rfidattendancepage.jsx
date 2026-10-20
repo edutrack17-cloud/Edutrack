@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  timeInAttendance,
   markAttendancePresent,
-  timeOutAttendance,
   closeAttendanceForSection,
   fetchStudentRecords,
   fetchAllStudentRecords,
@@ -252,21 +250,6 @@ function RFIDAttendancePage() {
 
   const TAP_COOLDOWN_MS = 3000;
   const lastTapRef = useRef({ rfid: null, atMs: 0 });
-
-  // FIX: an accidental double tap (student taps again because the
-  // confirmation wasn't fast enough, or the reader "bounces") could slip
-  // past TAP_COOLDOWN_MS above - which only blocks a repeat of the SAME
-  // rfid within 3s - and then get treated by recordTap as a genuine
-  // second/dismissal tap, silently firing a time-out right after the
-  // present/time-in had just succeeded. This tracks, per rfid, the
-  // moment THIS page last confirmed someone present/timed-in; recordTap
-  // checks it (recentlyConfirmed*Ref.current.get(rfid)) before ever
-  // assuming a second tap means "they're leaving." 15s comfortably
-  // covers a nervous re-tap while staying far shorter than any real gap
-  // before a legitimate dismissal tap.
-  const DOUBLE_TAP_GRACE_MS = 15000;
-  const recentlyConfirmedPresentRef = useRef(new Map());
-  const recentlyConfirmedTimedInRef = useRef(new Map());
 
   const [records, setRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -596,7 +579,7 @@ function RFIDAttendancePage() {
   // reloadRecords() after a tap doesn't refresh anything real; it just
   // wipes every row's attendance status back to null, including students
   // who were already marked present/timed-out earlier in the session.
-  // markAttendancePresent()/timeOutAttendance() already return the actual
+  // markAttendancePresent() already returns the actual
   // updated attendance record - that response IS the ground truth for
   // this student, so patch it directly into the matching row (matched by
   // rfid, which we already have from the tap itself) instead of
@@ -651,21 +634,13 @@ function RFIDAttendancePage() {
     );
   }
 
-  // timeOut() on the backend can fail with a plain 400 for two DIFFERENT
-  // reasons - NoClassromTap.java ("didn't tap their card on the classroom
-  // yet") and AlreadyTimedOut.java ("already marked as timed out") - and
-  // status code alone can't tell them apart, only the message text can
-  // (confirmed against both exception classes). Treating both as one
-  // generic "already-done" was wrong for the NoClassromTap case: a
-  // student who never got confirmed present in class isn't "done", they
-  // just haven't been tapped in yet.
-  function resolveTimeOutErrorAction(error) {
-    if (error.status !== 400) return "no-record";
-    const message = error.message || "";
-    if (/tap.*classroom/i.test(message)) return "no-classroom-tap";
-    return "already-done";
-  }
-
+  // The classroom scanner now ONLY confirms attendance (On School ->
+  // Present). Time out is no longer a tap on this page: the teacher does
+  // it by hand from the table's Manual Time Out icon, and the student's
+  // real "leaving campus" tap happens on the guard kiosk
+  // (Guardattendancepage.jsx -> PATCH /api/attendance/time-out). So a
+  // repeat tap here can never time anybody out - it just reports that
+  // the student is already present.
   async function recordTap(rfid) {
     const nowMs = Date.now();
     if (
@@ -676,102 +651,26 @@ function RFIDAttendancePage() {
     }
     lastTapRef.current = { rfid, atMs: nowMs };
 
-    // GUARD taps the gate scanner, not the classroom one - PATCH
-    // /api/attendance/present is TEACHER/ADMIN only on the backend
-    // (see AttendanceController.markAsPresent's @PreAuthorize), so a
-    // guard's tap has to go through POST /api/attendance (time-in)
-    // instead, falling back to time-out for a student's second gate tap
-    // of the day (leaving campus). timeInAttendance already existed in
-    // Attendanceservice.js but was never called from here - every guard
-    // tap used to go straight into the present/time-out branch below,
-    // so a student's very first tap of the day always resolved to
-    // "no-record" (present -> 404 no assignment/record, then time-out
-    // -> 404 same reason, and 404 isn't the 400 that "already-done"
-    // checks for).
-    if (role === "guard") {
-      try {
-        // POST /api/attendance (gate time-in)
-        const timedIn = await timeInAttendance(rfid);
-        recentlyConfirmedTimedInRef.current.set(rfid, nowMs);
-        setLastScan({ ...timedIn, action: "timed-in" });
-        applyAttendanceUpdate(rfid, timedIn);
-      } catch (timeInError) {
-        if (timeInError.status === 409) {
-          // AlreadyHasARecord - normally means the student is leaving
-          // campus (their second gate tap of the day). FIX: an
-          // accidental double tap right after the first one also lands
-          // here (same 409), so check whether THIS page just confirmed
-          // their time-in a moment ago before assuming that - otherwise
-          // a nervous re-tap immediately recorded a leaving-campus time
-          // seconds after the student arrived.
-          const confirmedAtMs = recentlyConfirmedTimedInRef.current.get(rfid);
-          if (confirmedAtMs && nowMs - confirmedAtMs < DOUBLE_TAP_GRACE_MS) {
-            setLastScan({ action: "already-present" });
-            return;
-          }
-          try {
-            // PATCH /api/attendance/time-out
-            const timedOut = await timeOutAttendance(rfid);
-            setLastScan({ ...timedOut, action: "timed-out" });
-            applyAttendanceUpdate(rfid, timedOut);
-          } catch (timeOutError) {
-            setLastScan({ action: resolveTimeOutErrorAction(timeOutError) });
-          }
-        } else {
-          setLastScan({ action: "no-record" });
-        }
-      }
-      return;
-    }
-
     try {
       // PATCH /api/attendance/present
       const markedPresent = await markAttendancePresent(rfid);
-      recentlyConfirmedPresentRef.current.set(rfid, nowMs);
       setLastScan({ ...markedPresent, action: "present" });
       applyAttendanceUpdate(rfid, markedPresent);
     } catch (presentError) {
       if (presentError.status === 404) {
         setLastScan({ action: "no-record" });
       } else if (presentError.status === 400 && /marked absent/i.test(presentError.message || "")) {
-        // AlreadyMarkedAbsent - deliberately NOT falling through to
-        // time-out here. The backend's timeOut() only guards against an
-        // on_school status and an existing dateTimeOut, not against an
-        // "absent" status, so treating this the same as "already
-        // present" and retrying time-out would silently clock an
-        // already-absent student back in with a dateTimeOut.
         setLastScan({ action: "already-absent" });
+      } else if (presentError.status === 400) {
+        // Backend rejecting a second "present" call - the student
+        // already has one today.
+        setLastScan({ action: "already-present" });
       } else {
-        // Anything else here is typically the backend rejecting a second
-        // "present" call because the student already has one today. FIX:
-        // this used to fall straight into attempting a time-out no
-        // matter how it got here, so an accidental double tap right
-        // after a successful Present silently fired a time-out a few
-        // seconds later - a student who'd just arrived would look like
-        // they'd already gone home. Only treat it as a real dismissal
-        // tap once enough time has passed since THIS page last confirmed
-        // them present; a repeat within DOUBLE_TAP_GRACE_MS is almost
-        // certainly the same accidental tap, not someone leaving seconds
-        // after arriving.
-        const confirmedAtMs = recentlyConfirmedPresentRef.current.get(rfid);
-        if (confirmedAtMs && nowMs - confirmedAtMs < DOUBLE_TAP_GRACE_MS) {
-          setLastScan({ action: "already-present" });
-          return;
-        }
-        try {
-          // PATCH /api/attendance/time-out
-          const timedOut = await timeOutAttendance(rfid);
-          setLastScan({ ...timedOut, action: "timed-out" });
-          applyAttendanceUpdate(rfid, timedOut);
-        } catch (timeOutError) {
-          setLastScan({ action: resolveTimeOutErrorAction(timeOutError) });
-        }
+        // 429 / network / 5xx - nothing changed, so don't claim the
+        // student is already present.
+        setLastScan({ action: "error" });
       }
     }
-    // No reloadRecords() here anymore - a failed tap (404/"already-done")
-    // changed nothing server-side, and a successful one is already
-    // reflected precisely above. If this rfid isn't on the currently
-    // filtered/paged view, there's nothing on-screen that needs updating.
   }
 
   function handleMarkRemainingAbsent() {
@@ -907,34 +806,19 @@ function RFIDAttendancePage() {
 
               {lastScan.action === "no-record" && (
                 <p className="mt-6 text-sm font-semibold text-gray-500">
-                  {role === "guard" ? "Card not recognized" : "No guard tap recorded yet today"}
+                  No guard tap recorded yet today
                 </p>
-              )}
-
-              {lastScan.action === "timed-in" && (
-                <>
-                  <p className="mt-6 text-sm font-semibold text-warning">Tapped In</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {formatDisplayTime(lastScan.timeIn)}
-                  </p>
-                </>
               )}
 
               {lastScan.action === "already-present" && (
                 <p className="mt-6 text-sm font-semibold text-success">
-                  {role === "guard" ? "Already tapped in today" : "Already marked Present today"}
+                  Already marked Present today
                 </p>
               )}
 
               {lastScan.action === "already-absent" && (
                 <p className="mt-6 text-sm font-semibold text-danger">
                   Already marked Absent today
-                </p>
-              )}
-
-              {lastScan.action === "no-classroom-tap" && (
-                <p className="mt-6 text-sm font-semibold text-warning">
-                  Hasn't tapped in class yet
                 </p>
               )}
 
@@ -947,25 +831,16 @@ function RFIDAttendancePage() {
                 </>
               )}
 
-              {lastScan.action === "timed-out" && (
-                <>
-                  <p className="mt-6 text-sm font-semibold text-danger">Time out</p>
-                  <p className="text-2xl font-bold text-gray-800">
-                    {formatDisplayTime(lastScan.timeOut)}
-                  </p>
-                </>
-              )}
-
-              {lastScan.action === "already-done" && (
-                <p className="mt-6 text-sm font-semibold text-gray-500">
-                  Already completed today
+              {lastScan.action === "error" && (
+                <p className="mt-6 text-sm font-semibold text-danger">
+                  Something went wrong, try again
                 </p>
               )}
             </>
           ) : (
             <p className="text-sm text-gray-500">
               <span className="block">Scan your RFID card</span>
-              <span className="block">to confirm or time out</span>
+              <span className="block">to confirm attendance</span>
             </p>
           )}
         </div>

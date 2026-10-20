@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { timeInAttendance, fetchTodaysAttendanceUpdates } from "./Attendaceserviceguard";
+import { timeInAttendance, timeOutAttendance, fetchTodaysAttendanceUpdates } from "./Attendaceserviceguard";
 import Pagination from "./components/pagination";
 import AttendanceStatus from "./components/GuardAttendanceStatus";
 import Header from "../../../components/layout/header"; // TODO: adjust to wherever Header.jsx actually lives relative to this file
@@ -60,7 +60,7 @@ function formatGradeAndSection(value) {
 // already returned) with the latest Status / Time in / Time out. Raise
 // this number if the backend rate limit gets tight; lower it if the
 // guard needs to see class taps faster.
-const STATUS_POLL_MS = 20_000;
+const STATUS_POLL_MS = 8_000;
 
 // Returns the SAME array when nothing changed so a poll that finds no
 // news doesn't re-render the cards or rewrite localStorage. Cards
@@ -163,8 +163,9 @@ function LiveClock() {
 //      side until step 2.
 //   2. Student taps the TEACHER's scanner in class -> on_school ->
 //      present.
-//   3. Either scanner, end of day                  -> present -> timed
-//      out.
+//   3. Student taps HERE again, end of day         -> present -> timed
+//      out. (The teacher's scanner no longer times anyone out; the
+//      teacher only has the manual Time Out icon in the table.)
 //
 // "Today's Activity" below is a running local list of the successful
 // tap-ins made in THIS browser (so the list itself only ever contains
@@ -250,15 +251,23 @@ function GuardAttendancePage() {
   useEffect(() => {
     let ignore = false;
     let isRefreshing = false;
+    let refreshStartedAt = 0;
+    let currentRun = 0;
     let intervalId = null;
+
+    // If a request ever hangs, don't let "isRefreshing" block every later
+    // poll forever (that's what made the cards stop updating until F5).
+    const MAX_REFRESH_LOCK_MS = 30_000;
 
     function stopPolling() {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", refreshStatuses);
+      window.removeEventListener("focus", refreshStatuses);
     }
 
     async function refreshStatuses() {
-      if (isRefreshing || document.hidden) return;
+      if (document.hidden) return;
+      if (isRefreshing && Date.now() - refreshStartedAt < MAX_REFRESH_LOCK_MS) return;
 
       const pending = todaysTapsRef.current.filter(
         (tap) => tap.status !== "Absent" && !tap.timeOut
@@ -266,12 +275,20 @@ function GuardAttendancePage() {
       if (pending.length === 0) return;
 
       isRefreshing = true;
+      refreshStartedAt = Date.now();
+      const runId = ++currentRun;
       try {
         const minId = Math.min(...pending.map((tap) => tap.id));
-        // GET /api/attendance
-        const updates = await fetchTodaysAttendanceUpdates({ minId });
-        if (ignore) return;
-        setTodaysTaps((prev) => mergeAttendanceUpdates(prev, updates));
+        // GET /api/attendance - each page is merged as soon as it arrives,
+        // and the walk stops once every pending card has been found.
+        await fetchTodaysAttendanceUpdates({
+          minId,
+          pendingIds: pending.map((tap) => tap.id),
+          onPage: (rows) => {
+            if (ignore) return;
+            setTodaysTaps((prev) => mergeAttendanceUpdates(prev, rows));
+          },
+        });
       } catch (error) {
         if (error.status === 403 || error.status === 404 || error.status === 405) {
           console.warn(
@@ -284,13 +301,17 @@ function GuardAttendancePage() {
           console.error("Background refresh of guard attendance statuses failed:", error);
         }
       } finally {
-        isRefreshing = false;
+        if (runId === currentRun) isRefreshing = false;
       }
     }
 
     refreshStatuses();
     intervalId = setInterval(refreshStatuses, STATUS_POLL_MS);
     document.addEventListener("visibilitychange", refreshStatuses);
+    // Switching back to this tab/window (e.g. from the teacher's tab while
+    // testing) refreshes immediately instead of waiting for the next tick,
+    // which browsers also throttle heavily in background tabs.
+    window.addEventListener("focus", refreshStatuses);
     return () => {
       ignore = true;
       stopPolling();
@@ -319,6 +340,22 @@ function GuardAttendancePage() {
     return () => document.removeEventListener("click", refocus);
   }, []);
 
+  // PATCH /api/attendance/time-out fails with a plain 400 for two
+  // DIFFERENT reasons (NoClassromTap vs AlreadyTimedOut) - status code
+  // alone can't tell them apart, only the message text can.
+  function resolveTimeOutErrorAction(error) {
+    if (error.status === 404) return "not-enrolled";
+    if (error.status === 400) {
+      if (/tap.*classroom/i.test(error.message || "")) return "no-classroom-tap";
+      return "already-timed-out";
+    }
+    return "error";
+  }
+
+  // FIRST tap of the day  -> POST /api/attendance (time in, On School).
+  // SECOND tap (409 above) -> PATCH /api/attendance/time-out. This is the
+  // student leaving campus; the teacher's scanner no longer times anyone
+  // out (the teacher does that manually from the table).
   async function recordTap(rfid) {
     const nowMs = Date.now();
     if (
@@ -336,11 +373,23 @@ function GuardAttendancePage() {
       setActivityPage(1);
     } catch (error) {
       if (error.status === 409) {
-        // AlreadyHasARecord - this student already tapped in today.
-        // The 409 response doesn't carry the original record, so
-        // there's no name/time to redisplay here without a follow-up
-        // lookup.
-        setLastScan({ action: "already-tapped-in" });
+        // AlreadyHasARecord - the student already tapped in today, so
+        // this tap means they're leaving: time them out. (A reader
+        // bounce is already swallowed by TAP_COOLDOWN_MS above, and the
+        // backend refuses a time out for anyone who hasn't tapped the
+        // classroom scanner yet, so an early re-tap can't clock a
+        // student out by mistake.)
+        try {
+          const timedOut = await timeOutAttendance(rfid);
+          setLastScan({ ...timedOut, action: "timed-out" });
+          setTodaysTaps((prev) =>
+            prev.some((tap) => tap.id === timedOut.id)
+              ? mergeAttendanceUpdates(prev, [timedOut])
+              : [{ ...timedOut }, ...prev]
+          );
+        } catch (timeOutError) {
+          setLastScan({ action: resolveTimeOutErrorAction(timeOutError) });
+        }
       } else if (error.status === 404) {
         // AssignmentNotFound - rfid doesn't match any active
         // assignment (unregistered card, or student no longer
@@ -362,6 +411,14 @@ function GuardAttendancePage() {
       setScanBuffer("");
     }
   }
+
+  // The scan panel on the left is a snapshot of the LAST tap, so on its
+  // own it would stay on "On School" forever. Look up that same student's
+  // live card (matched by attendance id) so the panel follows the same
+  // On School -> Time in -> Time out progression as the cards do.
+  const liveScanTap = lastScan?.id != null ? todaysTaps.find((tap) => tap.id === lastScan.id) : null;
+  const scanStatus = liveScanTap ? getCardStatus(liveScanTap) : "On School";
+  const scanTime = scanStatus === "Time out" ? liveScanTap?.timeOut : lastScan?.timeIn;
 
   const totalActivityPages = Math.max(1, Math.ceil(todaysTaps.length / ACTIVITY_PAGE_SIZE));
   const clampedActivityPage = Math.min(activityPage, totalActivityPages);
@@ -433,16 +490,33 @@ function GuardAttendancePage() {
 
                 {lastScan.action === "tapped-in" && (
                   <>
-                    <p className="mt-6 text-sm font-semibold text-warning">On School</p>
+                    <div className="mt-6">
+                      <AttendanceStatus status={scanStatus} />
+                    </div>
                     <p className="text-2xl font-bold text-gray-800">
-                      {formatDisplayTime(lastScan.timeIn)}
+                      {formatDisplayTime(scanTime)}
                     </p>
                   </>
                 )}
 
-                {lastScan.action === "already-tapped-in" && (
+                {lastScan.action === "timed-out" && (
+                  <>
+                    <p className="mt-6 text-sm font-semibold text-danger">Time out</p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      {formatDisplayTime(lastScan.timeOut)}
+                    </p>
+                  </>
+                )}
+
+                {lastScan.action === "no-classroom-tap" && (
+                  <p className="mt-6 text-sm font-semibold text-warning">
+                    Hasn't tapped in class yet
+                  </p>
+                )}
+
+                {lastScan.action === "already-timed-out" && (
                   <p className="mt-6 text-sm font-semibold text-gray-500">
-                    Already tapped in today
+                    Already timed out today
                   </p>
                 )}
 
@@ -461,7 +535,7 @@ function GuardAttendancePage() {
             ) : (
               <p className="text-sm text-gray-500">
                 <span className="block">Scan your RFID card</span>
-                <span className="block">to time in</span>
+                <span className="block">to time in or time out</span>
               </p>
             )}
           </div>

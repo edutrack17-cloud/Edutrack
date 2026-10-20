@@ -103,15 +103,9 @@ export async function markAttendancePresent(rfid) {
   }
 }
 
-// PATCH /api/attendance/time-out
-export async function timeOutAttendance(rfid) {
-  try {
-    const { data } = await attendanceApi.patch("/attendance/time-out", { rfid });
-    return mapAttendanceRecord(data);
-  } catch (error) {
-    throw buildAttendanceError(error, "PATCH /api/attendance/time-out");
-  }
-}
+// NOTE: the RFID time-out tap (PATCH /api/attendance/time-out) moved to the guard
+// kiosk - see timeOutAttendance in Attendaceserviceguard.js. Teachers time students
+// out by hand via manualTimeOut below.
 
 // GET /api/student
 //
@@ -286,14 +280,24 @@ export function invalidateTodaysAttendanceCache() {
   todaysAttendanceCache.clear();
 }
 
+// `minId` (optional) - stop walking as soon as a page reaches an attendance
+// id at or below it. Records are walked newest-first, so by then everything
+// NEWER than minId has already been collected. The background poll passes
+// the oldest still-changing row on screen (or the newest id it has already
+// seen), so it keeps up with changes to OLDER records (e.g. a guard time-out
+// on a student who tapped in an hour ago) without always walking the whole
+// day. Previously the poll was hard-capped at the newest 5 pages (~50
+// records), so any change to a record outside that window never showed up
+// until a manual refresh.
 export async function fetchTodaysAttendance({
   gradeLevel,
   status,
   size = 1000,
   maxPages = 40,
   cacheMs = 30_000,
+  minId = 0,
 } = {}) {
-  const cacheKey = JSON.stringify([gradeLevel || "", status || "", maxPages]);
+  const cacheKey = JSON.stringify([gradeLevel || "", status || "", maxPages, minId]);
   if (cacheMs > 0) {
     const cached = todaysAttendanceCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.data;
@@ -312,7 +316,17 @@ export async function fetchTodaysAttendance({
         params.attendanceStatus = LABEL_TO_STATUS[status] ?? status;
       }
 
-      const { data } = await attendanceApi.get("/attendance", { params });
+      // Background polls (cacheMs: 0) get a throwaway query param so the
+      // browser can never answer them from its own HTTP cache - a plain
+      // F5 always revalidates, which is why a refresh could show data the
+      // poll never did. Spring ignores unknown params.
+      if (cacheMs === 0) params._ = Date.now();
+
+      // FIX: `timeout` - without it one hung request never settles, and
+      // the page's poll (which skips a tick while a previous one is still
+      // "refreshing") stays blocked forever, so nothing updates until the
+      // page is reloaded. Same fix the guard page already has.
+      const { data } = await attendanceApi.get("/attendance", { params, timeout: 15_000 });
       const content = Array.isArray(data?.content) ? data.content : [];
       const mapped = content.map(mapAttendanceRecord);
       all.push(...mapped);
@@ -321,7 +335,8 @@ export async function fetchTodaysAttendance({
       if (mapped.some((r) => r.date && r.date !== today)) reachedOldDay = true;
 
       const isLastPage = data?.last === true || page + 1 >= (data?.totalPages ?? 1);
-      if (isLastPage || content.length === 0) break;
+      const passedMinId = minId > 0 && mapped.some((r) => r.id <= minId);
+      if (isLastPage || passedMinId || content.length === 0) break;
     }
 
     // Records with a time-in carry their date; "absent" records have no

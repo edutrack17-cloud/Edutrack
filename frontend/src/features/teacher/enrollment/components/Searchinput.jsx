@@ -11,7 +11,7 @@ import { Search } from "lucide-react";
 function SearchInput({
   value,
   onChange,
-  placeholder = "Search LRN or Student Name",
+  placeholder = "Search LRN or Student",
   className = "",
 }) {
   return (
