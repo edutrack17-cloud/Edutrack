@@ -117,7 +117,7 @@ function Sidebar({
 
   
         <div
-          className={`-mt-3 mb-3 flex flex-col items-center gap-3 py-4 ${logoContainerPadding}`}
+          className={`-mt-8 mb-3 flex flex-col items-center gap-3 pb-4 ${logoContainerPadding}`}
         >
           <img
             src={schoolLogo}

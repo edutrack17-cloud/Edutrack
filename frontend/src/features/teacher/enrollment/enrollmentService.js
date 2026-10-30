@@ -276,6 +276,17 @@ export async function getStudents({ search, level, section, status, schoolYearSt
   }
 }
 
+// FIX: GET /api/student/ids does NOT exist on the backend. Spring matches
+// "/student/ids" against the existing "/student/{studentId}" (PATCH) route,
+// so the request came back 405 "Request method 'GET' is not supported" -
+// and the fallback below only handled 404/5xx, so the 405 was rethrown and
+// "Select All" failed (and each try logged a backend ERROR). 405 now takes
+// the same fallback as 404, and once the endpoint is known to be missing we
+// stop calling it for the rest of the session (it would just fail again and
+// burn the rate-limit bucket). If the backend ever adds a real
+// GET /student/ids, remove this flag and it works with no other change.
+let studentIdsEndpointMissing = false;
+
 export async function getSelectableStudentIds({
   search,
   level,
@@ -295,12 +306,16 @@ export async function getSelectableStudentIds({
   if (schoolYearId) params.schoolYearId = schoolYearId;
 
   try {
+    if (studentIdsEndpointMissing) {
+      throw Object.assign(new Error("GET /student/ids is not available"), { response: { status: 405 } });
+    }
     const { data } = await studentApi.get("/student/ids", { params, signal });
     return data;
   } catch (error) {
     if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
     const responseStatus = error?.response?.status;
-    if (responseStatus === 404 || responseStatus >= 500) {
+    if (responseStatus === 404 || responseStatus === 405) studentIdsEndpointMissing = true;
+    if (responseStatus === 404 || responseStatus === 405 || responseStatus >= 500) {
       if (status && status !== "enrolled") return [];
 
       const ids = [];

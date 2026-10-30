@@ -460,15 +460,20 @@ function SF2AttendancePage() {
   return (
     <div className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-md sm:p-6">
       {/* Filter bar (layout only - no logic here).
-          lg and up: ONE line - the 5 dropdowns on the left (fixed, equal
+          2xl and up: ONE line - the 5 dropdowns on the left (fixed, equal
           widths, all h-9), then the search bar (takes the leftover room,
           capped so it doesn't stretch too wide), then "Export Report" at
           the far right.
-          Below lg: dropdowns in a grid (2 cols mobile -> 3 cols sm), with
-          search and the export button stacked underneath, in that order. */}
+          Why 2xl and not lg: the sidebar (w-72) eats 288px of the viewport,
+          so at lg (1024px) the content area is only ~736px - far too narrow
+          for 5 dropdowns + search + button in one row, which pushed the
+          Export button off the card.
+          Below 2xl: dropdowns in a grid (2 cols mobile -> 3 cols sm), with
+          search + the export button on their own row underneath (stacked on
+          phones, side by side from sm up). */}
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:shrink-0 lg:items-center">
+      <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-center">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:flex 2xl:shrink-0 2xl:items-center">
           <Sf2FilterDropdown
             options={gradeLevelOptions}
             value={gradeLevel}
@@ -490,7 +495,7 @@ function SF2AttendancePage() {
             value={schoolYearId}
             onChange={handleSchoolYearChange}
             ariaLabel="Filter by school year"
-            widthClass="relative col-span-2 w-full min-w-0 sm:col-span-1 lg:w-44 lg:shrink-0"
+            widthClass="relative col-span-2 w-full min-w-0 sm:col-span-1 2xl:w-44 2xl:shrink-0"
             disabled={isSectionsLoading}
           />
 
@@ -509,8 +514,9 @@ function SF2AttendancePage() {
           />
         </div>
 
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center 2xl:contents">
         <SearchInput
-          className="w-full lg:ml-auto lg:min-w-40 lg:max-w-sm lg:flex-1"
+          className="w-full sm:flex-1 2xl:ml-auto 2xl:min-w-40 2xl:max-w-sm"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -521,11 +527,12 @@ function SF2AttendancePage() {
           disabled={!sectionId}
           title={exportDisabledReason || undefined}
           aria-label="Export SF2 Report"
-          className="flex h-11 w-full items-center justify-center gap-1.5 sm:h-9 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary lg:w-auto lg:shrink-0"
+          className="flex h-11 w-full items-center justify-center gap-1.5 sm:h-9 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary sm:w-auto sm:shrink-0"
         >
           <FileSpreadsheet size={15} strokeWidth={2.5} />
           <span>Export Report</span>
         </button>
+        </div>
       </div>
 
       {sectionsError && (

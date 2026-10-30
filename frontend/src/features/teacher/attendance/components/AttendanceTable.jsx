@@ -8,9 +8,9 @@ import ViewAttendanceModal from "./Viewattendancemdodal";
 // Action icons) fit inside the card at 100% browser zoom without a
 // horizontal scrollbar. Narrower screens still scroll (see min-w below).
 const thClass =
-  "truncate px-2 py-2 text-center text-sm font-semibold text-white";
+  "whitespace-nowrap px-2 py-2 text-center text-sm font-semibold text-white";
 const tdClass =
-  "truncate px-2 py-2 text-center text-sm font-normal text-gray-700";
+  "whitespace-nowrap px-2 py-2 text-center text-sm font-normal text-gray-700";
 
 function formatDisplayTime(hhmm) {
   if (!hhmm) return "";
@@ -157,21 +157,13 @@ function AttendanceTable({
   return (
     <>
     <div className="w-full overflow-x-auto rounded-xl bg-white shadow-md">
-      <table className="w-full min-w-3xl table-fixed border-collapse">
-        {/* min-w-3xl (768px) is the floor before the wrapper scrolls
-            sideways, like Promote's table does at min-w-160. Widths are
-            tuned so a 12-digit LRN, the Status time range, and up to
-            three Action icons still fit at that floor; Name gets the rest
-            and truncates. */}
-        <colgroup>
-          <col className="w-[15%]" />
-          <col className="w-[10%]" />
-          <col className="w-[20%]" />
-          <col className="w-[9%]" />
-          <col className="w-[12%]" />
-          <col className="w-[17%]" />
-          <col className="w-[17%]" />
-        </colgroup>
+      {/* table-auto (no fixed column %): LRN, RFID UID, Level, Status and
+          Action size to their content and never get cut off with "...".
+          Name and Section (the only cells that allow wrapping) take the
+          leftover width, so a long name stays on one line when there's room
+          and only drops to a second line when there isn't. min-w-3xl
+          (768px) is the floor before the wrapper scrolls sideways. */}
+      <table className="w-full min-w-3xl table-auto border-collapse">
 
         <thead className="bg-primary">
           <tr>
@@ -197,7 +189,12 @@ function AttendanceTable({
             <tr key={record.assignmentId} className="odd:bg-white even:bg-primary/10">
               <td className={tdClass}>{record.lrn}</td>
               <td className={tdClass}>{record.rfid}</td>
-              <td className={tdClass} title={record.name}>{record.name}</td>
+              <td
+                className="whitespace-normal break-words px-2 py-2 text-center text-sm font-normal text-gray-700"
+                title={record.name}
+              >
+                {record.name}
+              </td>
               <td className={tdClass}>{record.gradeLevel}</td>
               <td
                 className="whitespace-normal break-normal px-2 py-2 text-center text-sm font-normal text-gray-700"

@@ -15,12 +15,12 @@ import { Check, ChevronDown } from "lucide-react";
 
 const triggerClass =
   "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-gray/50 shadow-sm bg-white px-2.5 sm:h-9 text-left text-sm font-medium text-gray-700 outline-none cursor-pointer transition-colors hover:border-gray-300 disabled:cursor-not-allowed disabled:opacity-60";
-// Standard width. Below lg the page puts the filters in a CSS grid, so each
-// one fills its cell (w-full). From lg the page uses one flex row, where every
+// Standard width. Below 2xl the page puts the filters in a CSS grid, so each
+// one fills its cell (w-full). From 2xl the page uses one flex row, where every
 // dropdown is the same fixed width (w-34 = 8.5rem, same as the
 // Attendance filters' md:w-34) so all 5 match. min-w-0 lets
 // the label truncate instead of stretching the box.
-const defaultWidthClass = "relative w-full min-w-0 lg:w-34 lg:shrink-0";
+const defaultWidthClass = "relative w-full min-w-0 2xl:w-34 2xl:shrink-0";
 
 function useClickOutside(isOpen, ref, onClose) {
   useEffect(() => {
