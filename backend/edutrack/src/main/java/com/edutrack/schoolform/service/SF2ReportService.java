@@ -16,6 +16,7 @@ import com.edutrack.student.enums.Sex;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.enums.ExitType;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
+import com.edutrack.user.entity.User;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -64,6 +65,9 @@ public class SF2ReportService {
     private static final String SECTION_CELL = "AM4";
     private static final String SCHOOL_DAYS_CELL = "AW4";
 
+    // ---- Adviser Cell ----
+    private static final String ADVISER_CELL = "AN88";
+
     // ---- Summary block: cell coordinates (M, F, TOTAL) ----
     // Row 65: Enrolment as of 1st Friday
     private static final String ROW1_M = "AR65", ROW1_F = "AS65", ROW1_T = "AT65";
@@ -85,10 +89,8 @@ public class SF2ReportService {
     private static final String ROW9_M = "AR81", ROW9_F = "AS81", ROW9_T = "AT81";
     // Row 83: Transferred in
     private static final String ROW10_M = "AR83", ROW10_F = "AS83", ROW10_T = "AT83";
+
     // ---- NLS exit types ----
-    // Any exit that removes the student from school.
-    // promoted & section_transfer are excluded — student is still in school.
-    // NOTE: EnumSet.of is null-safe in contains() unlike Set.of.
     private static final Set<ExitType> NLS_EXIT_TYPES = EnumSet.of(
             ExitType.dropped,
             ExitType.transferred_out,
@@ -229,11 +231,11 @@ public class SF2ReportService {
         MetricValue absent5 = new MetricValue(
                 abs5.male(), abs5.female(), abs5.male() + abs5.female());
 
-        // Row 8: NLS — dropped + transferred_out + graduated
+        // Row 8: NLS
         MetricValue nls = countExitsMatching(
                 roster, periodStart, periodEnd, NLS_EXIT_TYPES);
 
-        // Row 9: Transferred out — specific exit type only
+        // Row 9: Transferred out
         MetricValue transferredOut = countExitsMatching(
                 roster, periodStart, periodEnd, TRANSFERRED_OUT_TYPES);
 
@@ -314,13 +316,6 @@ public class SF2ReportService {
         return false;
     }
 
-    /**
-     * Count students whose exit type matches any of {@code exitTypes}
-     * AND whose {@code leftAt} falls within [periodStart, periodEnd].
-     *
-     * NOTE: We filter out null exitType BEFORE calling contains(),
-     * because some immutable sets (like Set.of) throw NPE on contains(null).
-     */
     private MetricValue countExitsMatching(List<StudentSectionAssignment> roster,
                                            LocalDate periodStart,
                                            LocalDate periodEnd,
@@ -439,6 +434,7 @@ public class SF2ReportService {
         setCell(sheet, GRADE_LEVEL_CELL, gradeLevelLabel(section.getGradeLevel()));
         setCell(sheet, SECTION_CELL, section.getSectionName());
         setCell(sheet, SCHOOL_DAYS_CELL, schoolDayCount);
+        setCell(sheet, ADVISER_CELL, formatAdviserName(section.getUser()));
     }
 
     private void writeDayHeaders(Sheet sheet, List<LocalDate> schoolDays) {
@@ -561,6 +557,33 @@ public class SF2ReportService {
             name.append(", ").append(student.getMiddleName());
         }
         return name.toString();
+    }
+
+    /**
+     * Formats the adviser's name.
+     * If first or last name is missing (e.g., legacy data), it safely falls back to the username.
+     */
+    private String formatAdviserName(User adviser) {
+        if (adviser == null) {
+            return "";
+        }
+
+        String firstName = adviser.getFirstName();
+        String lastName = adviser.getLastName();
+
+        // Fallback to username if names are null/blank
+        if (firstName == null || firstName.isBlank() || lastName == null || lastName.isBlank()) {
+            return adviser.getUsername() != null ? adviser.getUsername().toUpperCase() : "";
+        }
+
+        StringBuilder name = new StringBuilder(firstName);
+        if (adviser.getMiddleName() != null && !adviser.getMiddleName().isBlank()) {
+            name.append(' ')
+                    .append(Character.toUpperCase(adviser.getMiddleName().charAt(0)))
+                    .append('.');
+        }
+        name.append(' ').append(lastName);
+        return name.toString().trim().toUpperCase();
     }
 
     private String gradeLevelLabel(GradeLevel gradeLevel) {

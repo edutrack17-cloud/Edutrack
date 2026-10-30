@@ -7,6 +7,7 @@ public record SF2TableResponse(
         String schoolYear,
         String gradeLevel,
         String sectionName,
+        String adviserName,          // <-- NEW (position must match the constructor call above)
         String month,
         List<LocalDate> schoolDays,
         List<StudentAttendanceRow> students

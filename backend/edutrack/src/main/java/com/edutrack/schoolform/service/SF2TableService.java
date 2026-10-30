@@ -13,6 +13,7 @@ import com.edutrack.section.exception.SectionNotFound;
 import com.edutrack.section.repository.SectionRepository;
 import com.edutrack.studentsectionassignment.entity.StudentSectionAssignment;
 import com.edutrack.studentsectionassignment.repository.StudentSectionAssignmentRepository;
+import com.edutrack.user.entity.User;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,6 +96,7 @@ public class SF2TableService {
                 schoolYear.getSchoolYearName(),
                 section.getGradeLevel().name(),
                 section.getSectionName(),
+                formatAdviserName(section.getUser()),
                 monthLabel,
                 schoolDays,
                 studentRows
@@ -151,5 +153,32 @@ public class SF2TableService {
         return student.getLastName() + ", " + student.getFirstName() +
                 (student.getMiddleName() != null && !student.getMiddleName().isBlank()
                         ? " " + student.getMiddleName() : "");
+    }
+
+    /**
+     * Formats the adviser's name.
+     * If first or last name is missing (e.g., legacy data), it safely falls back to the username.
+     */
+    private String formatAdviserName(User adviser) {
+        if (adviser == null) {
+            return "";
+        }
+
+        String firstName = adviser.getFirstName();
+        String lastName = adviser.getLastName();
+
+        // Fallback to username if names are null/blank
+        if (firstName == null || firstName.isBlank() || lastName == null || lastName.isBlank()) {
+            return adviser.getUsername() != null ? adviser.getUsername().toUpperCase() : "";
+        }
+
+        StringBuilder name = new StringBuilder(firstName);
+        if (adviser.getMiddleName() != null && !adviser.getMiddleName().isBlank()) {
+            name.append(' ')
+                    .append(Character.toUpperCase(adviser.getMiddleName().charAt(0)))
+                    .append('.');
+        }
+        name.append(' ').append(lastName);
+        return name.toString().trim().toUpperCase();
     }
 }
