@@ -72,14 +72,14 @@ function DashboardPage() {
           { id: 2, icon: UserRound, label: "Active Teachers", count: summary?.activeTeachers, colorClass: "text-primary" },
           { id: 3, icon: Layers, label: "Active Sections", count: summary?.activeSections, colorClass: "text-primary" },
           { id: 4, icon: UserCheck, label: "Present Today", count: summary?.presentToday, colorClass: "text-success" },
-          { id: 5, icon: DoorOpen, label: "On School Today", count: summary?.onSchoolToday, colorClass: "text-primary" },
+          { id: 5, icon: DoorOpen, label: "In School Today", count: summary?.onSchoolToday, colorClass: "text-primary" },
           { id: 6, icon: UserX, label: "Absent Today", count: summary?.absentToday, colorClass: "text-danger" },
           { id: 7, icon: ClipboardX, label: "Incomplete Attendance", count: summary?.incompleteAttendance, colorClass: "text-warning" },
         ]
       : [
           { id: 1, icon: Users, label: "My Students", count: summary?.myStudents, colorClass: "text-primary" },
           { id: 2, icon: UserCheck, label: "Present Today", count: summary?.presentToday, colorClass: "text-success" },
-          { id: 3, icon: DoorOpen, label: "On School Today", count: summary?.onSchoolToday, colorClass: "text-primary" },
+          { id: 3, icon: DoorOpen, label: "In School Today", count: summary?.onSchoolToday, colorClass: "text-primary" },
           { id: 4, icon: UserX, label: "Absent Today", count: summary?.absentToday, colorClass: "text-danger" },
           { id: 5, icon: ClipboardX, label: "Incomplete Attendance", count: summary?.incompleteAttendance, colorClass: "text-warning" },
         ];

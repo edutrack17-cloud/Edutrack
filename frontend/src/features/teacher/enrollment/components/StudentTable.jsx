@@ -202,7 +202,8 @@ function StudentTable({
   onRefreshSections,
   showToast,
   role,
-  selectedIds = [],
+  selectedIds = new Set(),
+  selectionGradeLevel,
   canSelectRows = true,
   onToggleSelect,
   onClearSelection,
@@ -238,25 +239,23 @@ function StudentTable({
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [bulkError, setBulkError] = useState("");
 
-  // Only enrolled rows can be selected (see SelectCheckbox), and the parent
-  // prunes selectedIds whenever the list changes, but filter defensively anyway.
-  // "Select All" itself lives in EnrollmentPage's toolbar, not in this table's header.
-  const selectedStudents = students.filter(
-    (s) => s.studentStatus === "enrolled" && selectedIds.includes(s.studentId)
-  );
+  const studentsById = new Map(students.map((student) => [student.studentId, student]));
+  const selectedStudents = [...selectedIds].map((studentId) => {
+    const student = studentsById.get(studentId);
+    return student?.studentStatus === "enrolled"
+      ? student
+      : {
+          studentId,
+          fullName: `Student ID ${studentId}`,
+          studentStatus: "enrolled",
+        };
+  });
 
-  // Bulk Graduate is only allowed when EVERY selected student is in Grade 6.
-  const nonGraduatingCount = selectedStudents.filter((s) => !canGraduateStudent(s)).length;
-  const canGraduateSelection = nonGraduatingCount === 0;
-
-  // Graduate only shows up when at least one selected student is in Grade 6.
-  // If NONE are (the usual case when dropping Grade 4/5 students), the button
-  // and its explanation would just be noise, so both are hidden - same rule the
-  // single-row menu uses. When the selection is MIXED, the button stays but is
-  // disabled, with a hint telling the user how many to deselect.
-  const graduatingCount = selectedStudents.length - nonGraduatingCount;
-  const showGraduateButton = graduatingCount > 0;
-  const showGraduateHint = showGraduateButton && !canGraduateSelection;
+  // Selection is cleared whenever filters change, so the Grade 6 filter
+  // applies to every selected ID, including IDs from other pages.
+  const canGraduateSelection =
+    selectedStudents.length > 0 && selectionGradeLevel === GRADUATING_GRADE_LEVEL;
+  const showGraduateButton = canGraduateSelection;
 
   const bulkButtonClass =
     "flex h-11 items-center gap-2 rounded-md sm:h-9 border border-gray-300 bg-white px-4 text-base font-medium transition-colors";
@@ -501,12 +500,12 @@ function StudentTable({
     <>
       {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
 
-      {selectedStudents.length > 0 && (
+      {selectedIds.size > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl bg-white px-4 py-3 shadow-md">
           {/* Count. On sm+ a thin divider separates it from the actions so it
               reads as a label, not as a fourth button. */}
           <span className="w-full text-base font-semibold text-gray-700 sm:w-auto sm:border-r sm:border-gray-200 sm:pr-4">
-            {selectedStudents.length} selected
+            {selectedIds.size} selected
           </span>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -532,13 +531,7 @@ function StudentTable({
               <button
                 type="button"
                 onClick={() => handleOpenBulk("graduated")}
-                disabled={!canGraduateSelection}
-                title={
-                  canGraduateSelection
-                    ? undefined
-                    : `Deselect the ${nonGraduatingCount} student${nonGraduatingCount === 1 ? "" : "s"} not in Grade 6 to enable Graduate`
-                }
-                className={`${bulkButtonClass} text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white`}
+                className={`${bulkButtonClass} text-primary hover:bg-primary/10`}
               >
                 <GraduationCap size={16} />
                 Graduate
@@ -546,15 +539,6 @@ function StudentTable({
             )}
           </div>
 
-          {/* The button's title tooltip never shows on touch screens (or on a
-              disabled button in some browsers), so say why Graduate is
-              disabled right here instead. */}
-          {showGraduateHint && (
-            <p className="w-full text-sm text-gray-500 sm:w-auto">
-              Deselect the {nonGraduatingCount} student{nonGraduatingCount === 1 ? "" : "s"} not in
-              Grade 6 to enable Graduate.
-            </p>
-          )}
         </div>
       )}
 
@@ -597,7 +581,7 @@ function StudentTable({
                 <td className="px-3 py-2 text-center sm:px-4 sm:py-2">
                   <SelectCheckbox
                     student={student}
-                    isSelected={selectedIds.includes(student.studentId)}
+                    isSelected={selectedIds.has(student.studentId)}
                     onToggle={onToggleSelect}
                     canSelectRows={canSelectRows}
                   />

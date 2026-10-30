@@ -10,6 +10,7 @@ import {
   getSections,
   getSectionsByAdviser,
   getStudents,
+  getSelectableStudentIds,
   enrollStudent,
   wasStudentReactivated,
   getSchoolYearOptions,
@@ -65,12 +66,14 @@ function EnrollmentPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectableIds, setSelectableIds] = useState([]);
+  const [isLoadingSelectableIds, setIsLoadingSelectableIds] = useState(false);
+  const [selectableIdsRefreshKey, setSelectableIdsRefreshKey] = useState(0);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // Bulk-action selection (drop / transfer out / graduate). Holds studentIds
-  // only; StudentTable derives the full rows from its own `students` prop.
-  const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const hasActiveFilter = Boolean(level && section);
 
   // FIX: sections used to only be fetched once on mount (see the
   // loadSections() effect below), so a section an admin adds/archives
@@ -182,6 +185,7 @@ function EnrollmentPage() {
   }, [role, sections]);
 
   const abortControllerRef = useRef(null);
+  const selectableIdsAbortRef = useRef(null);
 
   // GET /api/student - re-fetches whenever a filter, the debounced
   // search, or the page changes. UPDATE: "search" now IS sent to the
@@ -245,23 +249,84 @@ function EnrollmentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level, section, status, schoolYear, currentPage, debouncedSearch, isInitializing]);
 
+  useEffect(() => {
+    selectableIdsAbortRef.current?.abort();
+    selectableIdsAbortRef.current = null;
+
+    if (isInitializing || !hasActiveFilter) return;
+
+    const controller = new AbortController();
+    selectableIdsAbortRef.current = controller;
+    setIsLoadingSelectableIds(true);
+
+    getSelectableStudentIds({
+      level,
+      section,
+      status,
+      schoolYearStatuses: schoolYear ? undefined : "active",
+      schoolYearId: schoolYear && schoolYear !== ALL_SCHOOL_YEARS ? schoolYear : undefined,
+      search: debouncedSearch || undefined,
+      signal: controller.signal,
+    })
+      .then((ids) => {
+        if (selectableIdsAbortRef.current !== controller) return;
+        const nextIds = Array.isArray(ids) ? ids : [];
+        setSelectableIds(nextIds);
+        setSelectedIds((previous) => new Set([...previous].filter((id) => nextIds.includes(id))));
+      })
+      .catch((error) => {
+        if (error.code === "ERR_CANCELED") return;
+        setSelectableIds([]);
+        setErrorMessage(error.message);
+      })
+      .finally(() => {
+        if (selectableIdsAbortRef.current === controller) {
+          selectableIdsAbortRef.current = null;
+          setIsLoadingSelectableIds(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [
+    level,
+    section,
+    status,
+    schoolYear,
+    debouncedSearch,
+    isInitializing,
+    hasActiveFilter,
+    selectableIdsRefreshKey,
+  ]);
+
   function handleLevelChange(event) {
+    handleClearSelection();
+    setSelectableIds([]);
+    setIsLoadingSelectableIds(false);
     setLevel(event.target.value);
     setSection(""); // previously selected section may not belong to the new level
     setCurrentPage(1);
   }
 
   function handleSectionChange(event) {
+    handleClearSelection();
+    setSelectableIds([]);
+    setIsLoadingSelectableIds(Boolean(level && event.target.value));
     setSection(event.target.value);
     setCurrentPage(1);
   }
 
   function handleStatusChange(event) {
+    handleClearSelection();
+    setSelectableIds([]);
+    setIsLoadingSelectableIds(hasActiveFilter);
     setStatus(event.target.value);
     setCurrentPage(1);
   }
 
   function handleSchoolYearChange(event) {
+    handleClearSelection();
+    setSelectableIds([]);
+    setIsLoadingSelectableIds(false);
     setSchoolYear(event.target.value);
     // The Section filter lists the CURRENT year's sections, so a previously
     // picked one may not exist in the newly selected year.
@@ -269,59 +334,57 @@ function EnrollmentPage() {
     setCurrentPage(1);
   }
 
-  // Keep the selection in sync with what is actually on screen: whenever the
-  // list changes (page, filter, search, or a reload after a status change),
-  // drop any selected id that is no longer in the list OR is no longer
-  // "enrolled". This is what clears the selection on page/filter changes and
-  // after a successful bulk action, and it guarantees a bulk request can
-  // never contain a student the user can't currently see. Returning `prev`
-  // when nothing changed avoids a pointless re-render.
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.length === 0) return prev;
-      const next = prev.filter((id) =>
-        students.some((s) => s.studentId === id && s.studentStatus === "enrolled")
-      );
-      return next.length === prev.length ? prev : next;
-    });
-  }, [students]);
-
-  // Same rule as Promote Student: the checkboxes (and Select All) stay
+  // Same rule as Promote Student: the checkboxes stay
   // faded/disabled until BOTH a Grade Level and a Section are picked. Going
   // back to "All ..." on either one clears whatever was selected.
-  const hasActiveFilter = Boolean(level && section);
-
-  useEffect(() => {
-    if (!hasActiveFilter) setSelectedIds((prev) => (prev.length === 0 ? prev : []));
-  }, [hasActiveFilter]);
 
   function handleToggleSelect(studentId) {
-    setSelectedIds((prev) =>
-      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
-    );
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      return next;
+    });
   }
 
-  // Toolbar "Select All" / "Deselect All": acts on every ENROLLED row on the
-  // current page (same rule StudentTable's row checkboxes use). It is per page on
-  // purpose - the selection is pruned whenever the list changes, and the bulk
-  // endpoints are all-or-nothing, so a selection can't quietly span pages.
-  const selectableIds = students
-    .filter((s) => s.studentStatus === "enrolled")
-    .map((s) => s.studentId);
   const allSelectableSelected =
-    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
+    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
 
   function handleToggleSelectAll() {
-    setSelectedIds((prev) =>
-      allSelectableSelected
-        ? prev.filter((id) => !selectableIds.includes(id))
-        : [...new Set([...prev, ...selectableIds])]
-    );
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      selectableIds.forEach((id) => {
+        if (allSelectableSelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
   }
 
   // No argument = clear everything; with ids = clear just those.
   function handleClearSelection(ids) {
-    setSelectedIds((prev) => (ids ? prev.filter((id) => !ids.includes(id)) : []));
+    if (!ids) {
+      selectableIdsAbortRef.current?.abort();
+      selectableIdsAbortRef.current = null;
+      setIsLoadingSelectableIds(false);
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  }
+
+  function handleSearchChange(event) {
+    handleClearSelection();
+    const nextSearch = event.target.value;
+    if (nextSearch.trim() !== debouncedSearch) {
+      setSelectableIds([]);
+      setIsLoadingSelectableIds(hasActiveFilter);
+    }
+    setSearch(nextSearch);
   }
 
   function handlePageChange(newPage) {
@@ -394,9 +457,10 @@ function EnrollmentPage() {
       // re-trigger the loadStudents() effect below, so call it directly
       // in that case to still refresh the list.
       if (currentPage !== 1) {
+        setSelectableIdsRefreshKey((previous) => previous + 1);
         setCurrentPage(1);
       } else {
-        await loadStudents();
+        await handleStudentsChanged();
       }
     } catch (error) {
       showToast(error.message, "error");
@@ -427,6 +491,11 @@ function EnrollmentPage() {
     ? sections.filter((s) => s.gradeLevel === level)
     : sections;
 
+  async function handleStudentsChanged() {
+    setSelectableIdsRefreshKey((previous) => previous + 1);
+    await loadStudents();
+  }
+
   // Layout copied from PromoteStudentPage: one white rounded container with
   // gap-6, a toolbar row (filters + Select All on the left, search + primary
   // button on the right), then the table and the pagination bar as direct
@@ -448,15 +517,22 @@ function EnrollmentPage() {
             schoolYear={schoolYear}
             schoolYearOptions={schoolYearOptions}
             onSchoolYearChange={handleSchoolYearChange}
-            canBulkSelect={hasActiveFilter && !isLoading && selectableIds.length > 0}
+            canBulkSelect={
+              hasActiveFilter &&
+              search.trim() === debouncedSearch &&
+              !isLoadingSelectableIds &&
+              selectableIds.length > 0
+            }
             allSelected={allSelectableSelected}
             onToggleSelectAll={handleToggleSelectAll}
             selectAllTitle={
               !hasActiveFilter
                 ? "Select a Grade Level and Section first to enable selection"
+                : isLoadingSelectableIds
+                ? "Loading matching students"
                 : selectableIds.length === 0
-                ? "No enrolled students on this page"
-                : "Selects every enrolled student on this page"
+                ? "No enrolled students match the current filters"
+                : "Select all enrolled students matching the current filters"
             }
           />
 
@@ -464,7 +540,7 @@ function EnrollmentPage() {
             <SearchInput
               className="w-full sm:w-52"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={handleSearchChange}
             />
 
             <button
@@ -487,13 +563,18 @@ function EnrollmentPage() {
           <StudentTable
             students={students}
             sections={sections}
-            onChanged={loadStudents}
+            onChanged={handleStudentsChanged}
             onRefreshSections={loadSections}
             showToast={showToast}
             role={role}
             schoolYear={schoolYear}
             selectedIds={selectedIds}
-            canSelectRows={hasActiveFilter}
+            selectionGradeLevel={level}
+            canSelectRows={
+              hasActiveFilter &&
+              search.trim() === debouncedSearch &&
+              !isLoadingSelectableIds
+            }
             onToggleSelect={handleToggleSelect}
             onClearSelection={handleClearSelection}
           />

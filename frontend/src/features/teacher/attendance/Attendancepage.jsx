@@ -20,7 +20,7 @@ import { useAuth } from "../../../Context/AuthContext";
 
 const SCHOOL_NAME = "Cecilio M. Saliba Elementary School";
 
-// STATUS FILTER FIX: Status (On School/Present/Absent) used to be a
+// STATUS FILTER FIX: Status (In School/Present/Absent) used to be a
 // purely client-side filter over whatever ~20-row page happened to
 // already be loaded (see fetchStudentRecords' `size`) - Level/Section/
 // Search all narrow the SERVER query, but Status never did. That's why
@@ -73,7 +73,7 @@ function writePersistedFilter(key, value) {
 
 // TODAY'S ATTENDANCE CACHE
 // fetchTodaysAttendance below is the ONLY place this page ever learns
-// about an "On School" row - a guard's gate tap never reaches this page
+// about an "In School" row - a guard's gate tap never reaches this page
 // live (separate kiosk, separate login, no socket connecting them). So
 // on every refresh, that one request has to succeed again before Time In
 // / Time Out can show up at all; while it's in flight (or if it happens
@@ -151,7 +151,7 @@ function formatDisplayTime(hhmm) {
 
 // HOW THE TEACHER SEES A GUARD TAP: the guard kiosk is a separate
 // login/browser, so nothing pushes its taps to this page. The only way
-// this page learns a student is now "On School" is by asking the
+// this page learns a student is now "In School" is by asking the
 // backend again (GET /api/attendance), so it re-asks every
 // TODAY_ATTENDANCE_POLL_MS (and right away when the tab becomes visible
 // again). Raise this number if the backend rate limit gets tight; lower
@@ -514,7 +514,7 @@ function AttendancePage() {
         // the only thing that makes LRN search work at all.
         // FIX: with a Status filter the whole roster is needed, but the
         // backend caps the page size - one size=1000 request only ever
-        // returned the first ~10 students, so "On School" showed nothing
+        // returned the first ~10 students, so "In School" showed nothing
         // unless the search narrowed the roster to that first page.
         // fetchAllStudentRecords walks every roster page instead.
         const { records: fetched, totalPages: fetchedTotalPages } = isStatusFilterActive
@@ -531,7 +531,7 @@ function AttendancePage() {
         // (from a previous load, a live tap, or a manual action) right
         // away, before the live fetch below even resolves - see the
         // comment on TODAY_ATTENDANCE_CACHE_KEY above for why this
-        // matters specifically for "On School" rows.
+        // matters specifically for "In School" rows.
         // FIX: no more cache overlay before the live fetch - a cached
         // status must never be shown on a row the backend didn't confirm.
         let merged = fetched;
@@ -631,7 +631,7 @@ function AttendancePage() {
   }, [records]);
 
   // Keeps the Status column current with taps made at the gate: a
-  // student's guard tap creates today's record as "On School"
+  // student's guard tap creates today's record as "In School"
   // (POST /api/attendance), and this re-asks the backend so that shows
   // up here without a manual refresh. It never sets "Present" - that
   // only happens when the student taps THIS page's scanner
@@ -639,13 +639,13 @@ function AttendancePage() {
   //
   // DEPENDS ON: GET /api/attendance. This used to have no GET mapping at
   // all on the backend, so the request came back 404/405 and NOTHING
-  // could show "On School" on this page - the 404/405 handling below
+  // could show "In School" on this page - the 404/405 handling below
   // stopped the polling in that case instead of retrying a failing
   // request every few seconds. The endpoint exists now.
   useEffect(() => {
     // FIX: was "role === 'guard' || !section" - same unnecessary Section
     // requirement as the loadRecords fetch above, blocking the poll (and
-    // therefore any live "On School" update) whenever only a Grade Level
+    // therefore any live "In School" update) whenever only a Grade Level
     // was picked or no filter was set at all.
     if (role === "guard") return;
 
@@ -689,11 +689,11 @@ function AttendancePage() {
         // manual refresh. Now it walks back only as far as it needs to:
         //   - every record NEWER than what it has already seen (new taps)
         //   - down to the oldest on-screen row that can still change
-        //     (On School, or Present without a time out)
+        //     (In School, or Present without a time out)
         // That's usually 1-2 requests, but never misses an update.
         const visible = recordsRef.current.map((r) => r.todayAttendance).filter(Boolean);
         const pendingIds = visible
-          .filter((a) => a.status === "On School" || (a.status === "Present" && !a.timeOut))
+          .filter((a) => a.status === "In School" || (a.status === "Present" && !a.timeOut))
           .map((a) => a.id);
         const oldestPendingId = pendingIds.length ? Math.min(...pendingIds) : Infinity;
         const newestKnownId = visible.reduce(
@@ -718,7 +718,7 @@ function AttendancePage() {
         if (error.status === 404 || error.status === 405) {
           console.warn(
             "GET /api/attendance doesn't exist on the backend yet - " +
-              "stopping the background refresh. Guard taps (On School) can't show up here until it does."
+              "stopping the background refresh. Guard taps (In School) can't show up here until it does."
           );
           stopPolling();
         } else {
@@ -800,7 +800,7 @@ function AttendancePage() {
     );
   }
 
-  // The classroom scanner now ONLY confirms attendance (On School ->
+  // The classroom scanner now ONLY confirms attendance (In School ->
   // Present). Time out is no longer a tap on this page: the teacher does
   // it by hand from the table's Manual Time Out icon, and the student's
   // real "leaving campus" tap happens on the guard kiosk
@@ -1085,7 +1085,7 @@ function AttendancePage() {
                 title={
                   !section
                     ? "Select a section first"
-                    : "Marks every student in this section with no record today, or still \"On School\" (tapped at the gate but never in class), as absent."
+                    : "Marks every student in this section with no record today, or still \"In School\" (tapped at the gate but never in class), as absent."
                 }
                 className="flex h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-secondary px-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 sm:h-9 sm:w-auto"
               >

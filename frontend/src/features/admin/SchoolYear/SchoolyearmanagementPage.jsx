@@ -16,12 +16,14 @@ import {
   closeSchoolYear,
   markAsPlanning,
   getActiveSchoolYear,
+  getSchoolYearDropdown,
 } from "./Schoolyearservice";
 
 const PAGE_SIZE = 10;
 
 function SchoolYearManagementpage() {
   const [schoolYears, setSchoolYears] = useState([]);
+  const [allSchoolYears, setAllSchoolYears] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -64,6 +66,11 @@ function SchoolYearManagementpage() {
 
   useEffect(() => {
     loadActiveSchoolYear();
+    getSchoolYearDropdown()
+      .then(setAllSchoolYears)
+      .catch((error) => {
+        console.error("Failed to load school year dates for validation:", error.message);
+      });
   }, []);
 
   // Holds the AbortController for whichever /api/school-year request is
@@ -273,6 +280,7 @@ function SchoolYearManagementpage() {
         isOpen={isModalOpen}
         mode={modalMode}
         initialData={selectedSchoolYear}
+        existingSchoolYears={allSchoolYears}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmitSchoolYear}
       />

@@ -33,7 +33,7 @@ function getSectionDefaultOption(role) {
 
 const STATUS_OPTIONS = [
   { value: "", label: "All Status", textClass: "text-gray-700", selectedBgClass: "bg-gray-100" },
-  { value: "On School", label: "On School", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
+  { value: "In School", label: "In School", textClass: "text-warning", selectedBgClass: "bg-warning/10" },
   { value: "Present", label: "Present", textClass: "text-success", selectedBgClass: "bg-success/10" },
   { value: "Absent", label: "Absent", textClass: "text-danger", selectedBgClass: "bg-danger/10" },
 ];

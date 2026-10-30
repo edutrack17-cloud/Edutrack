@@ -10,7 +10,14 @@ const inputClass = (hasError) =>
 const labelClass = "mb-1 block text-sm font-semibold text-gray-700";
 const errorClass = "mt-1 text-sm text-danger";
 
-function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSubmit }) {
+function SchoolYearFormModal({
+  isOpen,
+  mode = "add",
+  initialData,
+  existingSchoolYears = [],
+  onClose,
+  onSubmit,
+}) {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -89,7 +96,10 @@ function SchoolYearFormModal({ isOpen, mode = "add", initialData, onClose, onSub
 
         <Formik
           initialValues={initialValues}
-          validationSchema={getSchoolYearFormSchema()}
+          validationSchema={getSchoolYearFormSchema(
+            existingSchoolYears,
+            mode === "edit" ? initialData : null
+          )}
           onSubmit={handleFormSubmit}
           enableReinitialize
         >

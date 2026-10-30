@@ -1,6 +1,6 @@
 
 const STATUS_STYLES = {
-  "On School": "text-warning",
+  "In School": "text-warning",
   Present: "text-success",
   Absent: "text-danger",
 };

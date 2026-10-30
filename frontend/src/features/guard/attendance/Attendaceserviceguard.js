@@ -20,7 +20,7 @@ const guardAttendanceApi = createApiClient();
 // gradeAndSection is one pre-combined string, not separate
 // gradeLevel/section.
 const STATUS_TO_LABEL = {
-  on_school: "On School",
+  on_school: "In School",
   present: "Present",
   absent: "Absent",
 };
@@ -43,7 +43,7 @@ function mapAttendanceRecord(record) {
     date: record.dateTimeIn ? record.dateTimeIn.split("T")[0] : "",
     timeIn: extractHHmm(record.dateTimeIn), // "07:00:00" -> "07:00"
     timeOut: extractHHmm(record.dateTimeOut),
-    // on_school -> "On School", present -> "Present", absent -> "Absent".
+    // on_school -> "In School", present -> "Present", absent -> "Absent".
     // A tap right after POST /api/attendance is always on_school; the
     // teacher's scanner later moves it to present and sets timeOut.
     status: STATUS_TO_LABEL[record.attendanceStatus] ?? record.attendanceStatus ?? "",
@@ -95,7 +95,7 @@ export async function timeInAttendance(rfid) {
 //
 // Expected failures (backend exceptions, all plain 400s - only the
 // message text tells them apart, so callers match on it):
-//   NoClassromTap   - never tapped the classroom scanner (still On School)
+//   NoClassromTap   - never tapped the classroom scanner (still In School)
 //   AlreadyTimedOut - already timed out today
 // plus 404 (AssignmentNotFound / no record) for an unknown card.
 export async function timeOutAttendance(rfid) {

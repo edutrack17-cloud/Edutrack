@@ -72,6 +72,8 @@ function ViewAttendanceModal({ isOpen, onClose, record }) {
                 Today's Attendance
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-4">
+                <InfoField label="Time In" value={formatDisplayTime(todayAttendance?.timeIn)} />
+                <InfoField label="Time Out" value={formatDisplayTime(todayAttendance?.timeOut)} />
                 <div>
                   <p className="mb-0.5 text-sm font-semibold text-gray-500">Status</p>
                   {todayAttendance?.status ? (
@@ -80,8 +82,6 @@ function ViewAttendanceModal({ isOpen, onClose, record }) {
                     <p className="text-base text-gray-700">—</p>
                   )}
                 </div>
-                <InfoField label="Time In" value={formatDisplayTime(todayAttendance?.timeIn)} />
-                <InfoField label="Time Out" value={formatDisplayTime(todayAttendance?.timeOut)} />
               </div>
             </div>
           </div>

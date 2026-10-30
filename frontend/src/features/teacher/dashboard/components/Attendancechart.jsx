@@ -14,7 +14,7 @@ import { Check, ChevronDown } from "lucide-react";
 const METRIC_CONFIG = {
   present: { label: "Present", color: "#008C34" }, 
   absent: { label: "Absent", color: "#dc2626" }, 
-  onSchool: { label: "On School", color: "#01379A" },
+  onSchool: { label: "In School", color: "#01379A" },
 };
 const METRIC_ORDER = ["present", "absent", "onSchool"];
 

@@ -4,6 +4,7 @@ import Header from "./header";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import { useAuth } from "../../Context/AuthContext";
+import ChangePassword from "../../features/auth/pages/Changepassword";
 
 
 const pageTitles = {
@@ -16,13 +17,13 @@ const pageTitles = {
   "/section-level": "Section & Level",
   "/logs-reports": "Logs & Reports",
   "/user-management": "User Management",
-  "/change-password": "Change Password",
   "/profile": "Profile Information",
 };
 
 function MainLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -77,6 +78,7 @@ function MainLayout() {
           role={isAdmin ? "Administrator" : "Teacher"}
           onMenuClick={openMobileSidebar}
           onLogout={handleLogout}
+          onChangePassword={() => setIsChangePasswordOpen(true)}
         />
 
         <main className="flex-1 p-6 bg-gray/40">
@@ -84,6 +86,10 @@ function MainLayout() {
         </main>
         <Footer />
       </div>
+      <ChangePassword
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+      />
     </div>
   );
 }

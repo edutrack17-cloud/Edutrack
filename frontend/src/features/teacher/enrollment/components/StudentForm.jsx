@@ -316,7 +316,7 @@ function StudentForm({ formik, sections = [], onRfidClick }) {
             onBlur={formik.handleBlur}
             error={formik.errors.middleName}
             touched={formik.touched.middleName}
-            placeholder="C"
+            placeholder="Pineda"
             labelClassName={inputLabelClass} inputClassName={inputTextClass}
           />
           <Input

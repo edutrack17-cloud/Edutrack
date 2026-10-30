@@ -1,4 +1,3 @@
-
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -13,7 +12,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import schoolLogo from "../../assets/images/logo.jpg";
+import schoolLogo from "../../assets/images/logo-transparent.png";
 
 const ICON_SIZE = 18;
 
@@ -73,7 +72,8 @@ function Sidebar({
   }
 
   const widthClass = isCollapsed ? "w-20" : "w-72";
-  const logoSizeClass = isCollapsed ? "h-10 w-10" : "h-16 w-16";
+  const logoSizeClass = isCollapsed ? "h-12 w-12" : "h-20 w-20";
+  const logoContainerPadding = isCollapsed ? "px-2" : "px-6";
   const mobileTranslateClass = isMobileOpen
     ? "translate-x-0"
     : "-translate-x-full";
@@ -116,11 +116,13 @@ function Sidebar({
         </div>
 
   
-        <div className="flex flex-col items-center gap-2 px-6 py-2">
+        <div
+          className={`-mt-3 mb-3 flex flex-col items-center gap-3 py-4 ${logoContainerPadding}`}
+        >
           <img
             src={schoolLogo}
             alt="School Logo"
-            className={`${logoSizeClass} rounded-full border-2 border-white object-cover transition-all duration-300`}
+            className={`${logoSizeClass} shrink-0 object-contain transition-all duration-300`}
           />
 
           {!isCollapsed && (
@@ -135,7 +137,7 @@ function Sidebar({
           )}
         </div>
 
-        <nav className="mt-6 flex flex-col gap-1.5 px-4">
+        <nav className="mt-4 flex flex-col gap-1.5 px-4">
           {navigationItems.map((item) => {
             const Icon = item.icon;
 

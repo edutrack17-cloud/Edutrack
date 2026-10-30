@@ -276,6 +276,71 @@ export async function getStudents({ search, level, section, status, schoolYearSt
   }
 }
 
+export async function getSelectableStudentIds({
+  search,
+  level,
+  section,
+  status,
+  schoolYearStatuses,
+  schoolYearId,
+  signal,
+} = {}) {
+  const params = {};
+  if (level) params.gradeLevel = level;
+  if (section) params.sectionName = section;
+  if (status) params.studentStatus = status;
+  if (search) params.search = search;
+  const schoolYearStatusList = [].concat(schoolYearStatuses ?? []).filter(Boolean);
+  if (schoolYearStatusList.length > 0) params.schoolYearStatuses = schoolYearStatusList.join(",");
+  if (schoolYearId) params.schoolYearId = schoolYearId;
+
+  try {
+    const { data } = await studentApi.get("/student/ids", { params, signal });
+    return data;
+  } catch (error) {
+    if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
+    const responseStatus = error?.response?.status;
+    if (responseStatus === 404 || responseStatus >= 500) {
+      if (status && status !== "enrolled") return [];
+
+      const ids = [];
+      const pageSize = 100;
+      let page = 0;
+      let hasMorePages = true;
+
+      while (hasMorePages) {
+        const response = await getStudents({
+          search,
+          level,
+          section,
+          status: "enrolled",
+          schoolYearStatuses,
+          schoolYearId,
+          page,
+          size: pageSize,
+          signal,
+        });
+        ids.push(...(response.content ?? [])
+          .filter((student) => student.studentStatus === "enrolled")
+          .map((student) => student.studentId));
+        hasMorePages = page + 1 < (response.totalPages || 1);
+        page += 1;
+      }
+
+      return [...new Set(ids)];
+    }
+
+    const httpStatus = error?.response?.status;
+    throw new Error(
+      getErrorMessage(
+        error,
+        `Failed to load selectable students${httpStatus ? ` (HTTP ${httpStatus})` : ""}`
+      ),
+      { cause: error }
+    );
+  }
+}
+
 // RFID OWNERSHIP CHECK (pre-check before POST/PATCH)
 //
 // WHY THIS EXISTS: enrolling with a card that already belongs to a

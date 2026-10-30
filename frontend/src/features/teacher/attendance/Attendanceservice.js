@@ -4,13 +4,13 @@ const attendanceApi = createApiClient();
 
 const STATUS_TO_LABEL = {
   present: "Present",
-  on_school: "On School",
+  on_school: "In School",
   absent: "Absent",
 };
 
 const LABEL_TO_STATUS = {
   Present: "present",
-  "On School": "on_school",
+  "In School": "on_school",
   Absent: "absent",
 };
 
@@ -205,7 +205,7 @@ export async function fetchStudentRecords({
 
 // Walks EVERY roster page for the given filters. The backend caps the page
 // size, so asking for size=1000 only ever returned the first ~10 students -
-// which is why a Status filter (On School / Present / Absent) came back empty
+// which is why a Status filter (In School / Present / Absent) came back empty
 // unless the search narrowed the roster down to someone in that first page.
 // Cached briefly so changing pages/status doesn't re-download the roster.
 const rosterAllCache = new Map();
@@ -268,7 +268,7 @@ function getLocalTodayString() {
 // newest-first (sort=attendanceId,desc) and stops as soon as it reaches a
 // record from a previous day, the last page, or `maxPages`.
 //
-// - `status` (e.g. "On School") is sent as the server-side attendanceStatus
+// - `status` (e.g. "In School") is sent as the server-side attendanceStatus
 //   filter, so a Status-filtered view only pages through matching records.
 // - `maxPages` lets the 15s background poll stay cheap (it only needs the
 //   newest taps); the full load uses the larger default.
@@ -360,7 +360,7 @@ export async function fetchTodaysAttendance({
 
 export function getRowActionState(todayAttendance) {
   if (!todayAttendance) return "needs-status";
-  if (todayAttendance.status === "On School") return "needs-present";
+  if (todayAttendance.status === "In School") return "needs-present";
   if (todayAttendance.status === "Present" && !todayAttendance.timeOut) {
     return "needs-timeout";
   }

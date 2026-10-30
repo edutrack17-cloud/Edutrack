@@ -51,7 +51,15 @@ function isValidDate(value) {
 // `this.parent.startDate` below are already Dates - don't run them through
 // a string parser (the old parseLocalDate() regex never matched a Date,
 // returned null, and made the after-start-date check always pass).
-export function getSchoolYearFormSchema() {
+function formatLocalDate(value) {
+  if (!isValidDate(value)) return null;
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function getSchoolYearFormSchema(existingSchoolYears = [], currentSchoolYear = null) {
   const { minYear, min, max } = getSchoolYearDateBounds();
   const minMessage = `Year must be ${minYear} or later.`;
   const maxMessage = "Enter a valid 4-digit year.";
@@ -63,7 +71,29 @@ export function getSchoolYearFormSchema() {
       .typeError("Enter a valid date.")
       .required(MESSAGES.startDate)
       .min(min, minMessage)
-      .max(max, maxMessage),
+      .max(max, maxMessage)
+      .test(
+        "no-overlapping-school-year",
+        "These dates overlap with an existing school year.",
+        function (value) {
+          const endDate = this.parent.endDate;
+          if (!isValidDate(value) || !isValidDate(endDate) || value >= endDate) return true;
+
+          const start = formatLocalDate(value);
+          const end = formatLocalDate(endDate);
+          if (
+            currentSchoolYear?.startDate === start &&
+            currentSchoolYear?.endDate === end
+          ) {
+            return true;
+          }
+
+          return !existingSchoolYears.some((schoolYear) => {
+            if (schoolYear.schoolYearId === currentSchoolYear?.schoolYearId) return false;
+            return schoolYear.startDate <= end && schoolYear.endDate >= start;
+          });
+        }
+      ),
 
     endDate: Yup.date()
       .typeError("Enter a valid date.")

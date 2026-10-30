@@ -90,16 +90,16 @@ function mergeAttendanceUpdates(taps, updates) {
 }
 
 // The ONE status word a guard card shows, moving forward as the day goes:
-//   gate tap only                 -> "On School"
+//   gate tap only                 -> "In School"
 //   teacher scanner confirmed     -> "Time in"
 //   timed out                     -> "Time out"
 // (Absent stays "Absent".) Cards saved before status tracking existed
-// have no status yet - they were all fresh "On School" taps.
+// have no status yet - they were all fresh "In School" taps.
 function getCardStatus(tap) {
   if (tap.status === "Absent") return "Absent";
   if (tap.timeOut) return "Time out";
   if (tap.status === "Present") return "Time in";
-  return "On School";
+  return "In School";
 }
 
 // PAGE
@@ -159,7 +159,7 @@ function LiveClock() {
 //
 // Sequence:
 //   1. Student taps HERE (guard, at the gate)      -> record created,
-//      status = on_school. Shows up as "On School" on the teacher's
+//      status = on_school. Shows up as "In School" on the teacher's
 //      side until step 2.
 //   2. Student taps the TEACHER's scanner in class -> on_school ->
 //      present.
@@ -172,7 +172,7 @@ function LiveClock() {
 // students who tapped at this gate). Each card's Status / Time in /
 // Time out is then kept current by polling GET /api/attendance (see
 // STATUS_POLL_MS above) - so once the student taps the teacher's
-// scanner (On School -> Present) and later times out, the same card
+// scanner (In School -> Present) and later times out, the same card
 // here updates too.
 //
 // UI matches the Figma kiosk design: "Today's Activity" renders as a
@@ -188,7 +188,7 @@ function LiveClock() {
 // Each card's bottom row places Status, Time in and Time out side by
 // side, centered with a small gap (not pushed to the edges), each with
 // its own label above the value so the sides read symmetrically.
-// Status starts as "On School" (what a gate tap sets) and follows the
+// Status starts as "In School" (what a gate tap sets) and follows the
 // backend afterwards (Present / Absent), shown via the same
 // AttendanceStatus badge used on the teacher screen. Time out stays
 // "—" until the student is timed out.
@@ -352,7 +352,7 @@ function GuardAttendancePage() {
     return "error";
   }
 
-  // FIRST tap of the day  -> POST /api/attendance (time in, On School).
+  // FIRST tap of the day  -> POST /api/attendance (time in, In School).
   // SECOND tap (409 above) -> PATCH /api/attendance/time-out. This is the
   // student leaving campus; the teacher's scanner no longer times anyone
   // out (the teacher does that manually from the table).
@@ -413,11 +413,11 @@ function GuardAttendancePage() {
   }
 
   // The scan panel on the left is a snapshot of the LAST tap, so on its
-  // own it would stay on "On School" forever. Look up that same student's
+  // own it would stay on "In School" forever. Look up that same student's
   // live card (matched by attendance id) so the panel follows the same
-  // On School -> Time in -> Time out progression as the cards do.
+  // In School -> Time in -> Time out progression as the cards do.
   const liveScanTap = lastScan?.id != null ? todaysTaps.find((tap) => tap.id === lastScan.id) : null;
-  const scanStatus = liveScanTap ? getCardStatus(liveScanTap) : "On School";
+  const scanStatus = liveScanTap ? getCardStatus(liveScanTap) : "In School";
   const scanTime = scanStatus === "Time out" ? liveScanTap?.timeOut : lastScan?.timeIn;
 
   const totalActivityPages = Math.max(1, Math.ceil(todaysTaps.length / ACTIVITY_PAGE_SIZE));
@@ -567,7 +567,7 @@ function GuardAttendancePage() {
                     {formatGradeAndSection(tap.gradeAndSection)}
                   </p>
 
-                  {/* One centered status only - it changes from "On School" to
+                  {/* One centered status only - it changes from "In School" to
                       "Time in" (teacher tap) to "Time out", instead of showing
                       Status / Time in / Time out side by side. */}
                   <div className="mt-6 flex w-full flex-col items-center justify-center">

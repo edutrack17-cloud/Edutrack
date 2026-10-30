@@ -12,13 +12,13 @@ function formatTime(isoDateTime) {
 
 // The dashboard API sends the status as the raw backend value ("present",
 // "on_school", "absent"), but AttendanceStatus only knows the display
-// labels ("Present", "On School", "Absent") - an unknown value falls back
+// labels ("Present", "In School", "Absent") - an unknown value falls back
 // to plain gray, which is why the dashboard showed gray lowercase text.
 // Converting here gives the same warning/success/danger colors as the
 // Attendance page and its Status filter.
 const STATUS_LABELS = {
   present: "Present",
-  on_school: "On School",
+  on_school: "In School",
   absent: "Absent",
 };
 

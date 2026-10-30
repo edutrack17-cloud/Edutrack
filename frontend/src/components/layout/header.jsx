@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu, ChevronDown, User, KeyRound, LogOut } from "lucide-react";
 
-function Header({ title, fullname, role, onMenuClick, onLogout }) {
+function Header({ title, fullname, role, onMenuClick, onLogout, onChangePassword }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const isGuard = role === "Guard";
@@ -80,13 +80,16 @@ function Header({ title, fullname, role, onMenuClick, onLogout }) {
               )}
 
               {!isGuard && (
-                <Link
-                  to="/change-password"
-                  onClick={closeProfileMenu}
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeProfileMenu();
+                    onChangePassword?.();
+                  }}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary transition-colors hover:bg-primary/10">
                   <KeyRound size={18} />
                   <span>Change Password</span>
-                </Link>
+                </button>
               )}
 
               <button

@@ -1,6 +1,6 @@
 
 import ForgotPasswordForm from "./components/ForgotPasswordForm";
-import logo from "../../../assets/images/logo.jpg";
+import logo from "../../../assets/images/logo-transparent.png";
 import loginBg from "../../../assets/images/Loginpic.jpeg";
 
 function ForgotPasswordPage() {
