@@ -116,6 +116,46 @@ export async function getPromotableStudents({ gradeLevel, section, search, page 
   }
 }
 
+export async function getPromotableStudentIds({ gradeLevel, section, search, signal } = {}) {
+  const params = { studentStatus: "enrolled", schoolYearStatuses: "active,closed" };
+  if (gradeLevel) params.gradeLevel = gradeLevel;
+  if (section) params.sectionName = section;
+  if (search) params.search = search;
+
+  try {
+    const { data } = await studentApi.get("/student/ids", { params, signal });
+    return data;
+  } catch (error) {
+    if (axios.isCancel(error) || error.code === "ERR_CANCELED") throw error;
+
+    const responseStatus = error?.response?.status;
+    if (responseStatus !== 404 && !(responseStatus >= 500)) {
+      throw new Error(getErrorMessage(error, "Failed to load selectable students"), { cause: error });
+    }
+
+    const ids = [];
+    const pageSize = 100;
+    let page = 0;
+    let hasMorePages = true;
+
+    while (hasMorePages) {
+      const response = await getPromotableStudents({
+        gradeLevel,
+        section,
+        search,
+        page,
+        size: pageSize,
+        signal,
+      });
+      ids.push(...(response.content ?? []).map((student) => student.studentId));
+      hasMorePages = page + 1 < (response.totalPages || 1);
+      page += 1;
+    }
+
+    return [...new Set(ids)];
+  }
+}
+
 // getCurrentSections() and getTargetSections() below both hit
 // GET /section/dropdown with the same optional gradeLevel param and
 // return the same shape - today they're genuinely the same underlying

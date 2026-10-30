@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PromoteStudentFilters from "./components/Promotestudentfilters";
 import SearchInput from "./components/Promotestudentsearchinput";
 import PromoteStudentTable from "./components/Promotestudenttable";
@@ -6,6 +6,7 @@ import Pagination from "./components/Promotestudentpagination";
 import PromoteStudentModal from "./components/Promotestudentmodal";
 import {
   getPromotableStudents,
+  getPromotableStudentIds,
   getCurrentSections,
   getSectionsByAdviser,
   promoteStudents as promoteStudentsRequest,
@@ -35,11 +36,16 @@ function PromoteStudentPage() {
   const [students, setStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [selectionErrorMessage, setSelectionErrorMessage] = useState("");
 
   const [filterSections, setFilterSections] = useState([]);
   const [sectionsError, setSectionsError] = useState("");
 
   const [selectedIds, setSelectedIds] = useState([]);
+  const [selectableIds, setSelectableIds] = useState([]);
+  const [isLoadingSelectableIds, setIsLoadingSelectableIds] = useState(false);
+  const [isLoadingSelectedStudents, setIsLoadingSelectedStudents] = useState(false);
+  const [selectableIdsRefreshKey, setSelectableIdsRefreshKey] = useState(0);
   const [promotingStudents, setPromotingStudents] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -103,7 +109,6 @@ function PromoteStudentPage() {
         setSection((prev) => (prev && !sections.some((s) => s.name === prev) ? "" : prev));
       })
       .catch((error) => setSectionsError(error.message));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gradeLevel, role, user?.id, sectionsRefreshKey, adviserSections]);
 
   useEffect(() => {
@@ -116,6 +121,7 @@ function PromoteStudentPage() {
   }, [search]);
 
   const abortControllerRef = useRef(null);
+  const selectableIdsAbortRef = useRef(null);
 
   // getPromotableStudents() -> GET /api/student, only returns studentStatus=enrolled (enforced server-side).
   // UPDATE: the real query param is `search` (not `studentName` - that
@@ -124,7 +130,7 @@ function PromoteStudentPage() {
   // (StudentSectionAssignmentSpecification.matchesSearch()), so we pass
   // it straight through and let the server handle pagination even while
   // searching.
-  async function loadStudents() {
+  const loadStudents = useCallback(async () => {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -157,7 +163,7 @@ function PromoteStudentPage() {
     } finally {
       if (abortControllerRef.current === controller) setIsLoading(false);
     }
-  }
+  }, [currentPage, debouncedSearch, gradeLevel, section]);
 
   // FIX: this used to only depend on the filters/page/search, so a
   // student enrolled from the Enrollment page (a different tab/session)
@@ -167,8 +173,57 @@ function PromoteStudentPage() {
   // visibility. Reusing that same key here closes that gap for the
   // roster itself instead of just the section dropdowns.
   useEffect(() => {
+    // This effect intentionally starts the asynchronous roster refresh.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadStudents();
-  }, [gradeLevel, section, currentPage, debouncedSearch, sectionsRefreshKey]);
+  }, [loadStudents, sectionsRefreshKey]);
+
+  useEffect(() => {
+    selectableIdsAbortRef.current?.abort();
+    selectableIdsAbortRef.current = null;
+
+    const controller = new AbortController();
+    selectableIdsAbortRef.current = controller;
+
+    Promise.resolve()
+      .then(() => {
+        if (controller.signal.aborted) return null;
+        if (!canBulkSelect) {
+          setSelectableIds([]);
+          setSelectedIds([]);
+          setIsLoadingSelectableIds(false);
+          return null;
+        }
+
+        setIsLoadingSelectableIds(true);
+        setSelectionErrorMessage("");
+        return getPromotableStudentIds({
+          gradeLevel,
+          section,
+          search: debouncedSearch || undefined,
+          signal: controller.signal,
+        });
+      })
+      .then((ids) => {
+        if (ids === null || selectableIdsAbortRef.current !== controller) return;
+        const nextIds = Array.isArray(ids) ? ids : [];
+        setSelectableIds(nextIds);
+        setSelectedIds((previous) => previous.filter((id) => nextIds.includes(id)));
+      })
+      .catch((error) => {
+        if (error.code === "ERR_CANCELED") return;
+        setSelectableIds([]);
+        setSelectionErrorMessage(error.message);
+      })
+      .finally(() => {
+        if (selectableIdsAbortRef.current === controller) {
+          selectableIdsAbortRef.current = null;
+          setIsLoadingSelectableIds(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [gradeLevel, section, debouncedSearch, canBulkSelect, sectionsRefreshKey, selectableIdsRefreshKey]);
 
   const visibleStudents = students;
 
@@ -176,17 +231,18 @@ function PromoteStudentPage() {
     setGradeLevel(event.target.value);
     setSection("");
     setSelectedIds([]);
+    setSelectableIds([]);
     setCurrentPage(1);
   }
 
   function handleSectionChange(event) {
     setSection(event.target.value);
     setSelectedIds([]);
+    setSelectableIds([]);
     setCurrentPage(1);
   }
 
   function handlePageChange(newPage) {
-    setSelectedIds([]);
     setCurrentPage(newPage);
   }
 
@@ -197,14 +253,49 @@ function PromoteStudentPage() {
   }
 
   function handleToggleSelectAll() {
-    const allIds = visibleStudents.map((s) => s.studentId);
-    const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.includes(id));
-    setSelectedIds(allSelected ? [] : allIds);
+    const allSelected =
+      selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
+    setSelectedIds((previous) =>
+      allSelected
+        ? previous.filter((id) => !selectableIds.includes(id))
+        : [...new Set([...previous, ...selectableIds])]
+    );
   }
 
-  function handleBulkPromoteClick() {
-    const selected = students.filter((s) => selectedIds.includes(s.studentId));
-    setPromotingStudents(selected);
+  async function handleBulkPromoteClick() {
+    try {
+      setIsLoadingSelectedStudents(true);
+      setErrorMessage("");
+
+      const selectedIdSet = new Set(selectedIds);
+      const selectedStudents = [];
+      let page = 0;
+      let totalPagesToLoad = 1;
+
+      while (page < totalPagesToLoad) {
+        const response = await getPromotableStudents({
+          gradeLevel,
+          section,
+          search: debouncedSearch || undefined,
+          page,
+          size: 100,
+        });
+        totalPagesToLoad = response.totalPages || 1;
+        selectedStudents.push(
+          ...(response.content ?? []).filter((student) => selectedIdSet.has(student.studentId))
+        );
+        page += 1;
+      }
+
+      if (selectedStudents.length !== selectedIds.length) {
+        throw new Error("Some selected students could not be loaded. Please refresh and try again.");
+      }
+      setPromotingStudents(selectedStudents);
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsLoadingSelectedStudents(false);
+    }
   }
 
   // PATCH /student/grade-level/promote (bulk) or looped PATCH /student/{id}/student-status/graduate.
@@ -221,6 +312,8 @@ function PromoteStudentPage() {
 
       setSelectedIds((prev) => prev.filter((id) => !studentIds.includes(id)));
       setPromotingStudents(null);
+      setSelectableIds([]);
+      setSelectableIdsRefreshKey((prev) => prev + 1);
       await loadStudents();
     } catch (error) {
       setErrorMessage(error.message);
@@ -230,7 +323,12 @@ function PromoteStudentPage() {
   }
 
   const allFilteredSelected =
-    visibleStudents.length > 0 && visibleStudents.every((s) => selectedIds.includes(s.studentId));
+    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
+  const canToggleSelectAll =
+    canBulkSelect &&
+    !isLoadingSelectableIds &&
+    search.trim() === debouncedSearch &&
+    selectableIds.length > 0;
 
   return (
     <div className="flex flex-col gap-6 rounded-lg bg-white p-4 sm:p-6">
@@ -241,6 +339,7 @@ function PromoteStudentPage() {
           onGradeLevelChange={handleGradeLevelChange}
           onSectionChange={handleSectionChange}
           canBulkSelect={canBulkSelect}
+          canToggleSelectAll={canToggleSelectAll}
           allSelected={allFilteredSelected}
           onToggleSelectAll={handleToggleSelectAll}
           gradeLevels={gradeLevelOptions}
@@ -250,7 +349,11 @@ function PromoteStudentPage() {
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
           <SearchInput
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSelectedIds([]);
+              setSelectableIds([]);
+              setSearch(event.target.value);
+            }}
             className="w-full sm:w-64"
           />
 
@@ -258,9 +361,10 @@ function PromoteStudentPage() {
             <button
               type="button"
               onClick={handleBulkPromoteClick}
-              className="flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap sm:h-9 rounded-md bg-primary px-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 sm:w-auto"
+              disabled={isLoadingSelectedStudents}
+              className="flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-3 text-base font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-wait disabled:opacity-60 sm:h-9 sm:w-auto"
             >
-              Promote Selected ({selectedIds.length})
+              {isLoadingSelectedStudents ? "Loading selected students..." : `Promote Selected (${selectedIds.length})`}
             </button>
           )}
         </div>
@@ -268,6 +372,7 @@ function PromoteStudentPage() {
 
       {sectionsError && <p className="text-sm text-red-500">{sectionsError}</p>}
       {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
+      {selectionErrorMessage && <p className="text-sm text-red-500">{selectionErrorMessage}</p>}
 
       {!canBulkSelect && (
         <p className="text-sm text-gray-500">

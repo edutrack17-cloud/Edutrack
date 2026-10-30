@@ -102,6 +102,7 @@ function PromoteStudentFilters({
   onGradeLevelChange,
   onSectionChange,
   canBulkSelect,
+  canToggleSelectAll,
   allSelected,
   onToggleSelectAll,
   gradeLevels = [],
@@ -139,9 +140,15 @@ function PromoteStudentFilters({
       <button
         type="button"
         onClick={onToggleSelectAll}
-        disabled={!canBulkSelect}
-        title={canBulkSelect ? undefined : "Select a Grade Level and Section first to enable selection"}
-        className="h-11 w-full cursor-pointer sm:w-36 sm:h-9 whitespace-nowrap rounded-md border border-gray-300 bg-white px-4 text-base font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50"
+        disabled={!canToggleSelectAll}
+        title={
+          !canBulkSelect
+            ? "Select a Grade Level and Section first to enable selection"
+            : !canToggleSelectAll
+              ? "Loading matching students"
+              : "Select all enrolled students matching the current filters"
+        }
+        className="h-11 w-full cursor-pointer whitespace-nowrap rounded-md border border-gray-300 bg-white px-4 text-base font-medium text-primary outline-none transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:hover:bg-gray-50 sm:h-9 sm:w-36"
       >
         {allSelected ? "Deselect All" : "Select All"}
       </button>
